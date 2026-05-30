@@ -294,7 +294,9 @@ const allowedOrigins = [
   'https://neurosense360.site', // Production
   'https://www.neurosense360.site', // Production with www
   'http://neurosense360.site',  // Production HTTP
-  'http://www.neurosense360.site' // Production HTTP with www
+  'http://www.neurosense360.site', // Production HTTP with www
+  'https://limitlessbrainlab-eight.vercel.app', // Staging
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 ];
 
 // Setup all security and utility middleware
