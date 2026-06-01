@@ -450,13 +450,12 @@ const NeurosenseBooking = () => {
         </div>
       </section>
 
-      {/* Neurosense Cognitive Assessments Banner */}
-      <section className="py-8 sm:py-10 md:py-12 lg:py-16 bg-white">
+      {/* Neurosense Cognitive Assessments Banner — hidden */}
+      {/* <section className="py-8 sm:py-10 md:py-12 lg:py-16 bg-white">
         <div className="max-w-5xl mx-auto px-3 sm:px-5 md:px-6 lg:px-8">
           <div
             className="relative bg-gradient-to-br from-[#323956] to-[#1a1f36] rounded-xl sm:rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 lg:p-10 text-white shadow-2xl overflow-hidden"
           >
-            {/* Background decoration */}
             <div className="absolute top-0 right-0 w-32 sm:w-48 md:w-64 h-32 sm:h-48 md:h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3"></div>
             <div className="absolute bottom-0 left-0 w-24 sm:w-36 md:w-48 h-24 sm:h-36 md:h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/4"></div>
 
@@ -471,14 +470,12 @@ const NeurosenseBooking = () => {
               </div>
               <button
                 onClick={() => {
-                  // Find the Neurosense Bundle from bundles or create inline
                   const bundle = bundles.find(b => b.title?.toLowerCase().includes('neurosense bundle')) || {
                     id: 'neurosense-bundle',
                     title: 'Neurosense Bundle',
                     description: 'All 4 assessments: Neuro Age Estimator, Neuro Performance Score, Brain Burnout Score & Brain Fitness Score',
                     originalPrice: { usd: 89.95 },
                     salePrice: { usd: 19.99 },
-                    // Collect all individual assessment links
                     link: services.map(s => s.link).filter(Boolean).join(','),
                     includes: ['Neuro Age Estimator', 'Neuro Performance Score', 'Brain Burnout Score', 'Brain Fitness Score']
                   };
@@ -492,7 +489,7 @@ const NeurosenseBooking = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <Footer />
 
