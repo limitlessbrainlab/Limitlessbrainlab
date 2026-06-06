@@ -41,13 +41,30 @@ const setupMiddleware = (app, allowedOrigins) => {
   }));
 
   // CORS Configuration
+  const isAllowedOrigin = (origin) => {
+    if (!origin) return true;
+    if (/^https:\/\/limitlessbrainlab[^.]*\.vercel\.app$/.test(origin)) return true;
+    if (allowedOrigins.indexOf(origin) !== -1) return true;
+    return false;
+  };
+
+  // Handle OPTIONS preflight manually — before rate limiter and before cors() package.
+  // Direct header-setting avoids any edge cases in the cors npm package callback chain.
+  app.options('*', (req, res) => {
+    const origin = req.headers.origin || '';
+    if (isAllowedOrigin(origin)) {
+      res.header('Access-Control-Allow-Origin', origin || '*');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      return res.status(200).end();
+    }
+    return res.status(403).json({ error: 'Not allowed by CORS' });
+  });
+
   const corsOptions = {
     origin: function (origin, callback) {
-      // Allow requests with no origin (server-to-server, curl, Postman)
-      if (!origin) return callback(null, true);
-      // Allow any Vercel deployment URL for this project
-      if (/^https:\/\/limitlessbrainlab[^.]*\.vercel\.app$/.test(origin)) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
@@ -55,8 +72,6 @@ const setupMiddleware = (app, allowedOrigins) => {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   };
-  // Handle OPTIONS preflight explicitly before other middleware (rate limiter, etc.)
-  app.options('*', cors(corsOptions));
   app.use(cors(corsOptions));
 
   // Compression
