@@ -294,9 +294,13 @@ const AddPatientForm = () => {
         const smtpEmail = clinicData?.smtpEmail || clinicData?.smtp_email || '';
         const smtpPass = clinicData?.smtpPassword || clinicData?.smtp_password || '';
 
+        const { data: welcomeSession } = await supabase.auth.getSession();
+        const welcomeToken = welcomeSession?.session?.access_token;
+        const welcomeHeaders = { 'Content-Type': 'application/json' };
+        if (welcomeToken) welcomeHeaders['Authorization'] = `Bearer ${welcomeToken}`;
         fetch(`${baseUrl}/api/send-welcome-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: welcomeHeaders,
           body: JSON.stringify({
             patientName: data.name,
             email: data.email,

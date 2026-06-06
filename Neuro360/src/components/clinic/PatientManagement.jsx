@@ -347,9 +347,13 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         const baseUrl = apiUrl.replace(/\/api\/?$/, '');
 
+        const { data: sessionData } = await supabase.auth.getSession();
+        const authToken = sessionData?.session?.access_token;
+        const welcomeHeaders = { 'Content-Type': 'application/json' };
+        if (authToken) welcomeHeaders['Authorization'] = `Bearer ${authToken}`;
         fetch(`${baseUrl}/api/send-welcome-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: welcomeHeaders,
           body: JSON.stringify({
             patientName: data.name,
             email: sanitizedEmail,
@@ -415,9 +419,13 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         const smtpPass = clinicData?.smtpPassword || clinicData?.smtp_password || '';
         const clinicUrl = clinicData?.website_url || clinicData?.website || '';
 
+        const { data: emailSessionData } = await supabase.auth.getSession();
+        const emailAuthToken = emailSessionData?.session?.access_token;
+        const emailUpdateHeaders = { 'Content-Type': 'application/json' };
+        if (emailAuthToken) emailUpdateHeaders['Authorization'] = `Bearer ${emailAuthToken}`;
         fetch(`${baseUrl}/api/send-email-update-notification`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: emailUpdateHeaders,
           body: JSON.stringify({
             patientName: data.name,
             newEmail: data.email,
