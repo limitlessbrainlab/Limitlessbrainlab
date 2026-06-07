@@ -1391,7 +1391,7 @@ const PatientDashboard = () => {
     { id: 'photobiomodulation', label: 'Photobiomodulation', icon: Sun },
     { id: 'five-pillars', label: '5 Pillars of Mastery', icon: Award },
     { id: 'brain-courses', label: 'Brain Courses', icon: GraduationCap },
-    { id: 'events', label: 'Events', icon: Calendar },
+    // { id: 'events', label: 'Events', icon: Calendar }, // hidden — not active yet
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'feedback', label: 'Feedback | Help + Support', icon: HelpCircle }
   ];
