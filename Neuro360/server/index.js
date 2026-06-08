@@ -161,7 +161,10 @@ const getAdminNotificationHtml = (formTitle, dataRows) => `
                   <td style="padding: 10px 16px; font-size: 14px; color: #323956; font-weight: 500; ${i < dataRows.length - 1 ? 'border-bottom: 1px solid #f0f0f0;' : ''}">${row.value || 'Not provided'}</td>
                 </tr>`).join('')}
               </table>
-              <p style="color: #555; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">Please login to your portal to review and approve.</p>
+              <p style="color: #555; font-size: 14px; line-height: 1.7; margin: 0 0 20px;">Please login to your portal to review and approve.</p>
+              <div style="text-align: center; margin: 0 0 24px;">
+                <a href="${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/login" style="display: inline-block; background: linear-gradient(135deg, #323956 0%, #1a1f36 100%); color: #ffffff; text-decoration: none; padding: 13px 36px; border-radius: 8px; font-weight: 600; font-size: 15px;">Login to Portal →</a>
+              </div>
               <p style="color: #555; font-size: 14px; margin: 0 0 4px;">Best regards,</p>
               <p style="color: #323956; font-size: 14px; font-weight: 600; margin: 0 0 2px;">Support Team,</p>
               <p style="color: #323956; font-size: 14px; margin: 0;">Limitlessbrainlab.com</p>
@@ -180,7 +183,7 @@ const getAdminNotificationHtml = (formTitle, dataRows) => `
 </html>
 `;
 
-// Reusable user confirmation email template (attractive design + current content)
+// Reusable user confirmation email template (Academy-aligned, clean)
 const getUserConfirmationHtml = (userName) => `
 <!DOCTYPE html>
 <html>
@@ -194,12 +197,12 @@ const getUserConfirmationHtml = (userName) => `
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1);">
 
-          <!-- Header with Logo -->
+          <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #323956 0%, #1a1f36 100%); padding: 30px 32px; text-align: center;">
               <img src="cid:company-logo" alt="Limitless Brain Lab" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover;" />
               <h1 style="color: #ffffff; margin: 14px 0 0; font-size: 24px; font-weight: 700;">Limitless Brain Lab</h1>
-              <p style="color: #F5D05D; margin: 6px 0 0; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600;">Health, Wealth & Happiness for All</p>
+              <p style="color: #F5D05D; margin: 6px 0 0; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600;">Health, Wealth &amp; Happiness for All</p>
             </td>
           </tr>
 
@@ -207,85 +210,37 @@ const getUserConfirmationHtml = (userName) => `
           <tr>
             <td style="padding: 36px 32px 24px;">
               <h2 style="color: #323956; margin: 0 0 20px; font-size: 20px; font-weight: 600;">Dear ${userName},</h2>
-
               <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0 0 18px;">
-                Greetings from the <strong style="color: #323956;">Limitless Brain Lab</strong>!<br>
-                Our vision at the lab is <strong>health, wealth and happiness for all.</strong>
+                Greetings from <strong style="color: #323956;">Limitless Brain Lab</strong>!<br>
+                Thank you for reaching out. We have successfully received your submission and our team will get in touch with you within <strong style="color: #323956;">two working days</strong>.
               </p>
-
-              <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0 0 18px;">
-                Thank you for submitting your application. We have successfully received it, and our team will get in touch with you within <strong style="color: #323956;">two working days</strong> to guide you through the next steps.
-              </p>
-
-              <!-- Working Hours Box -->
-              <div style="background: #f8f9fc; border-radius: 12px; padding: 18px 20px; border-left: 4px solid #323956; margin: 0 0 18px;">
-                <p style="color: #323956; margin: 0 0 6px; font-size: 13px; font-weight: 600;">Working Hours</p>
-                <p style="color: #555; margin: 0; font-size: 13px; line-height: 1.7;">
-                  Monday to Friday, 9:00 AM to 6:00 PM (UAE time).<br>
-                  Please note that we are closed on Saturdays and Sundays.
-                </p>
-              </div>
-
-              <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0;">
+              <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0 0 24px;">
                 We look forward to connecting with you soon!
               </p>
-            </td>
-          </tr>
-
-          <!-- Team Signature + Quote + Dr Sweta Signature -->
-          <tr>
-            <td style="padding: 0 32px 24px;">
-              <p style="color: #323956; margin: 0; font-size: 15px; font-weight: 600;">Team</p>
-              <p style="color: #323956; margin: 2px 0 16px; font-size: 16px; font-weight: 700;">Limitless Brain Lab</p>
-
-              <div style="background: linear-gradient(135deg, #F5D05D15 0%, #F5D05D08 100%); border-radius: 10px; padding: 14px 18px; border: 1px solid #F5D05D30; margin: 0 0 16px;">
-                <p style="color: #323956; margin: 0; font-size: 14px; font-style: italic; line-height: 1.6;">
-                  &ldquo;A healthy brain is the foundation of a limitless life.&rdquo;
-                </p>
-              </div>
-
-              <img src="cid:email-signature" alt="Dr Sweta" style="height: 55px; width: auto; display: block;" />
+              <p style="color: #323956; font-size: 15px; font-weight: 700; margin: 0;">Team Limitless Brain Lab</p>
             </td>
           </tr>
 
           <!-- Brain Academy CTA -->
           <tr>
-            <td style="padding: 0 32px 24px;">
+            <td style="padding: 0 32px 32px;">
               <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #323956 0%, #1a1f36 100%); border-radius: 12px;">
                 <tr>
-                  <td style="padding: 20px 24px; text-align: center;">
-                    <p style="color: #F5D05D; margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Access all the brain health courses</p>
-                    <a href="https://www.limitlessbrainacademy.com" target="_blank" style="color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600;">www.limitlessbrainacademy.com</a>
+                  <td style="padding: 24px; text-align: center;">
+                    <p style="color: #F5D05D; margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Access all brain health courses</p>
+                    <a href="https://www.limitlessbrainacademy.com" target="_blank" style="display: inline-block; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; margin-bottom: 12px;">www.limitlessbrainacademy.com</a>
+                    <br>
+                    <a href="https://www.limitlessbrainacademy.com" target="_blank" style="display: inline-block; background: #F5D05D; color: #323956; text-decoration: none; padding: 10px 28px; border-radius: 6px; font-weight: 700; font-size: 14px; margin-top: 4px;">Visit Academy</a>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- WhatsApp & Social Footer -->
+          <!-- Footer -->
           <tr>
-            <td style="background: #f8f9fc; padding: 24px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="color: #555; margin: 0 0 14px; font-size: 13px;">
-                <a href="https://wa.me/971501382897" target="_blank" style="color: #25D366; text-decoration: none; font-weight: 600;">
-                  <img src="https://img.icons8.com/color/20/whatsapp--v1.png" alt="WhatsApp" style="vertical-align: middle; margin-right: 6px;" />
-                  Whats app: +971501382897
-                </a>
-              </p>
-              <p style="color: #888; margin: 0 0 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Social Media</p>
-              <div>
-                <a href="https://www.instagram.com/drsweta.adatia/?hl=en" target="_blank" style="display: inline-block; margin: 0 5px;">
-                  <img src="https://img.icons8.com/fluency/28/instagram-new.png" alt="Instagram" />
-                </a>
-                <a href="https://www.facebook.com/sweta.adatia" target="_blank" style="display: inline-block; margin: 0 5px;">
-                  <img src="https://img.icons8.com/fluency/28/facebook-new.png" alt="Facebook" />
-                </a>
-                <a href="https://www.linkedin.com/in/drswetaadatia/" target="_blank" style="display: inline-block; margin: 0 5px;">
-                  <img src="https://img.icons8.com/fluency/28/linkedin.png" alt="LinkedIn" />
-                </a>
-                <a href="https://www.youtube.com/@drsweta.adatia" target="_blank" style="display: inline-block; margin: 0 5px;">
-                  <img src="https://img.icons8.com/fluency/28/youtube-play.png" alt="YouTube" />
-                </a>
-              </div>
+            <td style="background: #f8f9fc; padding: 16px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
+              <p style="color: #aaa; margin: 0; font-size: 11px;">Limitlessbrainlab.com &nbsp;|&nbsp; limitlessbrainlab@gmail.com</p>
             </td>
           </tr>
 
