@@ -9135,7 +9135,15 @@ const PatientDashboard = () => {
         {/* KSB Protocol Card — dynamic care protocol from NeuroSense scan */}
         {(() => {
           const ksbProtocol = getCareProtocol(algorithmResults?.data);
-          if (!ksbProtocol) return null;
+          if (!ksbProtocol) return (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+              <div className="text-5xl mb-4">🧠</div>
+              <h3 className="text-lg font-semibold text-[#323956] dark:text-white mb-2">Your Personalized Protocol is Not Ready Yet</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                Your customized care program will be generated once your QEEG brain scan has been processed and analyzed by our team. Please check back after your report is ready.
+              </p>
+            </div>
+          );
 
           const priorityStyle = {
             CRITICAL: { header: 'bg-red-600', badge: 'bg-red-100 text-red-800' },
