@@ -55,7 +55,7 @@ const NeuroSenseAttribution = ({
         <span>{attributionText}</span>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .neurosense-attribution {
           position: relative;
           z-index: 1000;
@@ -180,7 +180,7 @@ export const ReportFooter = ({ branding, reportData, className = '' }) => {
         className="report-attribution"
       />
 
-      <style jsx>{`
+      <style>{`
         .report-footer {
           margin-top: 2rem;
           padding-top: 1rem;

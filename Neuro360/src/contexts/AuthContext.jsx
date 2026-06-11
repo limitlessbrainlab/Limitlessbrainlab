@@ -4,6 +4,7 @@ import Cookies from 'js-cookie';
 import { authService } from '../services/authService';
 import DatabaseService from '../services/databaseService';
 import { createClient } from '@supabase/supabase-js';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 // Get Supabase environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -17,7 +18,10 @@ const hasValidSupabaseConfig = supabaseUrl && supabaseUrl !== 'https://placehold
 let supabase = null;
 
 if (hasValidSupabaseConfig) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  // storageKey must match supabaseService.js — login writes the session under this key
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { storageKey: 'neuro360-auth' }
+  });
 } else {
 }
 
@@ -308,7 +312,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('ALERT: AuthContext: Login failed:', error);
-      toast.error(error.message || 'Login failed. Please try again.');
+      toast.error(getFriendlyErrorMessage(error, 'Login failed. Please try again.'));
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -440,7 +444,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Registration failed:', error);
-      toast.error(error.message || 'Registration failed. Please try again.');
+      toast.error(getFriendlyErrorMessage(error, 'Registration failed. Please try again.'));
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -499,7 +503,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Forgot password failed:', error);
-      toast.error(error.message || 'Failed to send reset email');
+      toast.error(getFriendlyErrorMessage(error, 'We could not send the password reset email. Please try again.'));
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -514,7 +518,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Password reset failed:', error);
-      toast.error(error.message || 'Password reset failed');
+      toast.error(getFriendlyErrorMessage(error, 'We could not reset your password. Please try again.'));
       return { success: false, error: error.message };
     } finally {
       setLoading(false);
@@ -627,7 +631,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Profile update failed:', error);
-      toast.error(error.message || 'Failed to update profile');
+      toast.error(getFriendlyErrorMessage(error, 'We could not update your profile. Please try again.'));
       return { success: false, error: error.message };
     } finally {
       setLoading(false);

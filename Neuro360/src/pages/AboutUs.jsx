@@ -63,7 +63,7 @@ const AboutUs = () => {
     <div className="min-h-screen bg-white overflow-x-hidden">
       <NavBar />
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeInUp {
           from {
             opacity: 0;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Brain, ShieldCheck, Users, Truck, ArrowDown, Menu, X, MapPin, Instagram, Linkedin, Youtube, Facebook, Heart, Droplets, Stethoscope, Dna, FlaskConical, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 import BrainParametersSlider from '../components/BrainParametersSlider';
 import Footer from '../components/Footer';
 import LocationsPopup from '../components/LocationsPopup';
@@ -58,7 +59,7 @@ const Landing = () => {
       if (data.success && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -1132,7 +1133,7 @@ const Landing = () => {
         </>
       )}
 
-      <style jsx>{`
+      <style>{`
         /* Neural Pulse Hero Animation */
         @keyframes neuralPulse {
           0%, 100% {

@@ -58,10 +58,41 @@ const emailTransporter = nodemailer.createTransport(
         },
         connectionTimeout: 30000,
         greetingTimeout: 30000,
-        socketTimeout: 30000,
-        tls: { rejectUnauthorized: false }
+        socketTimeout: 30000
       }
 );
+
+// Deliverability: HTML-only mail scores worse with spam filters, so derive a
+// plain-text alternative for every outbound mail, and set Reply-To so replies
+// to the noreply sender still reach a monitored inbox.
+const htmlToPlainText = (html) =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|tr|table)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const rawSendMail = emailTransporter.sendMail.bind(emailTransporter);
+emailTransporter.sendMail = (mailOptions, ...rest) => {
+  const enhanced = { ...mailOptions };
+  if (enhanced.html && !enhanced.text) {
+    enhanced.text = htmlToPlainText(enhanced.html);
+  }
+  if (!enhanced.replyTo && process.env.EMAIL_REPLY_TO) {
+    enhanced.replyTo = process.env.EMAIL_REPLY_TO;
+  }
+  return rawSendMail(enhanced, ...rest);
+};
 
 // Verify email transporter on startup
 emailTransporter.verify((error, success) => {
@@ -6096,9 +6127,20 @@ app.post('/api/send-coaching-link', async (req, res) => {
 });
 
 // Admin API: Fetch all data from any table (bypasses RLS using service role key)
-app.get('/api/admin/table/:tableName', async (req, res) => {
+app.get('/api/admin/table/:tableName', authMiddleware, async (req, res) => {
   try {
-    if (req.user?.role !== 'super_admin') {
+    // Role may live in profiles table rather than user_metadata (see AuthContext.jsx)
+    let role = req.user?.role;
+    if (role !== 'super_admin' && supabase && req.user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', req.user.id)
+        .single();
+      if (profile?.role) role = profile.role;
+    }
+
+    if (role !== 'super_admin') {
       return res.status(403).json({ success: false, message: 'Super admin role required' });
     }
 
@@ -6151,7 +6193,10 @@ app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
     error: true,
-    message: err.message || 'Internal server error',
+    // Plain-language message for users — raw details stay in the server logs
+    message: process.env.NODE_ENV === 'development'
+      ? (err.message || 'Internal server error')
+      : 'Something went wrong on the server. Please try again in a few moments.',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });

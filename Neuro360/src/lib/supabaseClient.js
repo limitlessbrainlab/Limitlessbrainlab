@@ -14,7 +14,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    storage: window.localStorage
+    storage: window.localStorage,
+    // Must match supabaseService.js — login writes the session under this key
+    storageKey: 'neuro360-auth'
   },
   db: {
     schema: 'public'
