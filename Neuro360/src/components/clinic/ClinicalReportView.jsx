@@ -360,7 +360,7 @@ const ClinicalReportView = ({ patient, onClose }) => {
                                 }`}>{doc.status}</span>
                               )}
                               {isFromAdmin && (
-                                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#323956] text-white">Neuro Performance Report</span>
+                                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-[#323956] text-white">Neurosense Performance Report</span>
                               )}
                             </div>
                           </div>

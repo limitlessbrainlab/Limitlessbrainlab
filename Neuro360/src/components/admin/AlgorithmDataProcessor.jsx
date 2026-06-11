@@ -3,6 +3,7 @@ import { Upload, Play, Download, FileText, CheckCircle, Activity, User, Building
 import DatabaseService from '../../services/databaseService';
 import SupabaseService from '../../services/supabaseService';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 // Always return a CURRENT Supabase access token. supabase.auth.getSession() refreshes
 // the token transparently if it's near expiry, so /api/qeeg/* calls no longer 401
@@ -480,7 +481,7 @@ const AlgorithmDataProcessor = () => {
       toast.success('Logo replaced! Click Download to save.', { id: 'doc-process' });
     } catch (error) {
       console.error('Error processing document:', error);
-      toast.error(`Failed: ${error.message}`, { id: 'doc-process' });
+      toast.error(getFriendlyErrorMessage(error, 'Document processing failed. Please try again.'), { id: 'doc-process' });
     } finally {
       setIsUploadingDoc(false);
       event.target.value = '';
@@ -792,7 +793,7 @@ const AlgorithmDataProcessor = () => {
       console.error('Error processing QEEG files:', error);
       setConsoleLog(prev => [...prev, `❌ Error: ${error.message}`]);
       setIsProcessing(false);
-      toast.error(error.message || 'Failed to process QEEG files');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to process the QEEG files. Please try again.'));
     }
   };
 
@@ -862,7 +863,7 @@ const AlgorithmDataProcessor = () => {
     } catch (error) {
       console.error('❌ Error saving results:', error);
       setIsSaving(false);
-      toast.error('❌ Failed to save results: ' + error.message, { id: 'save-results' });
+      toast.error(getFriendlyErrorMessage(error, 'Failed to save the results. Please try again.'), { id: 'save-results' });
     }
   };
 
@@ -897,7 +898,7 @@ const AlgorithmDataProcessor = () => {
 
       } catch (error) {
         console.error('❌ Error saving results:', error);
-        toast.error('Failed to save results: ' + error.message);
+        toast.error(getFriendlyErrorMessage(error, 'Failed to save the results. Please try again.'));
       }
     }
   };
@@ -928,7 +929,7 @@ const AlgorithmDataProcessor = () => {
       }
     } catch (error) {
       console.error('❌ Error generating PDF:', error);
-      toast.error('Failed to generate PDF: ' + error.message, { id: 'generate-pdf' });
+      toast.error(getFriendlyErrorMessage(error, 'Failed to generate the PDF. Please try again.'), { id: 'generate-pdf' });
     }
   };
 
@@ -1128,8 +1129,8 @@ const AlgorithmDataProcessor = () => {
       console.log('[Sidecar Pre-flight] ✅ online', hData);
     } catch (preflightErr) {
       setConsoleLog(prev => [...prev, `❌ Sidecar offline: ${preflightErr.message}`]);
-      toast.error(`Sidecar is offline — cannot generate report: ${preflightErr.message}`, { id: 'claude-report' });
-      setClaudeReportError(`Sidecar offline: ${preflightErr.message}`);
+      toast.error(getFriendlyErrorMessage(preflightErr, 'The report service is unavailable right now, so the report cannot be generated. Please try again in a few minutes.'), { id: 'claude-report' });
+      setClaudeReportError(getFriendlyErrorMessage(preflightErr, 'The report service is unavailable right now. Please try again in a few minutes.'));
       return;
     }
 
@@ -1142,7 +1143,7 @@ const AlgorithmDataProcessor = () => {
     setClaudeProgress(5);
     setClaudeStages(CLAUDE_STAGE_ORDER.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending', elapsedMs: null })));
     startClaudeCreep(10);
-    toast.loading('Uploading to Claude & building the 12-page report (≈3–6 min, please keep this tab open)…', { id: 'claude-report' });
+    toast.loading('Building your 12-page Neurosense Performance Report (≈3–6 min, please keep this tab open)…', { id: 'claude-report' });
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
@@ -1273,12 +1274,12 @@ const AlgorithmDataProcessor = () => {
         }
       } catch (e) { console.warn('Could not attach claude_report_url to history row:', e); }
       console.log(`[Claude Report] ✓ Done in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
-      toast.success('Claude report ready!', { id: 'claude-report' });
+      toast.success('Neurosense Performance Report ready!', { id: 'claude-report' });
     } catch (error) {
       console.error(`[Claude Report] ✗ Failed after ${((performance.now() - t0) / 1000).toFixed(1)}s:`, error);
       stopClaudeCreep();
-      setClaudeReportError(error.message);
-      toast.error(`Claude Report failed: ${error.message}`, { id: 'claude-report' });
+      setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
+      toast.error(getFriendlyErrorMessage(error, 'The Neurosense Performance Report could not be generated. Please try again.'), { id: 'claude-report' });
     } finally {
       stopClaudeCreep();
       setIsGeneratingClaudeReport(false);
@@ -1404,7 +1405,7 @@ const AlgorithmDataProcessor = () => {
 
         const clinicId = selectedPatient.clinicId || selectedPatient.clinic_id || selectedPatient.org_id;
         const clinicData = await DatabaseService.findById('clinics', clinicId);
-        const clinicEmail = clinicData?.email || 'clinic@example.com';
+        const clinicEmail = clinicData?.email || 'limitlessbrainlab@gmail.com'; // fallback: admin inbox, never a dead address
         const clinicName = clinicData?.name || 'Clinic';
 
         const token = await getFreshToken();
@@ -1440,7 +1441,7 @@ const AlgorithmDataProcessor = () => {
 
     } catch (error) {
       console.error('❌ Error sending report:', error);
-      toast.error('Failed to send report: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to send the report. Please try again.'));
     } finally {
       setIsSendingReport(false);
     }
@@ -1450,7 +1451,7 @@ const AlgorithmDataProcessor = () => {
   // but sources the URL from claudeReportUrl and marks the report as a Claude Report.
   const handleSendClaudeReport = async () => {
     if (!claudeReportUrl) {
-      toast.error('Please generate the Claude report first');
+      toast.error('Please generate the Neurosense Performance Report first');
       return;
     }
 
@@ -1524,9 +1525,9 @@ const AlgorithmDataProcessor = () => {
         filePath: filePath,
         reportType: 'Claude Report',
         reportData: {
-          title: `Neuro Performance Report - ${patientName}`,
+          title: `Neurosense Performance Report - ${patientName}`,
           reportType: 'Claude Report',
-          description: `Neuro Performance Report for ${patientName}`,
+          description: `Neurosense Performance Report for ${patientName}`,
           fileUrl: fullUrl,
           filePath: filePath,
           patientName: patientName,
@@ -1551,7 +1552,7 @@ const AlgorithmDataProcessor = () => {
 
         const clinicId = selectedPatient.clinicId || selectedPatient.clinic_id || selectedPatient.org_id;
         const clinicData = await DatabaseService.findById('clinics', clinicId);
-        const clinicEmail = clinicData?.email || 'clinic@example.com';
+        const clinicEmail = clinicData?.email || 'limitlessbrainlab@gmail.com'; // fallback: admin inbox, never a dead address
         const clinicName = clinicData?.name || 'Clinic';
 
         const token = await getFreshToken();
@@ -1579,12 +1580,12 @@ const AlgorithmDataProcessor = () => {
         console.error('Error preparing Claude report emails:', emailError);
       }
 
-      toast.success('Claude report sent to patient & clinic + email.', { duration: 5000 });
+      toast.success('Neurosense Performance Report sent to patient & clinic + email.', { duration: 5000 });
       setClaudeReportSent(true);
 
     } catch (error) {
       console.error('❌ Error sending Claude report:', error);
-      toast.error('Failed to send Claude report: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to send the Neurosense Performance Report. Please try again.'));
     } finally {
       setIsSendingClaudeReport(false);
     }
@@ -1594,7 +1595,7 @@ const AlgorithmDataProcessor = () => {
   // handleSendClaudeReport but sources URL + patient/clinic from the record.
   const sendClaudeReportForRecord = async (record) => {
     const url = record.claude_report_url || record.claudeReportUrl;
-    if (!url) { toast.error('No Claude report on this record'); return; }
+    if (!url) { toast.error('No Neurosense Performance Report on this record'); return; }
 
     try {
       const patientName = record.inputData?.patientName || record.patientName || getPatientName(selectedPatient);
@@ -1602,7 +1603,7 @@ const AlgorithmDataProcessor = () => {
       const patientEmail = record.patientEmail || record.inputData?.patientEmail || selectedPatient?.email;
 
       const clinicData = clinicId ? await DatabaseService.findById('clinics', clinicId) : null;
-      const clinicEmail = clinicData?.email || 'clinic@example.com';
+      const clinicEmail = clinicData?.email || 'limitlessbrainlab@gmail.com'; // fallback: admin inbox, never a dead address
       const clinicName = clinicData?.name || 'Clinic';
 
       const reportData = {
@@ -1612,9 +1613,9 @@ const AlgorithmDataProcessor = () => {
         filePath: url,
         reportType: 'Claude Report',
         reportData: {
-          title: `Neuro Performance Report - ${patientName}`,
+          title: `Neurosense Performance Report - ${patientName}`,
           reportType: 'Claude Report',
-          description: `Neuro Performance Report for ${patientName}`,
+          description: `Neurosense Performance Report for ${patientName}`,
           fileUrl: url,
           filePath: url,
           patientName: patientName,
@@ -1652,10 +1653,10 @@ const AlgorithmDataProcessor = () => {
       });
       if (!response.ok) throw new Error(`Server error (${response.status})`);
 
-      toast.success('Claude report sent to patient & clinic.');
+      toast.success('Neurosense Performance Report sent to patient & clinic.');
     } catch (error) {
       console.error('❌ Error sending Claude report for record:', error);
-      toast.error('Failed to send Claude report: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to send the Neurosense Performance Report. Please try again.'));
     }
   };
 
@@ -1850,13 +1851,13 @@ const AlgorithmDataProcessor = () => {
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
         console.error('❌ NETWORK ERROR: Cannot connect to backend server');
         console.error('❌ Please ensure backend server is running on http://localhost:5000');
-        toast.error('Cannot connect to server. Please ensure backend is running on port 5000.');
+        toast.error('We are unable to reach the server right now. Please try again in a moment.');
       } else if (error.name === 'AbortError') {
         console.error('❌ TIMEOUT ERROR: PDF generation took too long');
         toast.error('PDF generation timed out. Server might be overloaded.');
       } else {
         console.error('❌ PDF GENERATION ERROR:', error.message);
-        toast.error(`PDF generation failed: ${error.message}`);
+        toast.error(getFriendlyErrorMessage(error, 'PDF generation failed. Please try again.'));
       }
 
       return null;
@@ -1987,7 +1988,7 @@ const AlgorithmDataProcessor = () => {
       } else if (error.message.includes('Failed to fetch')) {
         errorMessage = 'Network error. Please check your connection.';
       } else {
-        errorMessage = `Download failed: ${error.message}`;
+        errorMessage = getFriendlyErrorMessage(error, 'Failed to download the PDF. Please try again.');
       }
 
       toast.error(errorMessage, { id: 'download-pdf' });
@@ -2354,8 +2355,8 @@ const AlgorithmDataProcessor = () => {
                   className="mt-1 h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600"
                 />
                 <span>
-                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Neuro Performance Report</span>
-                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Only the Neuro Performance Report is sent to the patient and the clinic. The SA can view both the NeuroSense and Neuro Performance reports.</span>
+                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Neurosense Performance Report</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Only the Neurosense Performance Report is sent to the patient and the clinic. The SA can view both the Neurosense and Neurosense Performance reports.</span>
                 </span>
               </label>
             </div>
@@ -2852,7 +2853,7 @@ const AlgorithmDataProcessor = () => {
                   title={!isSaved ? 'Please save results first' : pdfUrl ? 'Download PDF report' : 'Generate and download PDF report'}
                 >
                   <Download className="h-5 w-5" />
-                  <span>{pdfUrl ? 'Neuro Performance Report' : 'Generate PDF Report'}</span>
+                  <span>{pdfUrl ? 'Neurosense Report' : 'Generate PDF Report'}</span>
                 </button>
 
                 {/* Post-generation action buttons — mode-aware. NeuroSense mode sends
@@ -2887,7 +2888,7 @@ const AlgorithmDataProcessor = () => {
                         ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                     }`}
-                    title={!isSaved ? 'Save results first' : !pdfUrl ? 'Generate the NeuroSense report first' : 'Upload to Claude to build the 12-page report'}
+                    title={!isSaved ? 'Save results first' : !pdfUrl ? 'Generate the NeuroSense report first' : 'Build the 12-page Neurosense Performance Report'}
                   >
                     {isGeneratingClaudeReport ? (
                       <>
@@ -2897,12 +2898,12 @@ const AlgorithmDataProcessor = () => {
                     ) : (
                       <>
                         <Send className="h-5 w-5" />
-                        <span>Upload to Claude</span>
+                        <span>Build Neurosense Performance Report</span>
                       </>
                     )}
                   </button>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Sends the generated NeuroSense report to Claude to build the 12-page report.
+                    Builds the 12-page Neurosense Performance Report from the generated Neurosense report.
                   </p>
 
                   {/* Live, stage-by-stage progress (fed by the backend SSE stream) */}
@@ -2954,7 +2955,7 @@ const AlgorithmDataProcessor = () => {
                         title="Download the generated Claude report"
                       >
                         <Download className="h-5 w-5" />
-                        <span>Download Claude Report</span>
+                        <span>Download Neurosense Performance Report</span>
                       </button>
                       <button
                         onClick={handleSendClaudeReport}
@@ -3343,10 +3344,10 @@ const AlgorithmDataProcessor = () => {
                       <button
                         onClick={() => downloadPdfFromUrl(record.claude_report_url || record.claudeReportUrl, `Claude-Brain-Report-${getPatientName(selectedPatient).replace(/[^a-z0-9]/gi, '-')}.pdf`)}
                         className="px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-1"
-                        title="Download the Neuro Performance Report"
+                        title="Download the Neurosense Performance Report"
                       >
                         <Download className="h-4 w-4" />
-                        <span>Download Claude Report</span>
+                        <span>Download Neurosense Performance Report</span>
                       </button>
                     )}
 
@@ -3357,7 +3358,7 @@ const AlgorithmDataProcessor = () => {
                         title="Send the Claude report to the patient and clinic"
                       >
                         <Send className="h-4 w-4" />
-                        <span>Send Claude Report</span>
+                        <span>Send Neurosense Performance Report</span>
                       </button>
                     )}
                   </div>

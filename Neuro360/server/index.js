@@ -5755,14 +5755,14 @@ app.post('/api/send-report-email', async (req, res) => {
               <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.1);">
                 <tr><td style="background:linear-gradient(135deg,#1e63b4 0%,#0f2a5e 100%);padding:24px 32px;text-align:center;">
                   <img src="cid:company-logo" alt="Limitless Brain Lab" style="width:90px;height:90px;border-radius:50%;object-fit:cover;margin-bottom:10px;" />
-                  <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Neuro Performance Report</h1>
+                  <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">Neurosense Performance Report</h1>
                   <p style="color:#9ec2f0;margin:6px 0 0;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">Personalized 12-Page Neuro-Profile</p>
                 </td></tr>
                 <tr><td style="padding:36px 32px;">
                   <h2 style="color:#15315f;margin:0 0 20px;font-size:22px;font-weight:600;">Hi ${patientName},</h2>
-                  <p style="color:#555;font-size:15px;line-height:1.8;margin:0 0 16px;">Your personalized <strong>Neuro Performance Report</strong> is ready — a complete map of your brainwave activity, cognitive performance, and your dominant brain type, built from your qEEG analysis.</p>
+                  <p style="color:#555;font-size:15px;line-height:1.8;margin:0 0 16px;">Your personalized <strong>Neurosense Performance Report</strong> is ready — a complete map of your brainwave activity, cognitive performance, and your dominant brain type, built from your qEEG analysis.</p>
                   <p style="color:#555;font-size:15px;line-height:1.8;margin:0 0 20px;">Inside you'll find your brain-type profile, your seven performance markers, the deep-dive neuro-metrics your clinician will reference, and a personalized 30-day plan.</p>
-                  ${attached ? attachedNotice : `<div style="text-align:center;margin:0 0 24px;"><a href="${reportUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e63b4 0%,#0f2a5e 100%);color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:8px;font-weight:600;font-size:14px;">View My Neuro Performance Report</a></div>`}
+                  ${attached ? attachedNotice : `<div style="text-align:center;margin:0 0 24px;"><a href="${reportUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e63b4 0%,#0f2a5e 100%);color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:8px;font-weight:600;font-size:14px;">View My Neurosense Performance Report</a></div>`}
                   <div style="text-align:center;margin:0 0 24px;">
                     <a href="${loginUrl}" style="display:inline-block;background:#ffffff;color:#1e63b4;text-decoration:none;padding:13px 32px;border-radius:8px;font-weight:600;font-size:14px;border:2px solid #1e63b4;">Login</a>
                   </div>
@@ -5784,16 +5784,16 @@ app.post('/api/send-report-email', async (req, res) => {
           <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
             <div style="background:linear-gradient(135deg,#1e63b4 0%,#0f2a5e 100%);padding:25px;text-align:center;">
               <img src="cid:company-logo" alt="Limitless Brain Lab" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px;" />
-              <h1 style="color:white;margin:0;font-size:24px;">Neuro Performance Report</h1>
+              <h1 style="color:white;margin:0;font-size:24px;">Neurosense Performance Report</h1>
               <p style="color:#9ec2f0;margin:8px 0 0;font-size:14px;">Patient Brain-Type Profile &amp; Review</p>
             </div>
             <div style="padding:30px;">
               <p style="color:#333;font-size:16px;margin:0 0 20px;">Hello <strong>${clinicName}</strong>,</p>
-              <p style="color:#666;font-size:14px;line-height:1.6;margin:0 0 20px;">The <strong>Neuro Performance Report</strong> for <strong>${patientName}</strong> is ready for clinical review. The patient has also received a copy.</p>
+              <p style="color:#666;font-size:14px;line-height:1.6;margin:0 0 20px;">The <strong>Neurosense Performance Report</strong> for <strong>${patientName}</strong> is ready for clinical review. The patient has also received a copy.</p>
               <div style="background:#f8f9fc;border-radius:10px;padding:20px;margin:20px 0;">
                 <h3 style="color:#15315f;margin:0 0 15px;font-size:16px;">📋 Report Information</h3>
                 <div style="background:white;border-radius:8px;padding:15px;margin-bottom:10px;border-left:4px solid #1e63b4;"><p style="color:#888;margin:0;font-size:11px;text-transform:uppercase;">Patient Name</p><p style="color:#15315f;margin:4px 0 0;font-size:15px;font-weight:600;">${patientName}</p></div>
-                <div style="background:white;border-radius:8px;padding:15px;border-left:4px solid #2dbf9c;"><p style="color:#888;margin:0;font-size:11px;text-transform:uppercase;">Report Type</p><p style="color:#15315f;margin:4px 0 0;font-size:15px;font-weight:600;">Neuro Performance Report (12-page)</p></div>
+                <div style="background:white;border-radius:8px;padding:15px;border-left:4px solid #2dbf9c;"><p style="color:#888;margin:0;font-size:11px;text-transform:uppercase;">Report Type</p><p style="color:#15315f;margin:4px 0 0;font-size:15px;font-weight:600;">Neurosense Performance Report (12-page)</p></div>
               </div>
               ${attached ? attachedNotice : `<div style="text-align:center;margin:25px 0;"><a href="${reportUrl}" style="display:inline-block;background:linear-gradient(135deg,#1e63b4 0%,#0f2a5e 100%);color:white;text-decoration:none;padding:12px 30px;border-radius:8px;font-weight:600;font-size:14px;">📥 Download Report</a></div>`}
             </div>
@@ -5810,9 +5810,9 @@ app.post('/api/send-report-email', async (req, res) => {
         'List-Unsubscribe': `<mailto:${process.env.EMAIL_USER}?subject=unsubscribe>`,
         'X-Mailer': 'Limitless Brain Lab Mailer'
       },
-      subject: isClaude ? `Your Neuro Performance Report is Ready` : `Your report is ready — unlock your hidden brain powers`,
+      subject: isClaude ? `Your Neurosense Performance Report is Ready` : `Your report is ready — unlock your hidden brain powers`,
       text: isClaude
-        ? `Hi ${patientName},\n\nYour Neuro Performance Report is ready.\n\nLog in to your dashboard to view it: ${loginUrl}\n\nThe Limitless Brain Lab Team`
+        ? `Hi ${patientName},\n\nYour Neurosense Performance Report is ready.\n\nLog in to your dashboard to view it: ${loginUrl}\n\nThe Limitless Brain Lab Team`
         : `Hi ${patientName},\n\nYour brain report is ready. Log in to access your results: ${loginUrl}\n\nThe Limitless Brain Lab Team`,
       attachments: [...getLogoAttachment(), ...reportAttachment],
       html: isClaude ? claudePatientHtml : `
@@ -5890,7 +5890,7 @@ app.post('/api/send-report-email', async (req, res) => {
     const clinicMailOptions = {
       from: EMAIL_FROM,
       to: clinicEmail,
-      subject: isClaude ? `Neuro Performance Report — ${patientName}` : `QEEG Report Ready for Review - ${patientName}`,
+      subject: isClaude ? `Neurosense Performance Report — ${patientName}` : `QEEG Report Ready for Review - ${patientName}`,
       attachments: [...getLogoAttachment(), ...reportAttachment],
       html: isClaude ? claudeClinicHtml : `
         <!DOCTYPE html>
