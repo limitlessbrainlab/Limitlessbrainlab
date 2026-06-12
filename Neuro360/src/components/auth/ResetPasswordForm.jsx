@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const ResetPasswordForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +38,7 @@ const ResetPasswordForm = () => {
         navigate('/login');
       }, 3000);
     } else {
-      setError('root', { message: result.error });
+      setError('root', { message: getFriendlyErrorMessage(result.error, 'We could not reset your password. Please try again.') });
     }
   };
 

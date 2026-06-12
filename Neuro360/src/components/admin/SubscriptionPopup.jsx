@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Star, Zap, Crown, AlertTriangle, CreditCard, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import PaymentSuccessModal from '../payment/PaymentSuccessModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -117,7 +118,7 @@ const SubscriptionPopup = ({ isOpen, onClose, clinicId, currentUsage, onSubscrib
       if (data.success && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
         setIsProcessing(false);
       }
     } catch (error) {

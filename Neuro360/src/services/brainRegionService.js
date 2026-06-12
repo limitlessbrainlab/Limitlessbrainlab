@@ -18,6 +18,12 @@ class BrainRegionService {
         throw error;
       }
 
+      const toArray = (val) => {
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') { try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; } }
+        return [];
+      };
+
       // Transform array to object keyed by region_id for easy access
       const regionsObject = {};
       (data || []).forEach(region => {
@@ -25,8 +31,8 @@ class BrainRegionService {
           name: region.name,
           color: region.color,
           position: region.position || {},
-          responsibilities: region.responsibilities || [],
-          strengthen: region.strengthen || [],
+          responsibilities: toArray(region.responsibilities),
+          strengthen: toArray(region.strengthen),
           description: region.description,
           icon: region.icon
         };

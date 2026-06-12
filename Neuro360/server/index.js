@@ -358,13 +358,13 @@ const getProtectMyBrainEmailHtml = (userName) => `
               <!-- Bank Details -->
               <p style="color: #323956; font-size: 15px; font-weight: 700; margin: 0 0 12px;">Bank Details</p>
               <table width="100%" cellpadding="0" cellspacing="4" style="background: #f8f9fc; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Account Name</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">Chinmaya Brainforia</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Account Number</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">922020022903427</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Bank Name</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">Axis Bank</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Bank Address</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">Jamnagar</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">IFSC Code</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">UTIB0000175</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">MICR Code</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">361211001</td></tr>
-                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Customer ID</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">940319994</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Account Name</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_ACCOUNT_NAME || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Account Number</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_ACCOUNT_NUMBER || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Bank Name</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_NAME || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Bank Address</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_ADDRESS || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">IFSC Code</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_IFSC_CODE || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">MICR Code</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_MICR_CODE || ''}</td></tr>
+                <tr><td style="color: #888; font-size: 12px; padding: 4px 16px;">Customer ID</td><td style="color: #323956; font-size: 13px; font-weight: 600; padding: 4px 0;">${process.env.BANK_CUSTOMER_ID || ''}</td></tr>
               </table>
 
               <p style="color: #555; font-size: 14px; line-height: 1.8; margin: 0 0 16px;">

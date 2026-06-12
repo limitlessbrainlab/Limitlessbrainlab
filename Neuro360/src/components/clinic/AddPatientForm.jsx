@@ -23,6 +23,7 @@ import DatabaseService from '../../services/databaseService';
 import { useAuth } from '../../contexts/AuthContext';
 import { generatePatientUID } from '../../utils/patientUidGenerator';
 import { hashPassword } from '../../utils/passwordUtils';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import { supabase } from '../../lib/supabaseClient';
 
 const AddPatientForm = () => {
@@ -334,7 +335,7 @@ const AddPatientForm = () => {
 
     } catch (error) {
       console.error('Error adding patient:', error);
-      toast.error('Failed to add patient: ' + error.message);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to add the patient. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

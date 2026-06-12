@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import PaymentHistoryModal from '../payment/PaymentHistoryModal';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const PaymentHistory = ({ selectedClinic }) => {
   const [payments, setPayments] = useState([]);
@@ -75,7 +76,7 @@ const PaymentHistory = ({ selectedClinic }) => {
       
     } catch (error) {
       console.error('ERROR: SUPER ADMIN: Error loading payment data:', error);
-      toast.error('Error loading payment data: ' + error.message);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to load payment data. Please try again.'));
     } finally {
       setLoading(false);
     }

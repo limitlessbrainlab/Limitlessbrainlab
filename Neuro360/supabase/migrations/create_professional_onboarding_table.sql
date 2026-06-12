@@ -24,11 +24,13 @@ CREATE INDEX IF NOT EXISTS idx_professional_onboarding_created_at ON professiona
 ALTER TABLE professional_onboarding ENABLE ROW LEVEL SECURITY;
 
 -- Create policy to allow inserts from anonymous users (for public form submissions)
+DROP POLICY IF EXISTS "Allow anonymous inserts" ON professional_onboarding;
 CREATE POLICY "Allow anonymous inserts" ON professional_onboarding
   FOR INSERT
   WITH CHECK (true);
 
 -- Create policy to allow authenticated users to view all records (for admin access)
+DROP POLICY IF EXISTS "Allow authenticated users to view" ON professional_onboarding;
 CREATE POLICY "Allow authenticated users to view" ON professional_onboarding
   FOR SELECT
   USING (auth.role() = 'authenticated');

@@ -9,6 +9,7 @@ import NeuroSenseService from './neuroSenseService';
 import StorageService from './storageService';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 class ReportWorkflowService {
   constructor() {
@@ -726,7 +727,7 @@ class ReportWorkflowService {
         workflow.failedAt = new Date().toISOString();
         await this.updateWorkflowInDatabase(workflow);
 
-        toast.error(`Workflow failed: ${errorMessage}`);
+        toast.error(getFriendlyErrorMessage(errorMessage, 'The report could not be generated. Please try again, or contact support if it keeps happening.'));
       }
     } catch (error) {
       console.error('Failed to mark workflow as failed:', error);

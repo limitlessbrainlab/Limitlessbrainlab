@@ -48,6 +48,24 @@ services:
         sync: false
       - key: SHARED_SSO_SECRET
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: BANK_ACCOUNT_NAME
+        sync: false
+      - key: BANK_ACCOUNT_NUMBER
+        sync: false
+      - key: BANK_NAME
+        sync: false
+      - key: BANK_ADDRESS
+        sync: false
+      - key: BANK_IFSC_CODE
+        sync: false
+      - key: BANK_MICR_CODE
+        sync: false
+      - key: BANK_CUSTOMER_ID
+        sync: false
       - key: DDO_DOCTOR_URL
         value: https://aisurgeonpilot.com
       - key: DDO_PATIENT_URL
@@ -97,5 +115,7 @@ services:
         value: Neuro360
       - key: VITE_SUPABASE_STORAGE_BUCKET
         value: patient-reports
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
       - key: VITE_DDO_DOCTOR_SLUG
         value: dr-dr-shweta-adatia-td6s

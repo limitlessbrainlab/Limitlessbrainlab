@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 import FeatureGate from '../components/access/FeatureGate';
 import {
   User,
@@ -992,7 +993,7 @@ const BrainCoach = () => {
         localStorage.setItem('paymentReturnUrl', `/dashboard/brain-coach?${returnParams.toString()}`);
         window.location.href = data.url;
       } else {
-        toast.error(data.message || 'Payment initialization failed');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment could not be started. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);

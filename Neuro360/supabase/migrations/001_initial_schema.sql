@@ -3,15 +3,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create custom types
-CREATE TYPE IF NOT EXISTS user_role AS ENUM ('patient', 'clinician', 'admin', 'super_admin');
-CREATE TYPE IF NOT EXISTS org_role AS ENUM ('owner', 'clinician', 'staff');
-CREATE TYPE IF NOT EXISTS gender_type AS ENUM ('male', 'female', 'other');
-CREATE TYPE IF NOT EXISTS org_type AS ENUM ('clinic', 'hospital', 'research');
-CREATE TYPE IF NOT EXISTS subscription_tier AS ENUM ('free', 'basic', 'pro', 'enterprise');
-CREATE TYPE IF NOT EXISTS session_type AS ENUM ('initial', 'followup', 'assessment');
-CREATE TYPE IF NOT EXISTS document_kind AS ENUM ('report', 'scan', 'prescription', 'other');
-CREATE TYPE IF NOT EXISTS assessment_type AS ENUM ('adhd', 'gad7', 'pss', 'memory', 'mood');
-CREATE TYPE IF NOT EXISTS subscription_status AS ENUM ('active', 'cancelled', 'expired');
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('patient', 'clinician', 'admin', 'super_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE org_role AS ENUM ('owner', 'clinician', 'staff'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE gender_type AS ENUM ('male', 'female', 'other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE org_type AS ENUM ('clinic', 'hospital', 'research'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE subscription_tier AS ENUM ('free', 'basic', 'pro', 'enterprise'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE session_type AS ENUM ('initial', 'followup', 'assessment'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE document_kind AS ENUM ('report', 'scan', 'prescription', 'other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE assessment_type AS ENUM ('adhd', 'gad7', 'pss', 'memory', 'mood'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE subscription_status AS ENUM ('active', 'cancelled', 'expired'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Profiles table (extends auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- Organizations table
 CREATE TABLE IF NOT EXISTS organizations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   type org_type NOT NULL DEFAULT 'clinic',
   subscription_tier subscription_tier NOT NULL DEFAULT 'free',
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS org_memberships (
 
 -- Clinics table (legacy compatibility)
 CREATE TABLE IF NOT EXISTS clinics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255),
   phone VARCHAR(20),
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS clinics (
 
 -- Patients table
 CREATE TABLE IF NOT EXISTS patients (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   owner_user UUID NOT NULL REFERENCES profiles(id),
   external_id VARCHAR(100),
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS patients (
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   clinician_id UUID NOT NULL REFERENCES profiles(id),
   session_type session_type NOT NULL,
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- EEG Reports table
 CREATE TABLE IF NOT EXISTS eeg_reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   metrics JSONB NOT NULL DEFAULT '{}',
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS eeg_reports (
 
 -- Documents table
 CREATE TABLE IF NOT EXISTS documents (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
   kind document_kind NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
 -- Assessments table (from LBW)
 CREATE TABLE IF NOT EXISTS assessments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   assessment_type assessment_type NOT NULL,
   responses JSONB NOT NULL DEFAULT '{}',
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS assessments (
 
 -- Daily Progress table (from LBW)
 CREATE TABLE IF NOT EXISTS daily_progress (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   mood_rating INTEGER CHECK (mood_rating >= 1 AND mood_rating <= 10),
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS daily_progress (
 
 -- Subscriptions table
 CREATE TABLE IF NOT EXISTS subscriptions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   plan subscription_tier NOT NULL,
   status subscription_status NOT NULL DEFAULT 'active',
@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 -- Payment History table
 CREATE TABLE IF NOT EXISTS payment_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
   amount DECIMAL(10, 2) NOT NULL,
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS payment_history (
 
 -- Coaching Sessions table (from LBW)
 CREATE TABLE IF NOT EXISTS coaching_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   coach_id UUID NOT NULL REFERENCES profiles(id),
   scheduled_at TIMESTAMPTZ NOT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS coaching_sessions (
 
 -- Daily Content table (from LBW)
 CREATE TABLE IF NOT EXISTS daily_content (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   content_data JSONB NOT NULL DEFAULT '{}',

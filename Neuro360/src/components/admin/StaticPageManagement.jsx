@@ -13,6 +13,7 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const StaticPageManagement = () => {
   const [pages, setPages] = useState([]);
@@ -98,7 +99,7 @@ const StaticPageManagement = () => {
       loadPages();
     } catch (error) {
       console.error('Error creating page:', error);
-      toast.error(`Failed to create page: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to create the page. Please try again.'));
     }
   };
 
@@ -127,7 +128,7 @@ const StaticPageManagement = () => {
       loadPages();
     } catch (error) {
       console.error('Error updating page:', error);
-      toast.error(`Failed to update page: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to update the page. Please try again.'));
     }
   };
 
@@ -166,7 +167,7 @@ const StaticPageManagement = () => {
       loadPages();
     } catch (error) {
       console.error('Error deleting page:', error);
-      toast.error(`Failed to delete page: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to delete the page. Please try again.'));
     }
   };
 

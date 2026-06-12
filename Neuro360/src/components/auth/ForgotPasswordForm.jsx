@@ -5,6 +5,7 @@ import { Mail, ArrowLeft, Loader2, CheckCircle, Lock, Eye, EyeOff, ShieldCheck }
 import DatabaseService from '../../services/databaseService';
 import SupabaseService from '../../services/supabaseService';
 import { hashPassword } from '../../utils/passwordUtils';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -76,10 +77,10 @@ const ForgotPasswordForm = () => {
         setStep(2);
         toast.success('OTP sent to your email!');
       } else {
-        setError('root', { message: result.message || 'Failed to send OTP' });
+        setError('root', { message: getFriendlyErrorMessage(result.message, 'We could not send the OTP. Please try again.') });
       }
     } catch (err) {
-      setError('root', { message: err.message || 'Something went wrong' });
+      setError('root', { message: getFriendlyErrorMessage(err, 'We could not send the OTP. Please check your connection and try again.') });
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +105,7 @@ const ForgotPasswordForm = () => {
         setStep(3);
         toast.success('OTP verified successfully!');
       } else {
-        toast.error(result.message || 'Invalid OTP. Please try again.');
+        toast.error(getFriendlyErrorMessage(result.message, 'The OTP is incorrect or has expired. Please try again.'));
       }
     } catch (err) {
       toast.error('Failed to verify OTP');
@@ -170,7 +171,7 @@ const ForgotPasswordForm = () => {
 
       setPasswordChanged(true);
     } catch (err) {
-      setError('root', { message: err.message || 'Failed to change password' });
+      setError('root', { message: getFriendlyErrorMessage(err, 'We could not change your password. Please try again.') });
     } finally {
       setIsLoading(false);
     }

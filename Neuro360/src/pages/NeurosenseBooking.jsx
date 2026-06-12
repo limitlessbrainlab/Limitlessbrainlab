@@ -4,6 +4,7 @@ import { Brain, Clock, MapPin, Phone, Mail, User, Globe, MessageSquare, Send, X,
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 import { supabase } from '../lib/supabaseClient';
 import { countryCodes } from '../utils/countryCodes';
 import LocationService, { DEFAULT_LOCATIONS } from '../services/locationService';
@@ -263,7 +264,7 @@ const NeurosenseBooking = () => {
       if (data.success && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);

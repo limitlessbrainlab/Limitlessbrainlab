@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 import FeatureGate from '../components/access/FeatureGate';
 import {
   Music,
@@ -176,7 +177,7 @@ const FrequenciesMusic = () => {
       if (data.success && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -487,6 +488,42 @@ const FrequenciesMusic = () => {
       driveId: '13C0mos5wHHi1zuYFyPM8XEiv83CCax0i',
       image: '/meditation/741 Hz_page-0001.jpg',
       price: 29,
+      originalPrice: 49
+    },
+    {
+      id: 'solfeggio_852',
+      name: '852Hz Solfeggio',
+      suffix: 'Binaural Beats',
+      frequency: '852 Hz',
+      category: 'Awaken Spiritual Insight',
+      color: 'from-indigo-600 to-purple-700',
+      driveId: '1vEFc2wuiSkRANWkTozTcH7-Wnni8KkQo',
+      image: '/meditation/852 Hz_page-0001.jpg',
+      price: 25,
+      originalPrice: 49
+    },
+    {
+      id: 'solfeggio_963',
+      name: '963Hz Solfeggio',
+      suffix: 'Binaural Beats',
+      frequency: '963 Hz',
+      category: 'Pineal Gland & Divine Consciousness',
+      color: 'from-orange-500 to-red-600',
+      driveId: '14hDaC2Ud7YwDlmX7JEHMVkLNKKmDogP7',
+      image: '/meditation/963 Hz_page-0001.jpg',
+      price: 25,
+      originalPrice: 49
+    },
+    {
+      id: 'gamma',
+      name: 'Gamma',
+      suffix: 'Brainwave Music',
+      frequency: '30-100 Hz',
+      category: 'Focus, Sharp Memory & Great Intellect',
+      color: 'from-yellow-600 to-yellow-700',
+      driveId: '13zc55FIM9zThAi06BKy4NC_6nVNFX1Bn',
+      image: '/frequency/gamma.png',
+      price: 22,
       originalPrice: 49
     },
   ];

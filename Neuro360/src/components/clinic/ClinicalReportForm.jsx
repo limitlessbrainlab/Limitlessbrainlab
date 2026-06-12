@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import StorageService from '../../services/storageService';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const ClinicalReportForm = ({ patient, onClose, onSave }) => {
   const [existingReport, setExistingReport] = useState(null);
@@ -398,7 +399,7 @@ const ClinicalReportForm = ({ patient, onClose, onSave }) => {
     } catch (error) {
       console.error('Error saving clinical report:', error);
       toast.dismiss();
-      toast.error('Failed to save report: ' + error.message);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to save the report. Please try again.'));
     }
   };
 

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.franchise_inquiries (
 ALTER TABLE public.franchise_inquiries ENABLE ROW LEVEL SECURITY;
 
 -- Allow insert for anyone (public access for form submission)
+DROP POLICY IF EXISTS "Allow public insert on franchise_inquiries" ON franchise_inquiries;
 CREATE POLICY "Allow public insert on franchise_inquiries"
   ON public.franchise_inquiries
   FOR INSERT
@@ -19,27 +20,29 @@ CREATE POLICY "Allow public insert on franchise_inquiries"
   WITH CHECK (true);
 
 -- Allow select/update for authenticated super admins only
+DROP POLICY IF EXISTS "Allow super admin read on franchise_inquiries" ON franchise_inquiries;
 CREATE POLICY "Allow super admin read on franchise_inquiries"
   ON public.franchise_inquiries
   FOR SELECT
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
-      AND users.role = 'super_admin'
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'super_admin'
     )
   );
 
+DROP POLICY IF EXISTS "Allow super admin update on franchise_inquiries" ON franchise_inquiries;
 CREATE POLICY "Allow super admin update on franchise_inquiries"
   ON public.franchise_inquiries
   FOR UPDATE
   TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
-      AND users.role = 'super_admin'
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'super_admin'
     )
   );
 

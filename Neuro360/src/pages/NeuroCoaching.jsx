@@ -5,6 +5,7 @@ import {
   Users, Briefcase, Heart, BrainCircuit, X, Mail, User
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -38,7 +39,7 @@ const NeuroCoaching = () => {
       if (data.success && data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);

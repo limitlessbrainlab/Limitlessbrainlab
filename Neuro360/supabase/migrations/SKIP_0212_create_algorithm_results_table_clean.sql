@@ -38,6 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_algorithm_results_processed_at ON public.algorith
 ALTER TABLE public.algorithm_results ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
+DROP POLICY IF EXISTS "Super admins have full access to algorithm_results" ON algorithm_results;
 CREATE POLICY "Super admins have full access to algorithm_results"
     ON public.algorithm_results
     FOR ALL
@@ -49,6 +50,7 @@ CREATE POLICY "Super admins have full access to algorithm_results"
         )
     );
 
+DROP POLICY IF EXISTS "Clinic admins can view their clinic algorithm_results" ON algorithm_results;
 CREATE POLICY "Clinic admins can view their clinic algorithm_results"
     ON public.algorithm_results
     FOR SELECT
@@ -56,11 +58,12 @@ CREATE POLICY "Clinic admins can view their clinic algorithm_results"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND profiles.role = 'clinic_admin'
-            AND profiles.clinic_id = algorithm_results.clinic_id
+            AND profiles.role = 'admin'
+            AND algorithm_results.clinic_id IS NOT NULL
         )
     );
 
+DROP POLICY IF EXISTS "Doctors can view their clinic algorithm_results" ON algorithm_results;
 CREATE POLICY "Doctors can view their clinic algorithm_results"
     ON public.algorithm_results
     FOR SELECT
@@ -68,8 +71,8 @@ CREATE POLICY "Doctors can view their clinic algorithm_results"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND profiles.role = 'doctor'
-            AND profiles.clinic_id = algorithm_results.clinic_id
+            AND profiles.role = 'clinician'
+            AND algorithm_results.clinic_id IS NOT NULL
         )
     );
 

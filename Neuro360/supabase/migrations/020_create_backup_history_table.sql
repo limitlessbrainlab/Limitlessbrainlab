@@ -37,6 +37,7 @@ ALTER TABLE backup_history ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 -- Super admins can view all backup history
+DROP POLICY IF EXISTS "Super admins can view backup history" ON backup_history;
 CREATE POLICY "Super admins can view backup history"
   ON backup_history
   FOR SELECT
@@ -50,6 +51,7 @@ CREATE POLICY "Super admins can view backup history"
   );
 
 -- Super admins can insert backup history
+DROP POLICY IF EXISTS "Super admins can insert backup history" ON backup_history;
 CREATE POLICY "Super admins can insert backup history"
   ON backup_history
   FOR INSERT
@@ -64,4 +66,3 @@ CREATE POLICY "Super admins can insert backup history"
 
 -- Grant permissions
 GRANT SELECT, INSERT ON backup_history TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE backup_history_id_seq TO authenticated;

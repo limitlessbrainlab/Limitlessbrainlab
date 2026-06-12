@@ -47,6 +47,7 @@ ALTER TABLE public.uploaded_files ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 -- Clinics can only see their own uploaded files
+DROP POLICY IF EXISTS "Clinics can view own uploaded files" ON uploaded_files;
 CREATE POLICY "Clinics can view own uploaded files"
     ON public.uploaded_files
     FOR SELECT
@@ -58,6 +59,7 @@ CREATE POLICY "Clinics can view own uploaded files"
     );
 
 -- Clinics can insert their own uploaded files
+DROP POLICY IF EXISTS "Clinics can insert own uploaded files" ON uploaded_files;
 CREATE POLICY "Clinics can insert own uploaded files"
     ON public.uploaded_files
     FOR INSERT
@@ -69,6 +71,7 @@ CREATE POLICY "Clinics can insert own uploaded files"
     );
 
 -- Clinics can update their own uploaded files
+DROP POLICY IF EXISTS "Clinics can update own uploaded files" ON uploaded_files;
 CREATE POLICY "Clinics can update own uploaded files"
     ON public.uploaded_files
     FOR UPDATE
@@ -80,6 +83,7 @@ CREATE POLICY "Clinics can update own uploaded files"
     );
 
 -- Super admins can see all uploaded files
+DROP POLICY IF EXISTS "Super admins can view all uploaded files" ON uploaded_files;
 CREATE POLICY "Super admins can view all uploaded files"
     ON public.uploaded_files
     FOR ALL

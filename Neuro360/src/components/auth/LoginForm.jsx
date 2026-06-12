@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -94,16 +95,16 @@ const LoginForm = () => {
           navigate(redirectPath, { replace: true });
         }
       } else {
-        setError('root', { 
-          type: 'manual', 
-          message: result?.error || 'Invalid email or password' 
+        setError('root', {
+          type: 'manual',
+          message: getFriendlyErrorMessage(result?.error, 'Invalid email or password. Please try again.')
         });
       }
     } catch (error) {
       console.error('ALERT: LoginForm: Unexpected error:', error);
-      setError('root', { 
-        type: 'manual', 
-        message: error?.message || 'Login failed. Please try again.' 
+      setError('root', {
+        type: 'manual',
+        message: getFriendlyErrorMessage(error, 'Login failed. Please try again.')
       });
     }
   };

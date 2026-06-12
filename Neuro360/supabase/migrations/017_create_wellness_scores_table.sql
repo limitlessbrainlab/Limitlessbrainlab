@@ -1,9 +1,9 @@
 -- Create wellness status enum
-CREATE TYPE IF NOT EXISTS wellness_status AS ENUM ('normal', 'mild', 'moderate', 'severe');
+DO $$ BEGIN CREATE TYPE wellness_status AS ENUM ('normal', 'mild', 'moderate', 'severe'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Create wellness_scores table
 CREATE TABLE IF NOT EXISTS wellness_scores (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   eeg_report_id UUID REFERENCES eeg_reports(id) ON DELETE SET NULL,
   assessment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -73,6 +73,7 @@ ALTER TABLE wellness_scores ENABLE ROW LEVEL SECURITY;
 -- RLS Policies for wellness_scores
 
 -- Super admins can do everything
+DROP POLICY IF EXISTS "Super admins have full access to wellness_scores" ON wellness_scores;
 CREATE POLICY "Super admins have full access to wellness_scores"
   ON wellness_scores
   FOR ALL
@@ -93,6 +94,7 @@ CREATE POLICY "Super admins have full access to wellness_scores"
   );
 
 -- Clinicians can view wellness scores for patients in their organization
+DROP POLICY IF EXISTS "Clinicians can view wellness_scores for their org patients" ON wellness_scores;
 CREATE POLICY "Clinicians can view wellness_scores for their org patients"
   ON wellness_scores
   FOR SELECT
@@ -108,6 +110,7 @@ CREATE POLICY "Clinicians can view wellness_scores for their org patients"
   );
 
 -- Clinicians can create wellness scores for patients in their organization
+DROP POLICY IF EXISTS "Clinicians can create wellness_scores for their org patients" ON wellness_scores;
 CREATE POLICY "Clinicians can create wellness_scores for their org patients"
   ON wellness_scores
   FOR INSERT
@@ -123,6 +126,7 @@ CREATE POLICY "Clinicians can create wellness_scores for their org patients"
   );
 
 -- Clinicians can update wellness scores they created
+DROP POLICY IF EXISTS "Clinicians can update their wellness_scores" ON wellness_scores;
 CREATE POLICY "Clinicians can update their wellness_scores"
   ON wellness_scores
   FOR UPDATE
@@ -131,6 +135,7 @@ CREATE POLICY "Clinicians can update their wellness_scores"
   WITH CHECK (created_by = auth.uid());
 
 -- Patients can view their own wellness scores
+DROP POLICY IF EXISTS "Patients can view their own wellness_scores" ON wellness_scores;
 CREATE POLICY "Patients can view their own wellness_scores"
   ON wellness_scores
   FOR SELECT

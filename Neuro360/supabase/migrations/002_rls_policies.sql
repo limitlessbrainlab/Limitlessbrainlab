@@ -53,18 +53,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- PROFILES POLICIES
 -- Users can view their own profile
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
 -- Users can update their own profile
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
 -- Super admins can view all profiles
+DROP POLICY IF EXISTS "Super admins can view all profiles" ON profiles;
 CREATE POLICY "Super admins can view all profiles" ON profiles
   FOR SELECT USING (is_super_admin(auth.uid()));
 
 -- Organization members can view profiles in their org
+DROP POLICY IF EXISTS "Org members can view org profiles" ON profiles;
 CREATE POLICY "Org members can view org profiles" ON profiles
   FOR SELECT USING (
     EXISTS (
@@ -76,14 +80,17 @@ CREATE POLICY "Org members can view org profiles" ON profiles
 
 -- ORGANIZATIONS POLICIES
 -- Anyone authenticated can view organizations (for listing)
+DROP POLICY IF EXISTS "Authenticated users can view organizations" ON organizations;
 CREATE POLICY "Authenticated users can view organizations" ON organizations
   FOR SELECT USING (auth.uid() IS NOT NULL);
 
 -- Only super admins can insert organizations
+DROP POLICY IF EXISTS "Super admins can create organizations" ON organizations;
 CREATE POLICY "Super admins can create organizations" ON organizations
   FOR INSERT WITH CHECK (is_super_admin(auth.uid()));
 
 -- Organization owners and super admins can update
+DROP POLICY IF EXISTS "Org owners can update organization" ON organizations;
 CREATE POLICY "Org owners can update organization" ON organizations
   FOR UPDATE USING (
     is_super_admin(auth.uid()) OR
@@ -97,10 +104,12 @@ CREATE POLICY "Org owners can update organization" ON organizations
 
 -- ORG_MEMBERSHIPS POLICIES
 -- Users can view their own memberships
+DROP POLICY IF EXISTS "Users can view own memberships" ON org_memberships;
 CREATE POLICY "Users can view own memberships" ON org_memberships
   FOR SELECT USING (user_id = auth.uid());
 
 -- Organization owners can manage memberships
+DROP POLICY IF EXISTS "Org owners can manage memberships" ON org_memberships;
 CREATE POLICY "Org owners can manage memberships" ON org_memberships
   FOR ALL USING (
     is_super_admin(auth.uid()) OR
@@ -114,10 +123,12 @@ CREATE POLICY "Org owners can manage memberships" ON org_memberships
 
 -- PATIENTS POLICIES
 -- Patients can view their own records
+DROP POLICY IF EXISTS "Patients can view own records" ON patients;
 CREATE POLICY "Patients can view own records" ON patients
   FOR SELECT USING (owner_user = auth.uid());
 
 -- Organization members can view patients in their org
+DROP POLICY IF EXISTS "Org members can view org patients" ON patients;
 CREATE POLICY "Org members can view org patients" ON patients
   FOR SELECT USING (
     is_super_admin(auth.uid()) OR
@@ -125,6 +136,7 @@ CREATE POLICY "Org members can view org patients" ON patients
   );
 
 -- Clinicians can create patients in their org
+DROP POLICY IF EXISTS "Clinicians can create patients" ON patients;
 CREATE POLICY "Clinicians can create patients" ON patients
   FOR INSERT WITH CHECK (
     is_super_admin(auth.uid()) OR
@@ -138,6 +150,7 @@ CREATE POLICY "Clinicians can create patients" ON patients
   );
 
 -- Clinicians can update patients in their org
+DROP POLICY IF EXISTS "Clinicians can update patients" ON patients;
 CREATE POLICY "Clinicians can update patients" ON patients
   FOR UPDATE USING (
     is_super_admin(auth.uid()) OR
@@ -152,6 +165,7 @@ CREATE POLICY "Clinicians can update patients" ON patients
 
 -- SESSIONS POLICIES
 -- Patients can view their own sessions
+DROP POLICY IF EXISTS "Patients can view own sessions" ON sessions;
 CREATE POLICY "Patients can view own sessions" ON sessions
   FOR SELECT USING (
     EXISTS (
@@ -162,6 +176,7 @@ CREATE POLICY "Patients can view own sessions" ON sessions
   );
 
 -- Clinicians can manage sessions for their patients
+DROP POLICY IF EXISTS "Clinicians can manage sessions" ON sessions;
 CREATE POLICY "Clinicians can manage sessions" ON sessions
   FOR ALL USING (
     is_super_admin(auth.uid()) OR
@@ -177,6 +192,7 @@ CREATE POLICY "Clinicians can manage sessions" ON sessions
 
 -- EEG_REPORTS POLICIES
 -- Patients can view their own reports
+DROP POLICY IF EXISTS "Patients can view own reports" ON eeg_reports;
 CREATE POLICY "Patients can view own reports" ON eeg_reports
   FOR SELECT USING (
     EXISTS (
@@ -187,6 +203,7 @@ CREATE POLICY "Patients can view own reports" ON eeg_reports
   );
 
 -- Organization members can manage reports
+DROP POLICY IF EXISTS "Org members can manage reports" ON eeg_reports;
 CREATE POLICY "Org members can manage reports" ON eeg_reports
   FOR ALL USING (
     is_super_admin(auth.uid()) OR
@@ -200,6 +217,7 @@ CREATE POLICY "Org members can manage reports" ON eeg_reports
 
 -- DOCUMENTS POLICIES
 -- Patients can view their own documents
+DROP POLICY IF EXISTS "Patients can view own documents" ON documents;
 CREATE POLICY "Patients can view own documents" ON documents
   FOR SELECT USING (
     EXISTS (
@@ -210,6 +228,7 @@ CREATE POLICY "Patients can view own documents" ON documents
   );
 
 -- Organization members can manage documents
+DROP POLICY IF EXISTS "Org members can manage documents" ON documents;
 CREATE POLICY "Org members can manage documents" ON documents
   FOR ALL USING (
     is_super_admin(auth.uid()) OR
@@ -224,6 +243,7 @@ CREATE POLICY "Org members can manage documents" ON documents
 
 -- ASSESSMENTS POLICIES
 -- Patients can view and create their own assessments
+DROP POLICY IF EXISTS "Patients can manage own assessments" ON assessments;
 CREATE POLICY "Patients can manage own assessments" ON assessments
   FOR ALL USING (
     EXISTS (
@@ -234,6 +254,7 @@ CREATE POLICY "Patients can manage own assessments" ON assessments
   );
 
 -- Clinicians can view patient assessments
+DROP POLICY IF EXISTS "Clinicians can view assessments" ON assessments;
 CREATE POLICY "Clinicians can view assessments" ON assessments
   FOR SELECT USING (
     is_super_admin(auth.uid()) OR
@@ -248,6 +269,7 @@ CREATE POLICY "Clinicians can view assessments" ON assessments
 
 -- DAILY_PROGRESS POLICIES
 -- Patients can manage their own progress
+DROP POLICY IF EXISTS "Patients can manage own progress" ON daily_progress;
 CREATE POLICY "Patients can manage own progress" ON daily_progress
   FOR ALL USING (
     EXISTS (
@@ -258,6 +280,7 @@ CREATE POLICY "Patients can manage own progress" ON daily_progress
   );
 
 -- Clinicians can view patient progress
+DROP POLICY IF EXISTS "Clinicians can view progress" ON daily_progress;
 CREATE POLICY "Clinicians can view progress" ON daily_progress
   FOR SELECT USING (
     is_super_admin(auth.uid()) OR
@@ -272,6 +295,7 @@ CREATE POLICY "Clinicians can view progress" ON daily_progress
 
 -- SUBSCRIPTIONS POLICIES
 -- Organization owners can manage subscriptions
+DROP POLICY IF EXISTS "Org owners can manage subscriptions" ON subscriptions;
 CREATE POLICY "Org owners can manage subscriptions" ON subscriptions
   FOR ALL USING (
     is_super_admin(auth.uid()) OR
@@ -284,6 +308,7 @@ CREATE POLICY "Org owners can manage subscriptions" ON subscriptions
   );
 
 -- Organization members can view subscriptions
+DROP POLICY IF EXISTS "Org members can view subscriptions" ON subscriptions;
 CREATE POLICY "Org members can view subscriptions" ON subscriptions
   FOR SELECT USING (
     is_org_member(auth.uid(), org_id)
@@ -291,6 +316,7 @@ CREATE POLICY "Org members can view subscriptions" ON subscriptions
 
 -- PAYMENT_HISTORY POLICIES
 -- Same as subscriptions
+DROP POLICY IF EXISTS "Org owners can view payment history" ON payment_history;
 CREATE POLICY "Org owners can view payment history" ON payment_history
   FOR SELECT USING (
     is_super_admin(auth.uid()) OR
@@ -304,6 +330,7 @@ CREATE POLICY "Org owners can view payment history" ON payment_history
 
 -- COACHING_SESSIONS POLICIES
 -- Patients can manage their own coaching sessions
+DROP POLICY IF EXISTS "Patients can manage own coaching" ON coaching_sessions;
 CREATE POLICY "Patients can manage own coaching" ON coaching_sessions
   FOR ALL USING (
     EXISTS (
@@ -314,6 +341,7 @@ CREATE POLICY "Patients can manage own coaching" ON coaching_sessions
   );
 
 -- Coaches can manage their sessions
+DROP POLICY IF EXISTS "Coaches can manage sessions" ON coaching_sessions;
 CREATE POLICY "Coaches can manage sessions" ON coaching_sessions
   FOR ALL USING (
     coach_id = auth.uid() OR is_super_admin(auth.uid())
@@ -321,6 +349,7 @@ CREATE POLICY "Coaches can manage sessions" ON coaching_sessions
 
 -- DAILY_CONTENT POLICIES
 -- Patients can manage their own content
+DROP POLICY IF EXISTS "Patients can manage own content" ON daily_content;
 CREATE POLICY "Patients can manage own content" ON daily_content
   FOR ALL USING (
     EXISTS (

@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logUploadAttempt, logUploadError } from '../../utils/uploadErrorChecker';
 import SubscriptionPopup from '../admin/SubscriptionPopup';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
   const { user } = useAuth();
@@ -389,7 +390,7 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
       reset();
     } catch (error) {
       logUploadError(error, { clinicId, patient, user, file: data.reportFile?.[0] });
-      toast.error(`Upload failed: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Upload failed. Please try again.'));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Zap, Loader2, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const PricingManagement = () => {
   const [packages, setPackages] = useState([]);
@@ -140,7 +141,7 @@ const PricingManagement = () => {
       loadPackages();
     } catch (err) {
       console.error('Error saving package:', err);
-      toast.error('Failed to save: ' + err.message);
+      toast.error(getFriendlyErrorMessage(err, 'Failed to save the package. Please try again.'));
     } finally {
       setSaving(false);
     }

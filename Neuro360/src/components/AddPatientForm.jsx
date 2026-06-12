@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 const AddPatientForm = ({ userType = 'clinic', clinicId, onSuccess }) => {
   // userType: 'clinic' OR 'partner'
@@ -80,7 +81,7 @@ const AddPatientForm = ({ userType = 'clinic', clinicId, onSuccess }) => {
     }
 
     if (emailStatus.exists) {
-      alert(`Cannot add patient: ${emailStatus.message}`);
+      alert(getFriendlyErrorMessage(emailStatus.message, 'This email address is already registered. Please use a different email.'));
       return;
     }
 
@@ -124,11 +125,11 @@ const AddPatientForm = ({ userType = 'clinic', clinicId, onSuccess }) => {
         if (onSuccess) onSuccess();
       } else {
         // Handle non-success response from backend
-        alert('❌ ' + (response.data?.message || 'Failed to add patient'));
+        alert('❌ ' + getFriendlyErrorMessage(response.data?.message, 'Failed to add the patient. Please try again.'));
       }
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.message || 'Failed to add patient';
-      alert('❌ ' + errorMessage);
+      alert('❌ ' + getFriendlyErrorMessage(error, 'Failed to add the patient. Please try again.'));
 
       // If backend returned email already exists error, update email status
       if (errorMessage.includes('already registered')) {

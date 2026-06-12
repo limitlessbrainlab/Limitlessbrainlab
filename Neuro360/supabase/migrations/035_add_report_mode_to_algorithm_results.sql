@@ -21,6 +21,7 @@ DROP POLICY IF EXISTS "Clinic admins can view their clinic algorithm_results" ON
 DROP POLICY IF EXISTS "Doctors can view their clinic algorithm_results" ON public.algorithm_results;
 
 -- Super admins: FULL access, unchanged (recreated identically to migration 022)
+DROP POLICY IF EXISTS "Super admins have full access to algorithm_results" ON algorithm_results;
 CREATE POLICY "Super admins have full access to algorithm_results"
     ON public.algorithm_results
     FOR ALL
@@ -40,6 +41,7 @@ CREATE POLICY "Super admins have full access to algorithm_results"
     );
 
 -- Clinic admins: only 'neurosense' rows for their clinic
+DROP POLICY IF EXISTS "Clinic admins can view their clinic algorithm_results" ON algorithm_results;
 CREATE POLICY "Clinic admins can view their clinic algorithm_results"
     ON public.algorithm_results
     FOR SELECT
@@ -47,13 +49,14 @@ CREATE POLICY "Clinic admins can view their clinic algorithm_results"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND profiles.role = 'clinic_admin'
-            AND profiles.clinic_id = algorithm_results.clinic_id
+            AND profiles.role = 'admin'
+            AND algorithm_results.clinic_id IS NOT NULL
         )
         AND algorithm_results.report_mode = 'neurosense'
     );
 
 -- Doctors: only 'neurosense' rows for their clinic
+DROP POLICY IF EXISTS "Doctors can view their clinic algorithm_results" ON algorithm_results;
 CREATE POLICY "Doctors can view their clinic algorithm_results"
     ON public.algorithm_results
     FOR SELECT
@@ -61,8 +64,8 @@ CREATE POLICY "Doctors can view their clinic algorithm_results"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND profiles.role = 'doctor'
-            AND profiles.clinic_id = algorithm_results.clinic_id
+            AND profiles.role = 'clinician'
+            AND algorithm_results.clinic_id IS NOT NULL
         )
         AND algorithm_results.report_mode = 'neurosense'
     );

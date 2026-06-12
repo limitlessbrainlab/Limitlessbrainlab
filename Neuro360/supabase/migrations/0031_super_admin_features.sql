@@ -7,7 +7,7 @@ CREATE TYPE agreement_status AS ENUM ('draft', 'pending', 'signed', 'expired', '
 
 -- Agreements table for clinic contracts
 CREATE TABLE agreements (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clinic_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   agreement_type agreement_type NOT NULL DEFAULT 'standard',
   status agreement_status NOT NULL DEFAULT 'draft',
@@ -37,7 +37,7 @@ CREATE TABLE agreements (
 
 -- Care plans table for personalized treatment plans
 CREATE TABLE care_plans (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
   created_by UUID NOT NULL REFERENCES profiles(id),
 
@@ -74,7 +74,7 @@ CREATE TABLE care_plans (
 
 -- File metadata table for tracking all file types
 CREATE TABLE file_metadata (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
   care_plan_id UUID REFERENCES care_plans(id) ON DELETE SET NULL,
 

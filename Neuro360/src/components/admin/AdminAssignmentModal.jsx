@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
-import DatabaseService from '../../services/databaseService';
+import { supabase } from '../../lib/supabaseClient';
 
 const AdminAssignmentModal = ({ clinic, isOpen, onClose, onUpdate }) => {
   const [admins, setAdmins] = useState([]);
@@ -55,40 +55,24 @@ const AdminAssignmentModal = ({ clinic, isOpen, onClose, onUpdate }) => {
   const loadClinicAdmins = async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API call
-      const mockAdmins = [
-        {
-          id: 'admin-1',
-          email: 'dr.smith@centralmedical.com',
-          fullName: 'Dr. John Smith',
-          role: 'primary_admin',
-          status: 'active',
-          lastLogin: '2025-09-18T08:30:00Z',
-          permissions: ['manage_patients', 'view_reports', 'manage_staff', 'billing'],
-          assignedAt: '2025-08-01T00:00:00Z'
-        },
-        {
-          id: 'admin-2',
-          email: 'nurse.johnson@centralmedical.com',
-          fullName: 'Nurse Sarah Johnson',
-          role: 'admin',
-          status: 'active',
-          lastLogin: '2025-09-17T14:15:00Z',
-          permissions: ['manage_patients', 'view_reports'],
-          assignedAt: '2025-08-15T00:00:00Z'
-        },
-        {
-          id: 'admin-3',
-          email: 'tech.davis@centralmedical.com',
-          fullName: 'Tech Michael Davis',
-          role: 'limited_admin',
-          status: 'pending',
-          lastLogin: null,
-          permissions: ['view_reports'],
-          assignedAt: '2025-09-15T00:00:00Z'
-        }
-      ];
-      setAdmins(mockAdmins);
+      if (!clinic?.id) { setAdmins([]); return; }
+      const { data, error } = await supabase
+        .from('clinics')
+        .select('id, email, contact_person, is_active, created_at')
+        .eq('id', clinic.id)
+        .single();
+      if (error) throw error;
+      const primaryAdmin = data ? [{
+        id: data.id,
+        email: data.email,
+        fullName: data.contact_person || data.email,
+        role: 'primary_admin',
+        status: data.is_active ? 'active' : 'inactive',
+        lastLogin: null,
+        permissions: ['manage_patients', 'view_reports', 'manage_staff', 'billing'],
+        assignedAt: data.created_at,
+      }] : [];
+      setAdmins(primaryAdmin);
     } catch (error) {
       console.error('Error loading clinic admins:', error);
       toast.error('Failed to load clinic administrators');
@@ -99,24 +83,21 @@ const AdminAssignmentModal = ({ clinic, isOpen, onClose, onUpdate }) => {
 
   const loadAvailableUsers = async () => {
     try {
-      // Mock available users - replace with actual API call
-      const mockUsers = [
-        {
-          id: 'user-1',
-          email: 'jane.doe@email.com',
-          fullName: 'Dr. Jane Doe',
-          department: 'Neurology'
-        },
-        {
-          id: 'user-2',
-          email: 'mark.wilson@email.com',
-          fullName: 'Mark Wilson, RN',
-          department: 'Nursing'
-        }
-      ];
-      setAvailableUsers(mockUsers);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('role', 'clinic_admin')
+        .order('email');
+      if (error) throw error;
+      setAvailableUsers((data || []).map(u => ({
+        id: u.id,
+        email: u.email,
+        fullName: u.full_name || u.email,
+        department: 'Clinic Admin',
+      })));
     } catch (error) {
       console.error('Error loading available users:', error);
+      setAvailableUsers([]);
     }
   };
 
@@ -167,8 +148,12 @@ const AdminAssignmentModal = ({ clinic, isOpen, onClose, onUpdate }) => {
   };
 
   const sendInvitationEmail = async (admin) => {
-    // Mock email sending - replace with actual email service
-    return new Promise(resolve => setTimeout(resolve, 1000));
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    await fetch(`${apiUrl}/email/clinic-invitation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: admin.email, fullName: admin.fullName, clinicName: clinic?.name }),
+    });
   };
 
   const removeAdmin = async (adminId) => {

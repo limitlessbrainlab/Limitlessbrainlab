@@ -24,11 +24,13 @@ CREATE INDEX IF NOT EXISTS idx_program_inquiries_created_at ON program_inquiries
 ALTER TABLE program_inquiries ENABLE ROW LEVEL SECURITY;
 
 -- Create policy to allow inserts from anonymous users (for public form submissions)
+DROP POLICY IF EXISTS "Allow anonymous inserts" ON program_inquiries;
 CREATE POLICY "Allow anonymous inserts" ON program_inquiries
   FOR INSERT
   WITH CHECK (true);
 
 -- Create policy to allow authenticated users to view all records (for admin access)
+DROP POLICY IF EXISTS "Allow authenticated users to view" ON program_inquiries;
 CREATE POLICY "Allow authenticated users to view" ON program_inquiries
   FOR SELECT
   USING (auth.role() = 'authenticated');

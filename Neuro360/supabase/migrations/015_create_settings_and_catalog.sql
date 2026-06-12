@@ -13,7 +13,7 @@
 -- =====================================================
 -- Stores all global system configuration
 CREATE TABLE IF NOT EXISTS system_settings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Setting identification
     key TEXT NOT NULL UNIQUE,
@@ -77,7 +77,7 @@ COMMENT ON COLUMN system_settings.requires_restart IS 'Whether changing this set
 -- =====================================================
 -- Stores dynamic pricing packages/SKUs
 CREATE TABLE IF NOT EXISTS product_catalog (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Product identification
     sku TEXT NOT NULL UNIQUE, -- e.g., 'TRIAL', 'BASIC', 'STANDARD'
@@ -183,6 +183,7 @@ ALTER TABLE product_catalog ENABLE ROW LEVEL SECURITY;
 -- ========== SYSTEM_SETTINGS RLS POLICIES ==========
 
 -- Super admins can view all settings
+DROP POLICY IF EXISTS "Super admins can view all settings" ON system_settings;
 CREATE POLICY "Super admins can view all settings"
     ON system_settings
     FOR SELECT
@@ -196,6 +197,7 @@ CREATE POLICY "Super admins can view all settings"
     );
 
 -- Public settings visible to everyone
+DROP POLICY IF EXISTS "Public settings visible to all" ON system_settings;
 CREATE POLICY "Public settings visible to all"
     ON system_settings
     FOR SELECT
@@ -203,6 +205,7 @@ CREATE POLICY "Public settings visible to all"
     USING (access_level = 'public' AND is_visible = TRUE);
 
 -- Super admins can modify settings
+DROP POLICY IF EXISTS "Super admins can modify settings" ON system_settings;
 CREATE POLICY "Super admins can modify settings"
     ON system_settings
     FOR ALL
@@ -226,6 +229,7 @@ CREATE POLICY "Super admins can modify settings"
 -- ========== PRODUCT_CATALOG RLS POLICIES ==========
 
 -- Everyone can view active, visible products
+DROP POLICY IF EXISTS "Anyone can view active products" ON product_catalog;
 CREATE POLICY "Anyone can view active products"
     ON product_catalog
     FOR SELECT
@@ -233,6 +237,7 @@ CREATE POLICY "Anyone can view active products"
     USING (is_active = TRUE AND is_visible = TRUE);
 
 -- Super admins can view all products
+DROP POLICY IF EXISTS "Super admins can view all products" ON product_catalog;
 CREATE POLICY "Super admins can view all products"
     ON product_catalog
     FOR SELECT
@@ -246,6 +251,7 @@ CREATE POLICY "Super admins can view all products"
     );
 
 -- Super admins can manage products
+DROP POLICY IF EXISTS "Super admins can manage products" ON product_catalog;
 CREATE POLICY "Super admins can manage products"
     ON product_catalog
     FOR ALL

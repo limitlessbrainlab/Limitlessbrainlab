@@ -27,9 +27,11 @@ ON CONFLICT (package_id) DO NOTHING;
 ALTER TABLE pricing_config ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read pricing
+DROP POLICY IF EXISTS "Anyone can read pricing" ON pricing_config;
 CREATE POLICY "Anyone can read pricing" ON pricing_config
   FOR SELECT USING (true);
 
 -- Only super_admin can modify pricing (via service role key from server)
+DROP POLICY IF EXISTS "Service role can manage pricing" ON pricing_config;
 CREATE POLICY "Service role can manage pricing" ON pricing_config
   FOR ALL USING (true) WITH CHECK (true);

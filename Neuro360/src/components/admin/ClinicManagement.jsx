@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import {
   Plus,
   Edit,
@@ -115,7 +116,7 @@ const ClinicManagement = ({ onUpdate }) => {
       console.error('Index:', index);
 
       // Show detailed error message
-      toast.error(`Failed to delete clinic: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
     }
   };
 
@@ -409,8 +410,8 @@ const ClinicManagement = ({ onUpdate }) => {
     } catch (error) {
       console.error('ERROR: Error loading clinics:', error);
       if (isMounted) {
-        toast.error('Error loading clinics: ' + error.message);
-        setError('Failed to load clinics: ' + error.message);
+        toast.error(getFriendlyErrorMessage(error, 'Failed to load clinics. Please try again.'));
+        setError(getFriendlyErrorMessage(error, 'Failed to load clinics. Please try again.'));
         // Set empty array to prevent further errors
         setClinics([]);
       }
@@ -494,7 +495,7 @@ const ClinicManagement = ({ onUpdate }) => {
 
     } catch (error) {
       console.error('ERROR: Failed to create clinic:', error);
-      toast.error(`Error creating clinic: ${error.message || 'Unknown error'}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to create the clinic. Please try again.'));
     }
   };
 
@@ -647,8 +648,8 @@ const ClinicManagement = ({ onUpdate }) => {
           stack: error.stack,
           clinicId: clinicId 
         });
-        alert(`Delete failed: ${error.message}`);
-        toast.error('Error deleting clinic: ' + error.message);
+        alert(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
+        toast.error(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
       }
     } else {
       alert('Delete cancelled by user');

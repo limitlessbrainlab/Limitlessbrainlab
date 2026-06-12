@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DatabaseService from '../../services/databaseService';
 import { supabase } from '../../lib/supabaseClient';
 import SubscriptionPopup from '../admin/SubscriptionPopup';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpdate, creditsExhausted = false }) => {
   const { user } = useAuth();
@@ -47,9 +48,9 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
   // Error boundary-like error handling
   const handleError = (error, context) => {
     console.error(`ERROR: ReportViewer Error in ${context}:`, error);
-    const errorMessage = error?.message || 'Unknown error occurred';
-    setError(`Error in ${context}: ${errorMessage}`);
-    toast.error(`Failed to ${context}. Please try again.`);
+    const friendlyMessage = getFriendlyErrorMessage(error, `Failed to ${context}. Please try again.`);
+    setError(friendlyMessage);
+    toast.error(friendlyMessage);
   };
 
   // Load reports directly from database
@@ -433,7 +434,7 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
             }
           } catch (storageError) {
             console.error('ERROR: Supabase Storage download failed:', storageError);
-            toast.error(`Storage error: ${storageError.message}`);
+            toast.error(getFriendlyErrorMessage(storageError, 'There was a problem downloading the file. Please try again.'));
           }
         }
       }
@@ -470,7 +471,7 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
           fileUrl: report.fileUrl || report.file_url,
           fileName
         });
-        toast.error(`File not found in storage. Report: ${fileName}. Please check if file was uploaded correctly.`);
+        toast.error(`The file for "${fileName}" could not be found. It may not have been uploaded correctly — please try again or contact support.`);
       } else {
         // Increment download counter (shared quota with uploads)
         try {
@@ -490,7 +491,7 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
       }
     } catch (error) {
       console.error('ERROR: Error downloading report:', error);
-      toast.error(`Failed to download report: ${error?.message || 'Unknown error'}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to download the report. Please try again.'));
     } finally {
       setLoading(false);
     }

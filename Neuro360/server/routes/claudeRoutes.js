@@ -22,8 +22,8 @@ router.post('/claude', authMiddleware, async (req, res) => {
   }
 });
 
-// Test endpoint without auth (for testing VPS connection)
-router.post('/claude-test', async (req, res) => {
+// Test endpoint for VPS connection — auth required in production
+router.post('/claude-test', authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 

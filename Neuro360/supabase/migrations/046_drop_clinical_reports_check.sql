@@ -1,0 +1,1 @@
+ALTER TABLE clinical_reports DROP CONSTRAINT IF EXISTS clinical_reports_patient_uid_check;

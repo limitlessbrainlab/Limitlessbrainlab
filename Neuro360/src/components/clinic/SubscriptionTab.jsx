@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabaseClient';
 import PaymentHistory from '../payment/PaymentHistory';
 import PaymentSuccessModal from '../payment/PaymentSuccessModal';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -292,7 +293,7 @@ const SubscriptionTab = ({ onPaymentSuccess } = {}) => {
         }));
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);

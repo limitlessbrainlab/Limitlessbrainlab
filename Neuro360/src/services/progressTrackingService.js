@@ -1,21 +1,11 @@
 // Progress Tracking Service
 // Handles longitudinal data analysis, progress comparisons, and trend tracking
 
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 import aiAnalysisService from './aiAnalysisService';
 
 class ProgressTrackingService {
   constructor() {
-    // Initialize Supabase client
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('WARNING: Progress Tracking Service: Using offline mode');
-      this.supabase = null;
-    }
 
     // Progress metrics configuration
     this.progressMetrics = {
@@ -87,7 +77,7 @@ class ProgressTrackingService {
    */
   async getPatientProgressHistory(patientId, timeframe = '6months') {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockProgressHistory(patientId);
       }
 
@@ -113,7 +103,7 @@ class ProgressTrackingService {
       }
 
       // Get all analyses for the patient in timeframe
-      const { data: analyses, error } = await this.supabase
+      const { data: analyses, error } = await supabase
         .from('cloud_analyses')
         .select('*')
         .eq('patient_id', patientId)
@@ -196,7 +186,7 @@ class ProgressTrackingService {
   async getCurrentProgressStatus(patientId) {
     try {
       // Get latest analysis
-      const { data: latestAnalysis, error } = await this.supabase
+      const { data: latestAnalysis, error } = await supabase
         .from('cloud_analyses')
         .select('*')
         .eq('patient_id', patientId)
@@ -244,11 +234,11 @@ class ProgressTrackingService {
    */
   async getSessionProgressData(patientId, limit = 10) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockSessionProgress();
       }
 
-      const { data: sessions, error } = await this.supabase
+      const { data: sessions, error } = await supabase
         .from('neurofeedback_sessions')
         .select('*')
         .eq('patient_id', patientId)

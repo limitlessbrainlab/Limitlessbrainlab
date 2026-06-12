@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import { countryCodes } from '../utils/countryCodes';
 import LocationService, { DEFAULT_LOCATIONS } from '../services/locationService';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -232,7 +233,7 @@ const ContactFormPopup = ({ isOpen, onClose, source = null }) => {
       }, 3000);
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error(error.message || 'Failed to send message. Please try again.');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to send your message. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

@@ -4944,7 +4944,7 @@ const PatientDashboard = () => {
                         <span>Responsibilities</span>
                       </h4>
                       <ul className="space-y-1.5">
-                        {lobeData[selectedLobe].responsibilities.map((item, idx) => (
+                        {(Array.isArray(lobeData[selectedLobe].responsibilities) ? lobeData[selectedLobe].responsibilities : []).map((item, idx) => (
                           <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 flex items-start space-x-2">
                             <span className="text-[#323956] mt-0.5 flex-shrink-0">•</span>
                             <span>{item}</span>
@@ -4959,7 +4959,7 @@ const PatientDashboard = () => {
                         <span>How to Strengthen</span>
                       </h4>
                       <ul className="space-y-1.5">
-                        {lobeData[selectedLobe].strengthen.map((item, idx) => (
+                        {(Array.isArray(lobeData[selectedLobe].strengthen) ? lobeData[selectedLobe].strengthen : []).map((item, idx) => (
                           <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 flex items-start space-x-2">
                             <span className="text-green-500 mt-0.5 flex-shrink-0">✓</span>
                             <span>{item}</span>
@@ -7961,81 +7961,6 @@ const PatientDashboard = () => {
                     <p className="text-white text-sm font-semibold">{featured.title}</p>
                     <p className="text-gray-400 text-xs">{featured.subtitle}</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Frequencies Section */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center space-x-2">
-                  <div className="bg-[#323956] rounded-lg p-1.5">
-                    <Music className="h-4 w-4 text-white" />
-                  </div>
-                  <h3 className="text-base sm:text-lg font-bold text-gray-800 dark:text-white">Meditation Frequencies</h3>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {meditationPacks.slice(0, 3).map((pack, index) => {
-                    const isFirstCard = index === 0;
-                    const isPurchased = purchasedPacks.includes(pack.id);
-                    const isUnlocked = isFirstCard || isPurchased || pack.isFree;
-                    return (
-                      <div
-                        key={pack.id}
-                        id={`med-pack-${pack.id}`}
-                        className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all flex flex-col h-full"
-                      >
-                        <div className="relative aspect-video overflow-hidden">
-                          {pack.image ? (
-                            <img
-                              src={pack.image}
-                              alt={pack.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => e.target.style.display = 'none'}
-                            />
-                          ) : null}
-                          <div className={`w-full h-full bg-gradient-to-r ${pack.color} ${pack.image ? 'hidden' : 'flex'} items-center justify-center`}>
-                            <div className="text-center">
-                              <p className="text-white text-xl font-bold">{pack.name}</p>
-                              <p className="text-white/80 text-xs mt-1">{pack.suffix}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-3 flex flex-col flex-grow">
-                          <p className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 line-clamp-2 flex-grow">{pack.description}</p>
-                          {isUnlocked ? (
-                            <>
-                              {isFirstCard && !isPurchased && (
-                                <div className="text-sm font-bold text-green-600 dark:text-green-400 mb-2">Free</div>
-                              )}
-                              <button
-                                onClick={() => playMeditationTrack(pack)}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-xs flex items-center justify-center space-x-1.5 transition-colors"
-                              >
-                                <Play className="h-3 w-3" />
-                                <span>Listen Now</span>
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center space-x-1.5 mb-2">
-                                <span className="text-sm font-bold text-gray-900 dark:text-white">${pack.price}</span>
-                                <span className="text-xs text-gray-400 line-through">${pack.originalPrice}</span>
-                              </div>
-                              <button
-                                onClick={() => handlePurchase(pack.id, pack.name)}
-                                disabled={isProcessingPayment === pack.id}
-                                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white py-2 rounded-lg font-medium text-xs flex items-center justify-center space-x-1.5 transition-colors"
-                              >
-                                <ShoppingCart className="h-3 w-3" />
-                                <span>Buy Now</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
 

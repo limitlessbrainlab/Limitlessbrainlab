@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Camera, User, Mail, Building, Shield, Save, Upload, CheckCircle, Phone, MapPin, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import StorageService from '../../services/storageService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
   const { user, updateUser } = useAuth();
@@ -72,7 +73,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
 
       } catch (error) {
         console.error('AVATAR: Error selecting file:', error);
-        alert('Error selecting image: ' + error.message);
+        alert(getFriendlyErrorMessage(error, 'Could not read the selected image. Please try a different file.'));
       } finally {
         setUploadingAvatar(false);
       }
@@ -118,7 +119,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
           }
         } catch (uploadError) {
           console.error('AVATAR: Upload error:', uploadError);
-          alert('Failed to upload avatar: ' + uploadError.message);
+          alert(getFriendlyErrorMessage(uploadError, 'Failed to upload your profile photo. Please try again.'));
           setIsLoading(false);
           return;
         }
@@ -193,11 +194,11 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
       } else {
         console.error('=== PROFILE SAVE FAILED ===');
         console.error('ERROR: Failed to save profile:', result.error);
-        alert(result.error || 'Failed to save profile');
+        alert(getFriendlyErrorMessage(result.error, 'Failed to save your profile. Please try again.'));
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Error updating profile: ' + error.message);
+      alert(getFriendlyErrorMessage(error, 'Failed to update your profile. Please try again.'));
     } finally {
       setIsLoading(false);
     }

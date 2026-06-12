@@ -2,7 +2,7 @@
 -- This table stores complete payment information including subscription details
 
 CREATE TABLE IF NOT EXISTS payment_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Payment identifiers
   payment_id VARCHAR(255) NOT NULL UNIQUE,  -- Razorpay payment ID (pay_xxx)
@@ -52,14 +52,15 @@ CREATE INDEX IF NOT EXISTS idx_payment_history_created_at ON payment_history(cre
 CREATE INDEX IF NOT EXISTS idx_payment_history_package_id ON payment_history(package_id);
 
 -- Add updated_at trigger
-CREATE TRIGGER update_payment_history_updated_at
-  BEFORE UPDATE ON payment_history
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$ BEGIN
+  CREATE TRIGGER update_payment_history_updated_at BEFORE UPDATE ON payment_history FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Enable Row Level Security
 ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Allow all operations (refine later for production)
+DROP POLICY IF EXISTS "Allow all operations on payment_history" ON payment_history;
 CREATE POLICY "Allow all operations on payment_history"
   ON payment_history FOR ALL USING (true);
 

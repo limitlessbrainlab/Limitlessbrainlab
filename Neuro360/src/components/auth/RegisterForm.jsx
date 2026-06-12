@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { User, Mail, Lock, Eye, EyeOff, Loader2, Phone, MapPin, LocateFixed } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { countryCodes, validatePhoneNumber } from '../../utils/countryCodes';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const RegisterForm = () => {
   const location = useLocation();
@@ -92,7 +93,7 @@ const RegisterForm = () => {
             setValue('address', data.address);
             setLocationError('');
           } else {
-            setLocationError(data.message || 'Could not get address');
+            setLocationError(getFriendlyErrorMessage(data.message, 'We could not find your address. Please type it in manually.'));
           }
         } catch (error) {
           console.error('Geocoding error:', error);
@@ -150,7 +151,7 @@ const RegisterForm = () => {
           navigate('/dashboard');
         }
       } else {
-        setError('root', { message: result?.error || 'Registration failed. Please try again.' });
+        setError('root', { message: getFriendlyErrorMessage(result?.error, 'Registration failed. Please try again.') });
       }
     } catch (error) {
       console.error('ALERT: Registration form error:', error);

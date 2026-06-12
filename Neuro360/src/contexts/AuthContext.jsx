@@ -3,27 +3,8 @@ import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
 import { authService } from '../services/authService';
 import DatabaseService from '../services/databaseService';
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 import { getFriendlyErrorMessage } from '../utils/friendlyError';
-
-// Get Supabase environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-// Check if we have valid Supabase configuration
-const hasValidSupabaseConfig = supabaseUrl && supabaseUrl !== 'https://placeholder.supabase.co' &&
-                               supabaseAnonKey && supabaseAnonKey !== 'placeholder-anon-key';
-
-// Initialize Supabase client only if we have valid config
-let supabase = null;
-
-if (hasValidSupabaseConfig) {
-  // storageKey must match supabaseService.js — login writes the session under this key
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { storageKey: 'neuro360-auth' }
-  });
-} else {
-}
 
 // START: DEVELOPMENT MODE: Bypass authentication
 const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true' || false; // Set to false to enable authentication

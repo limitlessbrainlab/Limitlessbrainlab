@@ -1,5 +1,5 @@
 // Supabase Connection Test Utility
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 
 // Test Supabase connection and configuration
 export const testSupabaseConnection = async () => {
@@ -22,8 +22,6 @@ export const testSupabaseConnection = async () => {
   }
 
   try {
-    // Create Supabase client
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     // Test connection by trying to fetch from a system table
     const { data, error } = await supabase.auth.getSession();

@@ -19,6 +19,7 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const AssessmentManagement = () => {
   const [assessments, setAssessments] = useState([]);
@@ -106,7 +107,7 @@ const AssessmentManagement = () => {
       loadAssessments();
     } catch (error) {
       console.error('Error creating assessment:', error);
-      toast.error(`Failed to create assessment: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to create the assessment. Please try again.'));
     }
   };
 
@@ -147,7 +148,7 @@ const AssessmentManagement = () => {
       loadAssessments();
     } catch (error) {
       console.error('Error updating assessment:', error);
-      toast.error(`Failed to update assessment: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to update the assessment. Please try again.'));
     }
   };
 
@@ -186,7 +187,7 @@ const AssessmentManagement = () => {
       loadAssessments();
     } catch (error) {
       console.error('Error deleting assessment:', error);
-      toast.error(`Failed to delete assessment: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to delete the assessment. Please try again.'));
     }
   };
 

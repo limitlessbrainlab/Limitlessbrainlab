@@ -12,7 +12,7 @@
 -- =====================================================
 -- Manages multi-user access within clinics with granular permissions
 CREATE TABLE IF NOT EXISTS clinic_roles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- References
     clinic_id UUID REFERENCES clinics(id) ON DELETE CASCADE NOT NULL,
@@ -113,7 +113,7 @@ COMMENT ON COLUMN clinic_roles.is_primary IS 'Primary owner cannot be removed or
 -- =====================================================
 -- Stores monthly usage statements and invoices
 CREATE TABLE IF NOT EXISTS monthly_statements (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Period identification
     clinic_id UUID REFERENCES clinics(id) ON DELETE CASCADE NOT NULL,
@@ -211,6 +211,7 @@ ALTER TABLE monthly_statements ENABLE ROW LEVEL SECURITY;
 -- ========== CLINIC_ROLES RLS POLICIES ==========
 
 -- Clinic staff can view roles in their clinic
+DROP POLICY IF EXISTS "Clinic staff can view their clinic roles" ON clinic_roles;
 CREATE POLICY "Clinic staff can view their clinic roles"
     ON clinic_roles
     FOR SELECT
@@ -224,6 +225,7 @@ CREATE POLICY "Clinic staff can view their clinic roles"
     );
 
 -- Clinic owners can manage roles in their clinic
+DROP POLICY IF EXISTS "Clinic owners can manage roles" ON clinic_roles;
 CREATE POLICY "Clinic owners can manage roles"
     ON clinic_roles
     FOR ALL
@@ -246,6 +248,7 @@ CREATE POLICY "Clinic owners can manage roles"
     );
 
 -- Super admins can view and manage all roles
+DROP POLICY IF EXISTS "Super admins can manage all roles" ON clinic_roles;
 CREATE POLICY "Super admins can manage all roles"
     ON clinic_roles
     FOR ALL
@@ -269,6 +272,7 @@ CREATE POLICY "Super admins can manage all roles"
 -- ========== MONTHLY_STATEMENTS RLS POLICIES ==========
 
 -- Clinics can view their own statements
+DROP POLICY IF EXISTS "Clinics can view their own statements" ON monthly_statements;
 CREATE POLICY "Clinics can view their own statements"
     ON monthly_statements
     FOR SELECT
@@ -281,6 +285,7 @@ CREATE POLICY "Clinics can view their own statements"
     );
 
 -- Super admins can view and manage all statements
+DROP POLICY IF EXISTS "Super admins can manage all statements" ON monthly_statements;
 CREATE POLICY "Super admins can manage all statements"
     ON monthly_statements
     FOR ALL

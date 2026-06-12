@@ -1,6 +1,6 @@
 -- Create payments table for all payment tracking (clinics + patients)
 CREATE TABLE IF NOT EXISTS payments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clinic_id UUID,
   patient_email VARCHAR(255),
   amount DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -20,13 +20,16 @@ CREATE TABLE IF NOT EXISTS payments (
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Allow all operations for authenticated users
+DROP POLICY IF EXISTS "Allow all for authenticated users" ON payments;
 CREATE POLICY "Allow all for authenticated users" ON payments
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- Allow anon insert for webhook (server-side)
+DROP POLICY IF EXISTS "Allow insert for anon" ON payments;
 CREATE POLICY "Allow insert for anon" ON payments
   FOR INSERT TO anon WITH CHECK (true);
 
 -- Allow anon select for webhook verification
+DROP POLICY IF EXISTS "Allow select for anon" ON payments;
 CREATE POLICY "Allow select for anon" ON payments
   FOR SELECT TO anon USING (true);

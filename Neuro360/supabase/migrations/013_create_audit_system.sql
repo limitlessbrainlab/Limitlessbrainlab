@@ -12,7 +12,7 @@
 -- =====================================================
 -- Tracks all system-wide user actions for compliance
 CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- User identification
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -74,7 +74,7 @@ COMMENT ON COLUMN audit_logs.changes IS 'JSONB object showing specific fields th
 -- =====================================================
 -- Tracks all report downloads with consent information
 CREATE TABLE IF NOT EXISTS download_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Report and user references
     report_id UUID REFERENCES reports(id) ON DELETE CASCADE,
@@ -140,7 +140,7 @@ COMMENT ON COLUMN download_logs.hipaa_compliant IS 'Flag indicating if download 
 -- =====================================================
 -- Tracks patient portal access and data viewing
 CREATE TABLE IF NOT EXISTS access_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- User identification
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -213,6 +213,7 @@ ALTER TABLE access_logs ENABLE ROW LEVEL SECURITY;
 -- ========== AUDIT_LOGS RLS POLICIES ==========
 
 -- Super admins can view all audit logs
+DROP POLICY IF EXISTS "Super admins can view all audit logs" ON audit_logs;
 CREATE POLICY "Super admins can view all audit logs"
     ON audit_logs
     FOR SELECT
@@ -226,6 +227,7 @@ CREATE POLICY "Super admins can view all audit logs"
     );
 
 -- Super admins can insert audit logs
+DROP POLICY IF EXISTS "Super admins can insert audit logs" ON audit_logs;
 CREATE POLICY "Super admins can insert audit logs"
     ON audit_logs
     FOR INSERT
@@ -239,6 +241,7 @@ CREATE POLICY "Super admins can insert audit logs"
     );
 
 -- System can insert audit logs (for service accounts)
+DROP POLICY IF EXISTS "Service can insert audit logs" ON audit_logs;
 CREATE POLICY "Service can insert audit logs"
     ON audit_logs
     FOR INSERT
@@ -249,6 +252,7 @@ CREATE POLICY "Service can insert audit logs"
 -- ========== DOWNLOAD_LOGS RLS POLICIES ==========
 
 -- Super admins can view all download logs
+DROP POLICY IF EXISTS "Super admins can view all download logs" ON download_logs;
 CREATE POLICY "Super admins can view all download logs"
     ON download_logs
     FOR SELECT
@@ -262,6 +266,7 @@ CREATE POLICY "Super admins can view all download logs"
     );
 
 -- Clinic admins can view their clinic's download logs
+DROP POLICY IF EXISTS "Clinic admins can view their clinic download logs" ON download_logs;
 CREATE POLICY "Clinic admins can view their clinic download logs"
     ON download_logs
     FOR SELECT
@@ -274,6 +279,7 @@ CREATE POLICY "Clinic admins can view their clinic download logs"
     );
 
 -- Patients can view their own download logs
+DROP POLICY IF EXISTS "Patients can view their own download logs" ON download_logs;
 CREATE POLICY "Patients can view their own download logs"
     ON download_logs
     FOR SELECT
@@ -286,6 +292,7 @@ CREATE POLICY "Patients can view their own download logs"
     );
 
 -- System can insert download logs
+DROP POLICY IF EXISTS "System can insert download logs" ON download_logs;
 CREATE POLICY "System can insert download logs"
     ON download_logs
     FOR INSERT
@@ -296,6 +303,7 @@ CREATE POLICY "System can insert download logs"
 -- ========== ACCESS_LOGS RLS POLICIES ==========
 
 -- Super admins can view all access logs
+DROP POLICY IF EXISTS "Super admins can view all access logs" ON access_logs;
 CREATE POLICY "Super admins can view all access logs"
     ON access_logs
     FOR SELECT
@@ -309,6 +317,7 @@ CREATE POLICY "Super admins can view all access logs"
     );
 
 -- Patients can view their own access logs
+DROP POLICY IF EXISTS "Patients can view their own access logs" ON access_logs;
 CREATE POLICY "Patients can view their own access logs"
     ON access_logs
     FOR SELECT
@@ -318,6 +327,7 @@ CREATE POLICY "Patients can view their own access logs"
     );
 
 -- System can insert access logs
+DROP POLICY IF EXISTS "System can insert access logs" ON access_logs;
 CREATE POLICY "System can insert access logs"
     ON access_logs
     FOR INSERT

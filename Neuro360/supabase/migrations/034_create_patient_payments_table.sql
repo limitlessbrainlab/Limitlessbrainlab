@@ -1,6 +1,6 @@
 -- Create patient_payments table for tracking patient purchases per clinic
 CREATE TABLE IF NOT EXISTS patient_payments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clinic_id UUID,
   patient_id UUID,
   patient_email VARCHAR(255) NOT NULL,
@@ -28,11 +28,14 @@ CREATE INDEX IF NOT EXISTS idx_patient_payments_date ON patient_payments(created
 ALTER TABLE patient_payments ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "Allow all for authenticated" ON patient_payments;
 CREATE POLICY "Allow all for authenticated" ON patient_payments
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow insert for anon" ON patient_payments;
 CREATE POLICY "Allow insert for anon" ON patient_payments
   FOR INSERT TO anon WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow select for anon" ON patient_payments;
 CREATE POLICY "Allow select for anon" ON patient_payments
   FOR SELECT TO anon USING (true);

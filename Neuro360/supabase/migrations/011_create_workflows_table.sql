@@ -47,6 +47,7 @@ ALTER TABLE public.workflows ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 -- Clinics can only see their own workflows
+DROP POLICY IF EXISTS "Clinics can view own workflows" ON workflows;
 CREATE POLICY "Clinics can view own workflows"
     ON public.workflows
     FOR SELECT
@@ -58,6 +59,7 @@ CREATE POLICY "Clinics can view own workflows"
     );
 
 -- Clinics can insert their own workflows
+DROP POLICY IF EXISTS "Clinics can insert own workflows" ON workflows;
 CREATE POLICY "Clinics can insert own workflows"
     ON public.workflows
     FOR INSERT
@@ -69,6 +71,7 @@ CREATE POLICY "Clinics can insert own workflows"
     );
 
 -- Clinics can update their own workflows
+DROP POLICY IF EXISTS "Clinics can update own workflows" ON workflows;
 CREATE POLICY "Clinics can update own workflows"
     ON public.workflows
     FOR UPDATE
@@ -80,6 +83,7 @@ CREATE POLICY "Clinics can update own workflows"
     );
 
 -- Super admins can see all workflows
+DROP POLICY IF EXISTS "Super admins can view all workflows" ON workflows;
 CREATE POLICY "Super admins can view all workflows"
     ON public.workflows
     FOR ALL

@@ -25,6 +25,7 @@ import AccessControlService, { SUBSCRIPTION_TIERS } from '../services/accessCont
 import PaymentGatewayService from '../services/paymentGatewayService';
 import ContactFormPopup from '../components/ContactFormPopup';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 const PatientSubscription = () => {
   const { user } = useAuth();
@@ -158,7 +159,7 @@ const PatientSubscription = () => {
             }
           },
           onError: (error) => {
-            toast.error(error.message || 'Payment failed. Please try again.');
+            toast.error(getFriendlyErrorMessage(error, 'The payment could not be completed. Please try again.'));
           },
           onProcessing: () => {
             toast.loading('Redirecting to payment...', { duration: 3000 });
@@ -181,7 +182,7 @@ const PatientSubscription = () => {
         // Open contact form for support
         setShowContactForm(true);
       } else {
-        toast.error(error.message || 'Payment failed. Please try again.');
+        toast.error(getFriendlyErrorMessage(error, 'The payment could not be completed. Please try again.'));
       }
     } finally {
       setProcessingPayment(false);

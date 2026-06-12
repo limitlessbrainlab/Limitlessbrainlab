@@ -1,9 +1,40 @@
+-- Create coaches table (schema derived from source data)
+CREATE TABLE IF NOT EXISTS coaches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  photo TEXT,
+  credentials TEXT,
+  specialties JSONB DEFAULT '[]',
+  modalities JSONB DEFAULT '[]',
+  rating NUMERIC(3,1) DEFAULT 0,
+  reviews_count INTEGER DEFAULT 0,
+  is_online BOOLEAN DEFAULT true,
+  is_in_person BOOLEAN DEFAULT true,
+  price NUMERIC(10,2),
+  price_display VARCHAR(100),
+  bio TEXT,
+  languages JSONB DEFAULT '[]',
+  experience TEXT,
+  latitude NUMERIC(10,7),
+  longitude NUMERIC(10,7),
+  city VARCHAR(100),
+  phone VARCHAR(50),
+  email VARCHAR(255),
+  whatsapp VARCHAR(50),
+  next_slots JSONB DEFAULT '[]',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE coaches ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN CREATE POLICY "Allow all for coaches" ON coaches FOR ALL USING (true) WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- Migration: Create coaching credits system
 -- Description: Adds patient_coaching_credits table and extends coaches table with Calendly support
 
 -- Patient coaching credits table
 CREATE TABLE IF NOT EXISTS patient_coaching_credits (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_email VARCHAR(255) NOT NULL,
     credits_available INTEGER DEFAULT 1,
     credits_used INTEGER DEFAULT 0,
@@ -24,6 +55,17 @@ CREATE INDEX IF NOT EXISTS idx_coaching_credits_expires ON patient_coaching_cred
 ALTER TABLE coaches ADD COLUMN IF NOT EXISTS calendly_url VARCHAR(500);
 ALTER TABLE coaches ADD COLUMN IF NOT EXISTS booking_preference VARCHAR(50) DEFAULT 'whatsapp';
 
+-- Create coach_connection_requests table (if not exists)
+CREATE TABLE IF NOT EXISTS coach_connection_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+  coach_id UUID REFERENCES coaches(id) ON DELETE CASCADE,
+  status VARCHAR(50) DEFAULT 'pending',
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Add admin_notes to connection requests for tracking
 ALTER TABLE coach_connection_requests ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 
@@ -31,12 +73,14 @@ ALTER TABLE coach_connection_requests ADD COLUMN IF NOT EXISTS admin_notes TEXT;
 ALTER TABLE patient_coaching_credits ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read their own credits
+DROP POLICY IF EXISTS "Users can view own coaching credits" ON patient_coaching_credits;
 CREATE POLICY "Users can view own coaching credits"
     ON patient_coaching_credits
     FOR SELECT
     USING (auth.jwt() ->> 'email' = patient_email);
 
 -- Allow service role to manage all credits
+DROP POLICY IF EXISTS "Service role can manage all coaching credits" ON patient_coaching_credits;
 CREATE POLICY "Service role can manage all coaching credits"
     ON patient_coaching_credits
     FOR ALL

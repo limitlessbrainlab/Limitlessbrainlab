@@ -12,6 +12,7 @@ import SubscriptionTab from './SubscriptionTab';
 import AdvancedAnalytics from './AdvancedAnalytics';
 import ClinicAdminPanel from './ClinicAdminPanel';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -155,7 +156,7 @@ const PendingSubscriptionGate = ({ user, clinic, onPaymentSuccess }) => {
         }));
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout session');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -368,7 +369,7 @@ const CreditsExhaustedPopup = ({ user, clinic, onDismiss, onPaymentSuccess }) =>
         }));
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(data.message || 'Failed to create checkout');
+        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
       }
     } catch (err) {
       console.error('Payment error:', err);

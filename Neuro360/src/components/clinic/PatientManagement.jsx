@@ -23,6 +23,7 @@ import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import StorageService from '../../services/storageService';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import UploadReportModal from './UploadReportModal';
 import ClinicalReportView from './ClinicalReportView';
 import { useAuth } from '../../contexts/AuthContext';
@@ -380,7 +381,7 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
       onUpdate?.();
     } catch (error) {
       console.error('ERROR: Error creating patient:', error);
-      toast.error('Error creating patient: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to create the patient. Please try again.'));
     }
   };
 
@@ -1205,7 +1206,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
             toast.success(`${key} uploaded successfully!`);
           } catch (uploadError) {
             console.error(`Error uploading ${key}:`, uploadError);
-            toast.error(`Failed to upload ${key}: ${uploadError.message}`);
+            toast.error(getFriendlyErrorMessage(uploadError, `Failed to upload ${key}. Please try again.`));
           }
         }
       }
@@ -1294,7 +1295,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
       }
     } catch (error) {
       console.error('Error saving documentation:', error);
-      toast.error('Failed to save documentation: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to save the documentation. Please try again.'));
     } finally {
       setSaving(false);
     }

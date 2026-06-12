@@ -33,6 +33,7 @@ import SubscriptionPopup from './SubscriptionPopup';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import NotificationService from '../../services/notificationService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) => {
   const { user } = useAuth();
@@ -391,7 +392,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       setSubscriptions(subscriptionMap);
     } catch (error) {
       console.error('ERROR: Critical error loading admin patient reports:', error);
-      setError(`Failed to load data: ${error.message}`);
+      setError(getFriendlyErrorMessage(error, 'We could not load the patient reports. Please try again.'));
       toast.error('Error loading patient reports data');
     } finally {
       setLoading(false);
@@ -483,7 +484,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
         StorageService.validateFile(file);
         setSelectedFile(file);
       } catch (error) {
-        toast.error(error.message);
+        toast.error(getFriendlyErrorMessage(error, 'This file cannot be uploaded. Please choose a supported file type within the size limit.'));
         setSelectedFile(null);
       }
     }
@@ -496,7 +497,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
         StorageService.validateFile(file);
         setSelectedOtherDocFile(file);
       } catch (error) {
-        toast.error(error.message);
+        toast.error(getFriendlyErrorMessage(error, 'This file cannot be uploaded. Please choose a supported file type within the size limit.'));
         setSelectedOtherDocFile(null);
       }
     } else {
@@ -668,7 +669,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           }
         } catch (otherDocError) {
           console.error('ERROR: Other document upload failed:', otherDocError);
-          toast.error(`Brain Wellness report uploaded, but other document failed: ${otherDocError.message}`);
+          toast.error(getFriendlyErrorMessage(otherDocError, 'Brain Wellness report uploaded, but the other document could not be uploaded. Please try uploading it again.'));
         }
       }
 
@@ -721,8 +722,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
         } : null
       });
 
-      const errorMessage = error.message || 'Unknown error occurred';
-      toast.error(`Upload failed: ${errorMessage}`);
+      toast.error(getFriendlyErrorMessage(error, 'Upload failed. Please try again.'));
       setUploadProgress(0);
     } finally {
       setUploadingFile(false);
@@ -920,7 +920,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           }
         } catch (otherDocError) {
           console.error('ERROR: Other document upload failed:', otherDocError);
-          toast.error(`Response uploaded, but other document failed: ${otherDocError.message}`);
+          toast.error(getFriendlyErrorMessage(otherDocError, 'Response uploaded, but the other document could not be uploaded. Please try uploading it again.'));
         }
       }
 
@@ -935,8 +935,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       onUpdate?.();
     } catch (error) {
       console.error('ERROR: Response Upload Error:', error);
-      const errorMessage = error.message || 'Unknown error occurred';
-      toast.error(`Response upload failed: ${errorMessage}`);
+      toast.error(getFriendlyErrorMessage(error, 'Response upload failed. Please try again.'));
       setUploadProgress(0);
     } finally {
       setUploadingFile(false);
@@ -1061,7 +1060,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       }
     } catch (error) {
       console.error('ERROR: Error downloading report:', error);
-      toast.error(`Download failed: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Download failed. Please try again.'));
     }
   };
 
@@ -2516,7 +2515,7 @@ const UploadReportModal = ({
       setOtherDocNotes('');
     } catch (error) {
       console.error('ERROR: Form submission error:', error);
-      toast.error(`Form submission failed: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Form submission failed. Please check the details and try again.'));
     }
   };
 
@@ -3072,7 +3071,7 @@ Recommendation: Contact the clinic to re-upload this report.`;
       }
     } catch (error) {
       console.error('ERROR: Error loading report content:', error);
-      setError('Failed to load report content: ' + error.message);
+      setError(getFriendlyErrorMessage(error, 'Failed to load the report content. Please try again.'));
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 // Stripe configuration
 const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
@@ -263,7 +264,7 @@ class StripeService {
       }
     } catch (error) {
       console.error('ERROR: Failed to redirect to checkout:', error);
-      toast.error(error.message || 'Failed to open payment page');
+      toast.error(getFriendlyErrorMessage(error, 'The payment page could not be opened. Please try again.'));
       throw error;
     }
   }

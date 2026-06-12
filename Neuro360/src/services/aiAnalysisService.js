@@ -1,20 +1,10 @@
 // AI Analysis Service for Real EEG Data Processing
 // Integrates with NeuroSense Cloud AI algorithms for genuine analysis
 
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 
 class AIAnalysisService {
   constructor() {
-    // Initialize Supabase client
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('WARNING: AI Analysis Service: Using offline mode');
-      this.supabase = null;
-    }
 
     // AI Analysis endpoints
     this.endpoints = {
@@ -404,12 +394,12 @@ class AIAnalysisService {
    * Store analysis results in database
    */
   async storeAnalysisResults(analysisReport) {
-    if (!this.supabase) {
+    if (!supabase) {
       return;
     }
 
     try {
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('eeg_analyses')
         .insert({
           session_id: analysisReport.sessionId,
@@ -553,10 +543,10 @@ class AIAnalysisService {
   }
 
   async getPatientHistory(patientId) {
-    if (!this.supabase) return [];
+    if (!supabase) return [];
 
     try {
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('eeg_analyses')
         .select('analysis_data')
         .eq('patient_id', patientId)

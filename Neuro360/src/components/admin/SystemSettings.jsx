@@ -27,6 +27,7 @@ import {
 import toast from 'react-hot-toast';
 import DatabaseBackupService from '../../services/databaseBackupService';
 import LocationService from '../../services/locationService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const SystemSettings = () => {
   const [activeSection, setActiveSection] = useState('general');
@@ -66,7 +67,7 @@ const SystemSettings = () => {
         await loadLastBackupInfo();
       } else {
         toast.error(
-          `Backup failed: ${result.error}`,
+          getFriendlyErrorMessage(result.error, 'The backup could not be completed. Please try again.'),
           { id: loadingToast }
         );
       }
@@ -140,7 +141,7 @@ const SystemSettings = () => {
       setNewLocationName('');
       loadLocations();
     } else {
-      toast.error(result.error || 'Failed to add location');
+      toast.error(getFriendlyErrorMessage(result.error, 'Failed to add the location. Please try again.'));
     }
   };
 
@@ -152,7 +153,7 @@ const SystemSettings = () => {
       setEditingLocationId(null);
       loadLocations();
     } else {
-      toast.error(result.error || 'Failed to update');
+      toast.error(getFriendlyErrorMessage(result.error, 'Failed to update the location. Please try again.'));
     }
   };
 
@@ -163,7 +164,7 @@ const SystemSettings = () => {
       toast.success(`"${name}" deleted`);
       loadLocations();
     } else {
-      toast.error(result.error || 'Failed to delete');
+      toast.error(getFriendlyErrorMessage(result.error, 'Failed to delete the location. Please try again.'));
     }
   };
 
@@ -181,7 +182,7 @@ const SystemSettings = () => {
       toast.success(result.message);
       loadLocations();
     } else {
-      toast.error(result.error || 'Failed to seed');
+      toast.error(getFriendlyErrorMessage(result.error, 'Failed to add the default locations. Please try again.'));
     }
   };
 
@@ -251,7 +252,7 @@ const SystemSettings = () => {
         resetClinicForm();
         loadClinicLocations();
       } else {
-        toast.error(result.error || 'Failed to update clinic location');
+        toast.error(getFriendlyErrorMessage(result.error, 'Failed to update the clinic location. Please try again.'));
       }
     } else {
       // Add mode
@@ -270,7 +271,7 @@ const SystemSettings = () => {
         resetClinicForm();
         loadClinicLocations();
       } else {
-        toast.error(result.error || 'Failed to add clinic location');
+        toast.error(getFriendlyErrorMessage(result.error, 'Failed to add the clinic location. Please try again.'));
       }
     }
   };
@@ -317,7 +318,7 @@ const SystemSettings = () => {
         handleClinicFormChange('image_url', result.url);
         toast.success('Image uploaded!');
       } else {
-        toast.error(result.message || 'Upload failed');
+        toast.error(getFriendlyErrorMessage(result.message, 'The image could not be uploaded. Please try again.'));
       }
     } catch (err) {
       console.error('Image upload error:', err);
@@ -334,7 +335,7 @@ const SystemSettings = () => {
       toast.success(`"${name}" deleted`);
       loadClinicLocations();
     } else {
-      toast.error(result.error || 'Failed to delete');
+      toast.error(getFriendlyErrorMessage(result.error, 'Failed to delete the clinic location. Please try again.'));
     }
   };
 

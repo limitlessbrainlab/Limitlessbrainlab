@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import DatabaseService from '../../services/databaseService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import ClinicManagement from './ClinicManagement';
 import PatientReports from './PatientReports';
 import AnalyticsDashboard from './AnalyticsDashboard';
@@ -52,7 +53,7 @@ const SuperAdminPanel = () => {
     } catch (error) {
       console.error('Error initializing SuperAdminPanel:', error);
       if (isMounted) {
-        setError('Failed to initialize admin panel: ' + error.message);
+        setError(getFriendlyErrorMessage(error, 'Failed to load the admin panel. Please refresh the page and try again.'));
         setLoading(false);
       }
     }
@@ -87,7 +88,7 @@ const SuperAdminPanel = () => {
     } catch (error) {
       console.error('ERROR: Error loading clinics:', error);
       if (isMounted) {
-        setError('Failed to load clinics: ' + error.message);
+        setError(getFriendlyErrorMessage(error, 'Failed to load clinics. Please try again.'));
         setClinics([]); // Set empty array to prevent further errors
       }
     }
@@ -176,11 +177,11 @@ const SuperAdminPanel = () => {
       }
     } catch (error) {
       console.error('ERROR: Error rendering content:', error);
-      setError(error.message || 'Unknown error occurred');
+      setError(getFriendlyErrorMessage(error, 'Something went wrong while loading this page. Please try again.'));
       return (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
           <h3 className="text-red-800 dark:text-red-400 font-medium">Error Loading Content</h3>
-          <p className="text-red-600 dark:text-red-400 mt-2">{error?.message || 'Unknown error occurred'}</p>
+          <p className="text-red-600 dark:text-red-400 mt-2">{error || 'Unknown error occurred'}</p>
           <div className="flex space-x-3 mt-4">
             <button
               onClick={() => {

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import NotificationService from '../../services/notificationService';
 import { hashPassword } from '../../utils/passwordUtils';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 // API Base URL for backend email
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -135,7 +136,7 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
 
     } catch (error) {
       console.error('Activation error:', error);
-      toast.error(`Failed to approve clinic: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to approve the clinic. Please try again.'));
     } finally {
       setLoading(false);
       setSelectedItem(null);
@@ -185,7 +186,7 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
 
     } catch (error) {
       console.error('Rejection error:', error);
-      toast.error(`Failed to reject clinic: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to reject the clinic. Please try again.'));
     } finally {
       setRejectLoading(false);
     }

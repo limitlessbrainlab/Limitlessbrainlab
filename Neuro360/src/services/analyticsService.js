@@ -1,20 +1,10 @@
 // Analytics Service - Real data from Supabase
 // Handles all analytics calculations and data aggregation
 
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 
 class AnalyticsService {
   constructor() {
-    // Initialize Supabase client
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('WARNING: Analytics Service: Supabase not configured, using mock data');
-      this.supabase = null;
-    }
   }
 
   /**
@@ -23,7 +13,7 @@ class AnalyticsService {
   async getSystemAnalytics() {
     try {
 
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockAnalytics();
       }
 
@@ -34,9 +24,9 @@ class AnalyticsService {
         organizationsResult,
         paymentsResult
       ] = await Promise.allSettled([
-        this.supabase.from('clinics').select('*'),
-        this.supabase.from('profiles').select('*'),
-        this.supabase.from('organizations').select('*'),
+        supabase.from('clinics').select('*'),
+        supabase.from('profiles').select('*'),
+        supabase.from('organizations').select('*'),
         this.getMockPayments() // Payments table doesn't exist yet
       ]);
 
@@ -157,14 +147,14 @@ class AnalyticsService {
    */
   async getClinicAnalytics(clinicId) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockClinicAnalytics(clinicId);
       }
 
       // Fetch clinic-specific data
       const [clinicResult, patientsResult] = await Promise.allSettled([
-        this.supabase.from('clinics').select('*').eq('id', clinicId).single(),
-        this.supabase.from('patients').select('*').eq('clinic_id', clinicId) // Assuming patients table has clinic_id
+        supabase.from('clinics').select('*').eq('id', clinicId).single(),
+        supabase.from('patients').select('*').eq('clinic_id', clinicId) // Assuming patients table has clinic_id
       ]);
 
       const clinic = clinicResult.status === 'fulfilled' ? clinicResult.value.data : null;
@@ -202,7 +192,7 @@ class AnalyticsService {
     try {
       const dates = this.generateDateRange(days);
 
-      if (!this.supabase) {
+      if (!supabase) {
         return this.generateMockTimeSeries(metric, dates);
       }
 

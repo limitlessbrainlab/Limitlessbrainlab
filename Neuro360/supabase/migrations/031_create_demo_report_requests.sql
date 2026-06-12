@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS demo_report_requests (
 ALTER TABLE demo_report_requests ENABLE ROW LEVEL SECURITY;
 
 -- Allow anonymous inserts (public form)
+DROP POLICY IF EXISTS "Allow anonymous insert on demo_report_requests" ON demo_report_requests;
 CREATE POLICY "Allow anonymous insert on demo_report_requests"
   ON demo_report_requests
   FOR INSERT
@@ -17,6 +18,7 @@ CREATE POLICY "Allow anonymous insert on demo_report_requests"
   WITH CHECK (true);
 
 -- Allow authenticated users to read (for admin)
+DROP POLICY IF EXISTS "Allow authenticated read on demo_report_requests" ON demo_report_requests;
 CREATE POLICY "Allow authenticated read on demo_report_requests"
   ON demo_report_requests
   FOR SELECT

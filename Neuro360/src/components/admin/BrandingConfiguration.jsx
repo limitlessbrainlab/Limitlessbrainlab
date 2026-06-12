@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import fileStorageService from '../../services/fileStorageService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const BrandingConfiguration = () => {
   const [clinics, setClinics] = useState([]);
@@ -134,11 +135,11 @@ const BrandingConfiguration = () => {
           dimensions: dimensionValidation.dimensions
         });
       } else {
-        toast.error(uploadResult.error);
+        toast.error(getFriendlyErrorMessage(uploadResult.error, 'Logo upload failed. Please try again.'));
       }
     } catch (error) {
       console.error('Error uploading logo:', error);
-      toast.error('Failed to upload logo: ' + (error.message || 'Unknown error'));
+      toast.error(getFriendlyErrorMessage(error, 'Failed to upload the logo. Please try again.'));
     } finally {
       setUploadingLogo(false);
     }

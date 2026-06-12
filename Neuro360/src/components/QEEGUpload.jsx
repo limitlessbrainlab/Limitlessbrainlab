@@ -4,6 +4,7 @@ import neuroSenseCloudService from '../services/neuroSenseCloudService';
 import aiAnalysisService from '../services/aiAnalysisService';
 import fileManagementService from '../services/fileManagementService';
 import { useAuth } from '../contexts/AuthContext';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 const QEEGUpload = ({ onUploadComplete, patientId }) => {
   const { user } = useAuth();
@@ -80,7 +81,7 @@ const QEEGUpload = ({ onUploadComplete, patientId }) => {
         } catch (error) {
           console.error(`ERROR: Failed to process ${file.name}:`, error);
           updateFileStatus(fileId, 'error', 0);
-          alert(`Failed to process ${file.name}: ${error.message}`);
+          alert(getFriendlyErrorMessage(error, `We could not process ${file.name}. Please try again.`));
         }
       }
     } catch (error) {
@@ -206,7 +207,7 @@ const QEEGUpload = ({ onUploadComplete, patientId }) => {
 
     } catch (error) {
       console.error('ERROR: Report generation failed:', error);
-      alert(`Failed to generate report: ${error.message}`);
+      alert(getFriendlyErrorMessage(error, 'We could not generate the report. Please try again.'));
     }
   };
 
@@ -223,7 +224,7 @@ const QEEGUpload = ({ onUploadComplete, patientId }) => {
       await neuroSenseCloudService.downloadCloudReport(reportPath, 'interactive_analysis.html');
     } catch (error) {
       console.error('ERROR: Failed to view analysis:', error);
-      alert(`Failed to view analysis: ${error.message}`);
+      alert(getFriendlyErrorMessage(error, 'We could not open the analysis. Please try again.'));
     }
   };
 

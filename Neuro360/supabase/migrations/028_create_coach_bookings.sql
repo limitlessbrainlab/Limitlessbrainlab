@@ -56,26 +56,31 @@ ALTER TABLE coach_bookings ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 -- Patients can view their own bookings
+DROP POLICY IF EXISTS "Patients can view own bookings" ON coach_bookings;
 CREATE POLICY "Patients can view own bookings" ON coach_bookings
   FOR SELECT USING (
     patient_email = (SELECT email FROM patients WHERE email = current_setting('request.jwt.claims')::json->>'email')
   );
 
 -- Coaches can view bookings assigned to them
+DROP POLICY IF EXISTS "Coaches can view assigned bookings" ON coach_bookings;
 CREATE POLICY "Coaches can view assigned bookings" ON coach_bookings
   FOR SELECT USING (
     coach_email = current_setting('request.jwt.claims')::json->>'email'
   );
 
 -- Service role can do everything (for webhooks)
+DROP POLICY IF EXISTS "Service role full access" ON coach_bookings;
 CREATE POLICY "Service role full access" ON coach_bookings
   FOR ALL USING (true) WITH CHECK (true);
 
 -- Allow anonymous inserts for webhook
+DROP POLICY IF EXISTS "Allow webhook inserts" ON coach_bookings;
 CREATE POLICY "Allow webhook inserts" ON coach_bookings
   FOR INSERT WITH CHECK (true);
 
 -- Allow anonymous updates for webhook
+DROP POLICY IF EXISTS "Allow webhook updates" ON coach_bookings;
 CREATE POLICY "Allow webhook updates" ON coach_bookings
   FOR UPDATE USING (true) WITH CHECK (true);
 

@@ -44,17 +44,47 @@ DROP POLICY IF EXISTS "Coaches can manage sessions" ON coaching_sessions;
 DROP POLICY IF EXISTS "Patients can manage own content" ON daily_content;
 
 -- Add simple permissive policies that don't cause recursion
+DROP POLICY IF EXISTS "Allow all for clinics" ON clinics;
+DROP POLICY IF EXISTS "Allow all operations on clinics" ON clinics;
 CREATE POLICY "Allow all for clinics" ON clinics FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for organizations" ON organizations;
 CREATE POLICY "Allow all for organizations" ON organizations FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for profiles" ON profiles;
 CREATE POLICY "Allow all for profiles" ON profiles FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for org_memberships" ON org_memberships;
 CREATE POLICY "Allow all for org_memberships" ON org_memberships FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for patients" ON patients;
+DROP POLICY IF EXISTS "Allow all operations on patients" ON patients;
 CREATE POLICY "Allow all for patients" ON patients FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for sessions" ON sessions;
 CREATE POLICY "Allow all for sessions" ON sessions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for eeg_reports" ON eeg_reports;
 CREATE POLICY "Allow all for eeg_reports" ON eeg_reports FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for documents" ON documents;
 CREATE POLICY "Allow all for documents" ON documents FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for assessments" ON assessments;
 CREATE POLICY "Allow all for assessments" ON assessments FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for daily_progress" ON daily_progress;
 CREATE POLICY "Allow all for daily_progress" ON daily_progress FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for subscriptions" ON subscriptions;
+DROP POLICY IF EXISTS "Allow all operations on subscriptions" ON subscriptions;
 CREATE POLICY "Allow all for subscriptions" ON subscriptions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for payment_history" ON payment_history;
 CREATE POLICY "Allow all for payment_history" ON payment_history FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for coaching_sessions" ON coaching_sessions;
 CREATE POLICY "Allow all for coaching_sessions" ON coaching_sessions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for daily_content" ON daily_content;
 CREATE POLICY "Allow all for daily_content" ON daily_content FOR ALL USING (true) WITH CHECK (true);

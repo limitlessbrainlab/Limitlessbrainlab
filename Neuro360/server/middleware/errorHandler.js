@@ -16,7 +16,11 @@ const errorHandler = (err, req, res, next) => {
   // Determine status code
   let statusCode = err.statusCode || err.status || 500;
   let errorCode = err.code || 'INTERNAL_ERROR';
-  let message = err.message || 'An unexpected error occurred';
+  // Never expose raw technical error text to users in production —
+  // use a plain-language message instead (raw details stay in the logs above)
+  let message = process.env.NODE_ENV === 'production'
+    ? 'Something went wrong on the server. Please try again in a few moments.'
+    : (err.message || 'An unexpected error occurred');
 
   // Handle specific error types
   if (err.name === 'ValidationError') {

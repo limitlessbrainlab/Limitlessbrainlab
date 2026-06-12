@@ -1,20 +1,10 @@
 // Booking and Scheduling Service
 // Handles appointment scheduling, calendar management, and notifications
 
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 
 class BookingService {
   constructor() {
-    // Initialize Supabase client
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('WARNING: Booking Service: Using offline mode');
-      this.supabase = null;
-    }
 
     // Appointment types and durations
     this.appointmentTypes = {
@@ -63,12 +53,12 @@ class BookingService {
    */
   async getAvailableSlots(clinicId, date, appointmentType = 'follow-up') {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockAvailableSlots(date);
       }
 
       // Get existing appointments for the date
-      const { data: existingAppointments, error } = await this.supabase
+      const { data: existingAppointments, error } = await supabase
         .from('appointments')
         .select('start_time, end_time')
         .eq('clinic_id', clinicId)
@@ -101,7 +91,7 @@ class BookingService {
    */
   async bookAppointment(appointmentData) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.createMockAppointment(appointmentData);
       }
 
@@ -132,7 +122,7 @@ class BookingService {
       const endTime = new Date(startTime.getTime() + duration * 60000);
 
       // Create appointment record
-      const { data: appointment, error } = await this.supabase
+      const { data: appointment, error } = await supabase
         .from('appointments')
         .insert({
           patient_id: patientId,
@@ -171,11 +161,11 @@ class BookingService {
    */
   async getPatientAppointments(patientId, limit = 10) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockPatientAppointments(patientId);
       }
 
-      const { data: appointments, error } = await this.supabase
+      const { data: appointments, error } = await supabase
         .from('appointments')
         .select(`
           *,
@@ -210,11 +200,11 @@ class BookingService {
    */
   async getClinicAppointments(clinicId, date) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockClinicAppointments(clinicId, date);
       }
 
-      const { data: appointments, error } = await this.supabase
+      const { data: appointments, error } = await supabase
         .from('appointments')
         .select(`
           *,
@@ -248,12 +238,12 @@ class BookingService {
    */
   async rescheduleAppointment(appointmentId, newDate, newTime) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return { success: true, message: 'Appointment rescheduled (mock)' };
       }
 
       // Get current appointment
-      const { data: currentAppointment, error: fetchError } = await this.supabase
+      const { data: currentAppointment, error: fetchError } = await supabase
         .from('appointments')
         .select('*')
         .eq('id', appointmentId)
@@ -279,7 +269,7 @@ class BookingService {
       const endTime = new Date(startTime.getTime() + duration * 60000);
 
       // Update appointment
-      const { data: updatedAppointment, error: updateError } = await this.supabase
+      const { data: updatedAppointment, error: updateError } = await supabase
         .from('appointments')
         .update({
           appointment_date: newDate,
@@ -309,11 +299,11 @@ class BookingService {
    */
   async cancelAppointment(appointmentId, reason = '') {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return { success: true, message: 'Appointment cancelled (mock)' };
       }
 
-      const { data: cancelledAppointment, error } = await this.supabase
+      const { data: cancelledAppointment, error } = await supabase
         .from('appointments')
         .update({
           status: 'cancelled',
@@ -342,14 +332,14 @@ class BookingService {
    */
 
   async checkSlotAvailability(clinicId, date, time, appointmentType) {
-    if (!this.supabase) return true;
+    if (!supabase) return true;
 
     try {
       const duration = this.appointmentTypes[appointmentType]?.duration || 30;
       const startTime = new Date(`${date} ${time}`);
       const endTime = new Date(startTime.getTime() + duration * 60000);
 
-      const { data: conflicts, error } = await this.supabase
+      const { data: conflicts, error } = await supabase
         .from('appointments')
         .select('id')
         .eq('clinic_id', clinicId)

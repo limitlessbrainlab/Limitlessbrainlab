@@ -1,21 +1,11 @@
 // File Management Service for DataAccess
 // Handles file operations, downloads, and document generation
 
-import { createClient } from '@supabase/supabase-js';
+import supabase from '../lib/supabaseClient';
 import brandingService from './brandingService';
 
 class FileManagementService {
   constructor() {
-    // Initialize Supabase client
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn('WARNING: File Management Service: Using mock data');
-      this.supabase = null;
-    }
   }
 
   /**
@@ -23,12 +13,12 @@ class FileManagementService {
    */
   async getPatientFiles(patientId) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockPatientFiles(patientId);
       }
 
       // In production, query documents table
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('documents')
         .select('*')
         .eq('patient_id', patientId)
@@ -48,12 +38,12 @@ class FileManagementService {
    */
   async getClinicFiles(clinicId) {
     try {
-      if (!this.supabase) {
+      if (!supabase) {
         return this.getMockClinicFiles(clinicId);
       }
 
       // Query files through patients belonging to clinic
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('documents')
         .select(`
           *,

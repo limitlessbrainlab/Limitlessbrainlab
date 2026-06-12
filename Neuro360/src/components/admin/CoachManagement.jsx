@@ -26,10 +26,12 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const CoachManagement = ({ onUpdate }) => {
   const [coaches, setCoaches] = useState([]);
   const [connectionRequests, setConnectionRequests] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [activeTab, setActiveTab] = useState('coaches');
@@ -71,7 +73,22 @@ const CoachManagement = ({ onUpdate }) => {
   useEffect(() => {
     loadCoaches();
     loadConnectionRequests();
+    loadBookings();
   }, []);
+
+  const loadBookings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('patient_payments')
+        .select('*')
+        .eq('type', 'coaching')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setBookings(data || []);
+    } catch (error) {
+      console.error('Error loading coaching bookings:', error);
+    }
+  };
 
   const loadCoaches = async () => {
     try {
@@ -154,7 +171,7 @@ const CoachManagement = ({ onUpdate }) => {
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Error creating coach:', error);
-      toast.error(`Failed to create coach: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to create the coach. Please try again.'));
     }
   };
 
@@ -197,7 +214,7 @@ const CoachManagement = ({ onUpdate }) => {
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Error updating coach:', error);
-      toast.error(`Failed to update coach: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to update the coach. Please try again.'));
     }
   };
 
@@ -237,7 +254,7 @@ const CoachManagement = ({ onUpdate }) => {
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Error deleting coach:', error);
-      toast.error(`Failed to delete coach: ${error.message}`);
+      toast.error(getFriendlyErrorMessage(error, 'Failed to delete the coach. Please try again.'));
     }
   };
 
@@ -346,6 +363,19 @@ const CoachManagement = ({ onUpdate }) => {
             <div className="flex items-center space-x-2">
               <MessageCircle className="h-4 w-4" />
               <span>Connection Requests ({connectionRequests.filter(r => r.status === 'pending').length})</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('bookings')}
+            className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'bookings'
+                ? 'border-[#323956] text-[#323956] dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-4 w-4" />
+              <span>Paid Bookings ({bookings.length})</span>
             </div>
           </button>
         </nav>
@@ -596,6 +626,73 @@ const CoachManagement = ({ onUpdate }) => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Paid Bookings Tab */}
+      {activeTab === 'bookings' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {bookings.length === 0 ? (
+            <div className="p-8 text-center">
+              <CheckCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">No paid coaching bookings yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Bookings appear here after a patient completes payment</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Coach</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Transaction ID</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {bookings
+                    .filter(b => {
+                      const term = searchTerm.toLowerCase();
+                      if (!term) return true;
+                      return (
+                        (b.patient_name || '').toLowerCase().includes(term) ||
+                        (b.patient_email || '').toLowerCase().includes(term) ||
+                        (b.item_name || '').toLowerCase().includes(term)
+                      );
+                    })
+                    .map((booking) => {
+                      const coachName = (booking.item_name || '').replace('Brain Coaching - ', '').replace('Brain Coach Session - ', '').trim() || 'Unknown Coach';
+                      const amount = booking.currency === 'INR' ? `₹${(booking.amount || 0).toLocaleString()}` : `$${(booking.amount || 0).toLocaleString()}`;
+                      return (
+                        <tr key={booking.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white text-sm">{booking.patient_name || '—'}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{booking.patient_email}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{coachName}</td>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">{amount}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                            {new Date(booking.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                              {booking.status || 'completed'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-400 font-mono">
+                            {booking.stripe_session_id ? booking.stripe_session_id.slice(0, 20) + '…' : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

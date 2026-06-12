@@ -3,7 +3,7 @@
 
 -- Create clinical_reports table
 CREATE TABLE IF NOT EXISTS clinical_reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Link to patient and clinic
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

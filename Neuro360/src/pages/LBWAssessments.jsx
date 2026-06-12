@@ -5,6 +5,7 @@ import { Brain, Clock, CheckCircle, Users, Target, Heart, Activity, AlertCircle 
 const LBWAssessments = () => {
   const navigate = useNavigate();
   const [selectedAssessment, setSelectedAssessment] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   const assessments = [
     {
@@ -63,12 +64,13 @@ const LBWAssessments = () => {
 
   const handleStartAssessment = (assessment) => {
     setSelectedAssessment(assessment);
-    // TODO: Navigate to actual assessment taker
-    alert(`Starting ${assessment.title} assessment. This would navigate to the assessment interface.`);
+    setNotice(`${assessment.title} — assessment module coming soon.`);
+    setTimeout(() => setNotice(null), 4000);
   };
 
   const handleFullSuite = () => {
-    alert('Starting comprehensive assessment suite. All assessments will be completed in sequence.');
+    setNotice('Full assessment suite coming soon.');
+    setTimeout(() => setNotice(null), 4000);
   };
 
   const getColorClasses = (color) => {
@@ -83,6 +85,11 @@ const LBWAssessments = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#E4EFFF] via-white to-teal-50">
+      {notice && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#323956] text-white px-6 py-3 rounded-lg shadow-lg text-sm">
+          {notice}
+        </div>
+      )}
       {/* Header with Navigation */}
       <nav className="bg-white shadow-sm border-b border-gray-100">
         <div className="container mx-auto px-4 py-4">

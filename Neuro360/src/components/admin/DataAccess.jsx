@@ -33,7 +33,8 @@ import toast from 'react-hot-toast';
 import QEEGFileViewer from './QEEGFileViewer';
 import PersonalizedCarePlan from './PersonalizedCarePlan';
 import fileManagementService from '../../services/fileManagementService';
-import analyticsService from '../../services/analyticsService';
+import { getFriendlyErrorMessage } from '../../utils/friendlyError';
+import { supabase } from '../../lib/supabaseClient';
 
 const DataAccess = () => {
   const [selectedClinic, setSelectedClinic] = useState(null);
@@ -49,33 +50,9 @@ const DataAccess = () => {
   const [showCarePlan, setShowCarePlan] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState(null);
 
-  // Load real data on component mount
   useEffect(() => {
-    loadRealData();
+    loadClinics();
   }, []);
-
-  const loadRealData = async () => {
-    setLoading(true);
-    try {
-
-      // Get real system analytics for clinic data
-      const systemAnalytics = await analyticsService.getSystemAnalytics();
-
-      // For now, use enhanced mock data based on real structure
-      setClinics(mockClinics);
-
-      if (selectedClinic) {
-        const patientFiles = await fileManagementService.getClinicFiles(selectedClinic.id);
-        setFiles(patientFiles);
-      }
-
-    } catch (error) {
-      console.error('ERROR: Error loading data:', error);
-      toast.error('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Enhanced file download functionality
   const handleDownloadFile = async (fileId, fileType, patientId = null) => {
@@ -86,7 +63,7 @@ const DataAccess = () => {
       if (result.success) {
         toast.success(`Downloaded: ${result.filename}`);
       } else {
-        toast.error(result.error);
+        toast.error(getFriendlyErrorMessage(result.error, 'Failed to download the file. Please try again.'));
       }
     } catch (error) {
       console.error('Download error:', error);
@@ -124,170 +101,66 @@ const DataAccess = () => {
     }
   };
 
-  // Mock data - replace with actual API calls
-  const mockClinics = [
-    {
-      id: 'clinic-1',
-      name: 'Central Medical Center',
-      location: 'Downtown',
-      email: 'admin@centralmedical.com',
-      phone: '+1-555-0123',
-      patientsCount: 25,
-      reportsCount: 47,
-      lastActivity: '2025-09-18T10:30:00Z',
-      isActive: true
-    },
-    {
-      id: 'clinic-2',
-      name: 'Wellness Clinic East',
-      location: 'Eastside',
-      email: 'info@wellnesseast.com',
-      phone: '+1-555-0456',
-      patientsCount: 18,
-      reportsCount: 32,
-      lastActivity: '2025-09-18T09:15:00Z',
-      isActive: true
-    },
-    {
-      id: 'clinic-3',
-      name: 'Family Health Partners',
-      location: 'Westfield',
-      email: 'contact@familyhealth.com',
-      phone: '+1-555-0789',
-      patientsCount: 33,
-      reportsCount: 61,
-      lastActivity: '2025-09-18T11:45:00Z',
-      isActive: true
+  const loadClinics = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('clinics')
+        .select('id, name, email, phone, city, is_active, created_at')
+        .order('name');
+      if (error) throw error;
+      setClinics(data || []);
+    } catch (error) {
+      console.error('Error loading clinics:', error);
+      toast.error('Failed to load clinics');
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const mockPatients = {
-    'clinic-1': [
-      {
-        id: 'patient-1',
-        name: 'John Smith',
-        email: 'john.smith@email.com',
-        age: 34,
-        gender: 'Male',
-        phone: '+1-555-1001',
-        lastSession: '2025-09-15T14:30:00Z',
-        totalSessions: 8,
-        status: 'active',
-        clinicId: 'clinic-1'
-      },
-      {
-        id: 'patient-2',
-        name: 'Sarah Johnson',
-        email: 'sarah.j@email.com',
-        age: 28,
-        gender: 'Female',
-        phone: '+1-555-1002',
-        lastSession: '2025-09-16T10:15:00Z',
-        totalSessions: 12,
-        status: 'active',
-        clinicId: 'clinic-1'
-      }
-    ],
-    'clinic-2': [
-      {
-        id: 'patient-3',
-        name: 'Michael Brown',
-        email: 'michael.brown@email.com',
-        age: 45,
-        gender: 'Male',
-        phone: '+1-555-1003',
-        lastSession: '2025-09-17T09:00:00Z',
-        totalSessions: 6,
-        status: 'active',
-        clinicId: 'clinic-2'
-      }
-    ],
-    'clinic-3': [
-      {
-        id: 'patient-4',
-        name: 'Emily Davis',
-        email: 'emily.davis@email.com',
-        age: 31,
-        gender: 'Female',
-        phone: '+1-555-1004',
-        lastSession: '2025-09-18T11:30:00Z',
-        totalSessions: 15,
-        status: 'active',
-        clinicId: 'clinic-3'
-      }
-    ]
   };
 
-  const mockFiles = {
-    'patient-1': [
-      {
-        id: 'file-1',
-        name: 'Patient Profile - John Smith.pdf',
-        type: 'patient_profile',
-        size: '2.4 MB',
-        created: '2025-09-01T09:00:00Z',
-        modified: '2025-09-15T14:30:00Z',
-        status: 'complete'
-      },
-      {
-        id: 'file-2',
-        name: 'qEEG Profile - Session 8.edf',
-        type: 'qeeg_profile',
-        size: '15.7 MB',
-        created: '2025-09-15T14:30:00Z',
-        modified: '2025-09-15T14:30:00Z',
-        status: 'complete'
-      },
-      {
-        id: 'file-3',
-        name: 'Brain Wellness Report - September 2025.pdf',
+  const loadPatients = async (clinicId) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, name, email, phone, gender, status, created_at, clinic_id')
+        .eq('clinic_id', clinicId)
+        .order('name');
+      if (error) throw error;
+      setPatients(data || []);
+    } catch (error) {
+      console.error('Error loading patients:', error);
+      toast.error('Failed to load patients');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFiles = async (patientId) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('algorithm_results')
+        .select('id, algorithm_name, pdf_url, status, created_at, updated_at')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const mapped = (data || []).map(r => ({
+        id: r.id,
+        name: r.algorithm_name || 'Report',
         type: 'neurosense_report',
-        size: '3.1 MB',
-        created: '2025-09-15T15:00:00Z',
-        modified: '2025-09-15T15:00:00Z',
-        status: 'complete'
-      },
-      {
-        id: 'file-4',
-        name: 'Personalized Care Plan - Updated.pdf',
-        type: 'care_plan',
-        size: '1.8 MB',
-        created: '2025-09-15T15:30:00Z',
-        modified: '2025-09-15T15:30:00Z',
-        status: 'complete'
-      }
-    ]
-  };
-
-  useEffect(() => {
-    loadClinics();
-  }, []);
-
-  const loadClinics = () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setClinics(mockClinics);
+        status: r.status || 'complete',
+        created: r.created_at,
+        modified: r.updated_at,
+        pdf_url: r.pdf_url,
+      }));
+      setFiles(mapped);
+    } catch (error) {
+      console.error('Error loading files:', error);
+      toast.error('Failed to load files');
+    } finally {
       setLoading(false);
-    }, 500);
-  };
-
-  const loadPatients = (clinicId) => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setPatients(mockPatients[clinicId] || []);
-      setLoading(false);
-    }, 300);
-  };
-
-  const loadFiles = (patientId) => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setFiles(mockFiles[patientId] || []);
-      setLoading(false);
-    }, 300);
+    }
   };
 
   const handleClinicSelect = (clinic) => {

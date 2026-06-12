@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabaseService';
+import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -54,14 +55,14 @@ apiClient.interceptors.response.use(
     // Handle 403 - Insufficient permissions
     if (error.response?.status === 403) {
       return Promise.reject(
-        new Error(error.response.data?.error || 'You do not have permission to perform this action.')
+        new Error('You do not have permission to perform this action.')
       );
     }
 
     // Handle 429 - Rate limit exceeded
     if (error.response?.status === 429) {
       return Promise.reject(
-        new Error(error.response.data?.error || 'Too many requests. Please try again later.')
+        new Error('Too many requests in a short time. Please wait a minute and try again.')
       );
     }
 
@@ -70,21 +71,16 @@ apiClient.interceptors.response.use(
       const details = error.response.data?.details;
       if (details && Array.isArray(details)) {
         const messages = details.map(d => `${d.field}: ${d.message}`).join(', ');
-        return Promise.reject(new Error(`Validation failed: ${messages}`));
+        return Promise.reject(new Error(`Please check the information you entered — ${messages}`));
       }
       return Promise.reject(
-        new Error(error.response.data?.error || 'Invalid request')
+        new Error('The request could not be completed. Please check the information you entered and try again.')
       );
     }
 
-    // Handle server errors (500)
-    if (error.response?.status >= 500) {
-      return Promise.reject(
-        new Error('Server error. Please try again later.')
-      );
-    }
-
-    return Promise.reject(error);
+    // Everything else (server errors, network failures, timeouts) gets a
+    // plain-language message — never raw status codes or technical text
+    return Promise.reject(new Error(getFriendlyErrorMessage(error)));
   }
 );
 

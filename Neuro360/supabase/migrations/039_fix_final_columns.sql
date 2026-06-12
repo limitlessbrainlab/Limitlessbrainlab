@@ -1,0 +1,47 @@
+-- Fix algorithm_results: make all potentially-null columns nullable
+ALTER TABLE algorithm_results ALTER COLUMN patient_name DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN clinic_name DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN results DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN processed_by DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN processed_at DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN patient_id DROP NOT NULL;
+ALTER TABLE algorithm_results ALTER COLUMN clinic_id DROP NOT NULL;
+ALTER TABLE algorithm_results DROP CONSTRAINT IF EXISTS algorithm_results_patient_id_fkey;
+ALTER TABLE algorithm_results DROP CONSTRAINT IF EXISTS algorithm_results_clinic_id_fkey;
+
+-- Add missing columns to clinical_reports (migration 019 created it without these)
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS brain_parameters JSONB;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS handedness VARCHAR(20);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS occupation VARCHAR(255);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS date_of_test DATE;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS referring_physician VARCHAR(255);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS referral_reason TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS presenting_complaints TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS symptom_duration VARCHAR(100);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS past_medical_history TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS medications TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS family_history TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS lifestyle TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS uploaded_documents JSONB;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS appearance_behavior TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS mood_affect TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS thought_process_content TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS cognitive_assessment TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS insight_judgment TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS eeg_frequency_bands JSONB;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS eeg_connectivity JSONB;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS eeg_asymmetry_patterns TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS eeg_artifact_quality TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS primary_findings TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS correlations_clinical_eeg TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS differential_considerations TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS lifestyle_modifications TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS cognitive_behavioral_strategies TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS neurofeedback_protocol TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS pharmacological_considerations TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS referrals_followup TEXT;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS patient_uid VARCHAR(255);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS clinic_name VARCHAR(255);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE clinical_reports ADD COLUMN IF NOT EXISTS gender VARCHAR(20);

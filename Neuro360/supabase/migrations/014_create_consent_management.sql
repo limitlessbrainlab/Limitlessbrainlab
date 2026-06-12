@@ -12,7 +12,7 @@
 -- =====================================================
 -- Stores different versions of consent text and terms
 CREATE TABLE IF NOT EXISTS consent_templates (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Template identification
     template_code TEXT NOT NULL UNIQUE, -- e.g., 'REPORT_DOWNLOAD', 'DATA_SHARING', 'HIPAA_CONSENT'
@@ -60,8 +60,7 @@ CREATE TABLE IF NOT EXISTS consent_templates (
     CONSTRAINT valid_status CHECK (status IN ('draft', 'active', 'deprecated', 'archived')),
     CONSTRAINT valid_category CHECK (category IN ('required', 'optional', 'informational')),
     CONSTRAINT valid_scope CHECK (scope IN ('patient', 'clinic', 'system')),
-    CONSTRAINT unique_active_template UNIQUE NULLS NOT DISTINCT (template_code, is_active)
-        DEFERRABLE INITIALLY DEFERRED
+    CONSTRAINT unique_active_template UNIQUE (template_code, is_active)
 );
 
 -- Indexes for performance
@@ -85,7 +84,7 @@ COMMENT ON COLUMN consent_templates.is_active IS 'Only one template per code can
 -- =====================================================
 -- Tracks patient consent acceptances with full audit trail
 CREATE TABLE IF NOT EXISTS consent_records (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- References
     consent_template_id UUID REFERENCES consent_templates(id) ON DELETE RESTRICT,
@@ -184,6 +183,7 @@ ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 -- ========== CONSENT_TEMPLATES RLS POLICIES ==========
 
 -- Everyone can view active consent templates
+DROP POLICY IF EXISTS "Anyone can view active consent templates" ON consent_templates;
 CREATE POLICY "Anyone can view active consent templates"
     ON consent_templates
     FOR SELECT
@@ -191,6 +191,7 @@ CREATE POLICY "Anyone can view active consent templates"
     USING (is_active = TRUE);
 
 -- Super admins can view all templates
+DROP POLICY IF EXISTS "Super admins can view all consent templates" ON consent_templates;
 CREATE POLICY "Super admins can view all consent templates"
     ON consent_templates
     FOR SELECT
@@ -204,6 +205,7 @@ CREATE POLICY "Super admins can view all consent templates"
     );
 
 -- Super admins can insert/update/delete templates
+DROP POLICY IF EXISTS "Super admins can manage consent templates" ON consent_templates;
 CREATE POLICY "Super admins can manage consent templates"
     ON consent_templates
     FOR ALL
@@ -227,6 +229,7 @@ CREATE POLICY "Super admins can manage consent templates"
 -- ========== CONSENT_RECORDS RLS POLICIES ==========
 
 -- Patients can view their own consent records
+DROP POLICY IF EXISTS "Patients can view their own consent records" ON consent_records;
 CREATE POLICY "Patients can view their own consent records"
     ON consent_records
     FOR SELECT
@@ -238,6 +241,7 @@ CREATE POLICY "Patients can view their own consent records"
     );
 
 -- Clinic staff can view their clinic's consent records
+DROP POLICY IF EXISTS "Clinic staff can view their clinic consent records" ON consent_records;
 CREATE POLICY "Clinic staff can view their clinic consent records"
     ON consent_records
     FOR SELECT
@@ -250,6 +254,7 @@ CREATE POLICY "Clinic staff can view their clinic consent records"
     );
 
 -- Super admins can view all consent records
+DROP POLICY IF EXISTS "Super admins can view all consent records" ON consent_records;
 CREATE POLICY "Super admins can view all consent records"
     ON consent_records
     FOR SELECT
@@ -263,6 +268,7 @@ CREATE POLICY "Super admins can view all consent records"
     );
 
 -- Authenticated users can insert consent records
+DROP POLICY IF EXISTS "Authenticated users can create consent records" ON consent_records;
 CREATE POLICY "Authenticated users can create consent records"
     ON consent_records
     FOR INSERT
@@ -270,6 +276,7 @@ CREATE POLICY "Authenticated users can create consent records"
     WITH CHECK (true);
 
 -- Patients can update their own consent records (for revocation)
+DROP POLICY IF EXISTS "Patients can update their own consent records" ON consent_records;
 CREATE POLICY "Patients can update their own consent records"
     ON consent_records
     FOR UPDATE
@@ -389,7 +396,7 @@ CREATE TRIGGER consent_templates_updated_at
 CREATE OR REPLACE VIEW patient_consent_status AS
 SELECT
     p.id AS patient_id,
-    p.name AS patient_name,
+    p.full_name AS patient_name,
     c.id AS clinic_id,
     c.name AS clinic_name,
     ct.template_code,
@@ -485,7 +492,7 @@ INSERT INTO consent_templates (
     TRUE,
     'HIPAA, HITECH Act',
     CURRENT_DATE
-) ON CONFLICT (template_code, is_active) DO NOTHING;
+) ON CONFLICT DO NOTHING;
 
 -- Insert privacy policy consent template
 INSERT INTO consent_templates (
@@ -539,7 +546,7 @@ INSERT INTO consent_templates (
     FALSE,
     'HIPAA, GDPR, CCPA',
     CURRENT_DATE
-) ON CONFLICT (template_code, is_active) DO NOTHING;
+) ON CONFLICT DO NOTHING;
 
 
 -- =====================================================

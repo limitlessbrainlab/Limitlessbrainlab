@@ -3,7 +3,7 @@
 
 -- Create clinic_enquiries table
 CREATE TABLE IF NOT EXISTS clinic_enquiries (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- User Information
   name VARCHAR(255) NOT NULL,
@@ -56,6 +56,7 @@ COMMENT ON COLUMN clinic_enquiries.notes IS 'Internal notes for tracking follow-
 ALTER TABLE clinic_enquiries ENABLE ROW LEVEL SECURITY;
 
 -- Create policy to allow anyone to insert enquiries (public submission)
+DROP POLICY IF EXISTS "Anyone can submit clinic enquiries" ON clinic_enquiries;
 CREATE POLICY "Anyone can submit clinic enquiries"
   ON clinic_enquiries
   FOR INSERT
@@ -63,6 +64,7 @@ CREATE POLICY "Anyone can submit clinic enquiries"
 
 -- Create policy to allow all authenticated users to view enquiries
 -- (Clinics and admins can view all enquiries)
+DROP POLICY IF EXISTS "Authenticated users can view enquiries" ON clinic_enquiries;
 CREATE POLICY "Authenticated users can view enquiries"
   ON clinic_enquiries
   FOR SELECT
@@ -70,6 +72,7 @@ CREATE POLICY "Authenticated users can view enquiries"
 
 -- Create policy to allow all authenticated users to update enquiries
 -- (Clinics and admins can update enquiry status)
+DROP POLICY IF EXISTS "Authenticated users can update enquiries" ON clinic_enquiries;
 CREATE POLICY "Authenticated users can update enquiries"
   ON clinic_enquiries
   FOR UPDATE
