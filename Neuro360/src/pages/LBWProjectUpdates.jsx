@@ -283,7 +283,7 @@ const LBWProjectUpdates = () => {
                       </p>
                     </div>
                     <div className="relative flex items-center justify-center min-h-[220px] sm:min-h-[260px]">
-                      <img src="/1.png" alt="Binaural Beats" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
+                      <img src="/1.webp" alt="Binaural Beats" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
                     </div>
                   </div>
                 </div>
@@ -293,7 +293,7 @@ const LBWProjectUpdates = () => {
                   <div className="absolute top-0 left-0 w-48 h-48 bg-purple-500/8 rounded-full blur-[80px] pointer-events-none" />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-0 items-center">
                     <div className="relative flex items-center justify-center min-h-[220px] sm:min-h-[260px] order-2 md:order-1">
-                      <img src="/2.png" alt="Meditation" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
+                      <img src="/2.webp" alt="Meditation" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
                       <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-md rounded-lg px-3 py-2 border border-white/10 z-10">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -331,7 +331,7 @@ const LBWProjectUpdates = () => {
                       </div>
                     </div>
                     <div className="relative flex items-center justify-center min-h-[220px] sm:min-h-[260px]">
-                      <img src="/3.png" alt="Optimization Protocols" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
+                      <img src="/3.webp" alt="Optimization Protocols" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
                     </div>
                   </div>
                 </div>
@@ -341,7 +341,7 @@ const LBWProjectUpdates = () => {
                   <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#c9a227]/8 rounded-full blur-[80px] pointer-events-none" />
                   <div className="flex flex-col md:flex-row items-center">
                     <div className="relative flex items-center justify-center min-h-[220px] sm:min-h-[260px] w-full md:w-1/2 order-2 md:order-1">
-                      <img src="/4.png" alt="Binaural Beats ADHD" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
+                      <img src="/4.webp" alt="Binaural Beats ADHD" className="w-full h-full object-cover absolute inset-0 group-hover:scale-105 transition-all duration-700" />
                     </div>
                     <div className="p-6 sm:p-8 md:p-10 relative z-10 order-1 md:order-2 w-full md:w-1/2">
                       <h3 className="text-white text-xl sm:text-2xl md:text-3xl font-bold leading-tight mb-3">

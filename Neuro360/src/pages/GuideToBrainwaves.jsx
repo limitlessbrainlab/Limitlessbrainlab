@@ -9,24 +9,25 @@ const GuideToBrainwaves = () => {
   const [mentalState, setMentalState] = useState('idle');
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const sections = document.querySelectorAll('section[id]');
-      let current = '';
-
-      sections.forEach((section) => {
-        const sectionTop = section.offsetTop;
-        if (window.pageYOffset >= sectionTop - 250) {
-          current = section.getAttribute('id');
-        }
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const sections = document.querySelectorAll('section[id]');
+        let current = '';
+        sections.forEach((section) => {
+          if (window.pageYOffset >= section.offsetTop - 250) {
+            current = section.getAttribute('id');
+          }
+        });
+        if (current) setActiveSection(current);
+        ticking = false;
       });
-
-      if (current) {
-        setActiveSection(current);
-      }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Initial check
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 

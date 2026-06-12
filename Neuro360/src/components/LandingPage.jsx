@@ -133,24 +133,27 @@ const LandingPage = () => {
     };
   }, []);
 
-  // Handle scroll events
+  // Handle scroll events — throttled via requestAnimationFrame
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
-
-      // Calculate scroll progress
-      const totalScrollable = documentHeight - windowHeight;
-      const progress = (scrollPosition / totalScrollable) * 100;
-
-      setScrollProgress(progress);
-      setShowScrollTop(scrollPosition > 400);
-      setIsScrolled(scrollPosition > 50);
-      setShowStickyCTA(scrollPosition > 800 && scrollPosition < documentHeight - windowHeight - 500);
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const scrollPosition = window.scrollY;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const totalScrollable = documentHeight - windowHeight;
+        const progress = (scrollPosition / totalScrollable) * 100;
+        setScrollProgress(progress);
+        setShowScrollTop(scrollPosition > 400);
+        setIsScrolled(scrollPosition > 50);
+        setShowStickyCTA(scrollPosition > 800 && scrollPosition < documentHeight - windowHeight - 500);
+        ticking = false;
+      });
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
