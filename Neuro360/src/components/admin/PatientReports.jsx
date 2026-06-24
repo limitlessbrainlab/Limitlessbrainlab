@@ -60,6 +60,8 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
   const [selectedReportForResponse, setSelectedReportForResponse] = useState(null);
   const [clinicUsage, setClinicUsage] = useState({});
   const [subscriptions, setSubscriptions] = useState({});
+  // Per-clinic report credits from clinics.reports_allowed / reports_used (keyed by clinic id)
+  const [clinicLimits, setClinicLimits] = useState({});
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedReportForView, setSelectedReportForView] = useState(null);
   const [showPatientDetailModal, setShowPatientDetailModal] = useState(false);
@@ -93,16 +95,11 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
         return false;
       }
 
-      const subscription = subscriptions[clinicId];
-      const usage = clinicUsage[clinicId] || 0;
-
-      if (subscription && subscription.status === 'active') {
-        // Paid subscription - check against plan limit
-        return usage >= (subscription.reportsAllowed || 0);
-      } else {
-        // Trial subscription - 10 report limit
-        return usage >= 10;
-      }
+      // Report quota from authoritative clinics columns (reports_allowed / reports_used)
+      const limit = clinicLimits[clinicId];
+      const allowed = limit?.allowed || 0;
+      const used = limit?.used || 0;
+      return used >= allowed;
     } catch (error) {
       console.error('ERROR: Error checking report limit:', error);
       return false; // Default to not limiting if there's an error
@@ -135,34 +132,25 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
         };
       }
       
-      const subscription = subscriptions[clinicId];
-      const usage = clinicUsage[clinicId] || 0;
-      
-      if (subscription && subscription.status === 'active') {
-        return {
-          used: usage,
-          allowed: subscription.reportsAllowed || 0,
-          remaining: Math.max(0, (subscription.reportsAllowed || 0) - usage),
-          isTrial: false,
-          planName: subscription.planName || 'Paid Plan'
-        };
-      } else {
-        return {
-          used: usage,
-          allowed: 10,
-          remaining: Math.max(0, 10 - usage),
-          isTrial: true,
-          planName: 'Trial Plan'
-        };
-      }
+      // Report credits from authoritative clinics columns (reports_allowed / reports_used)
+      const limit = clinicLimits[clinicId];
+      const allowed = limit?.allowed || 0;
+      const used = limit?.used || 0;
+      return {
+        used,
+        allowed,
+        remaining: Math.max(0, allowed - used),
+        isTrial: false,
+        planName: 'Report Credits'
+      };
     } catch (error) {
       console.error('ERROR: Error getting clinic usage info:', error);
       return {
         used: 0,
-        allowed: 10,
-        remaining: 10,
-        isTrial: true,
-        planName: 'Trial Plan'
+        allowed: 0,
+        remaining: 0,
+        isTrial: false,
+        planName: 'Report Credits'
       };
     }
   };
@@ -399,9 +387,15 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       const usageMap = {};
       const subscriptionMap = {};
 
+      const limitsMap = {};
       normalizedClinics.forEach(clinic => {
         const clinicReports = allReports.filter(report => report.clinicId === clinic.id);
         usageMap[clinic.id] = clinicReports.length;
+        // Authoritative report credits from clinics.reports_allowed / reports_used
+        limitsMap[clinic.id] = {
+          allowed: clinic.reportsAllowed || 0,
+          used: clinic.reportsUsed || 0,
+        };
       });
 
       normalizedSubscriptions.forEach(subscription => {
@@ -410,6 +404,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
 
       setClinicUsage(usageMap);
       setSubscriptions(subscriptionMap);
+      setClinicLimits(limitsMap);
     } catch (error) {
       console.error('ERROR: Critical error loading admin patient reports:', error);
       setError(getFriendlyErrorMessage(error, 'We could not load the patient reports. Please try again.'));

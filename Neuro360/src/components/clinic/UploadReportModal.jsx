@@ -30,6 +30,8 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
   const [showSubscriptionPopup, setShowSubscriptionPopup] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [currentReports, setCurrentReports] = useState(0);
+  // Authoritative report credits from clinics.reports_used / reports_allowed
+  const [clinicRecord, setClinicRecord] = useState(null);
   const selectedFile = watch('reportFile');
   const selectedFile2 = watch('reportFile2');
   const selectedReportType = watch('reportType');
@@ -48,6 +50,11 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
         const subscriptions = await DatabaseService.get('subscriptions') || [];
         const clinicSubscription = subscriptions.find(sub => sub.clinicId === clinicId);
         setSubscription(clinicSubscription);
+
+        // Load the clinic record — authoritative source for report credits
+        // (clinics.reports_used / reports_allowed), matching the Subscription tab + DB.
+        const clinicRec = await DatabaseService.findById('clinics', clinicId);
+        setClinicRecord(clinicRec || null);
       } catch (error) {
         console.error('Error loading usage data:', error);
       }
@@ -108,9 +115,10 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
   // Check if clinic has reached report limit
   const checkReportLimit = async () => {
     // Check trial expiry first
+    let clinic = null;
     if (clinicId) {
       try {
-        const clinic = await DatabaseService.findById('clinics', clinicId);
+        clinic = await DatabaseService.findById('clinics', clinicId);
         if (clinic && clinic.trialEndDate) {
           const trialEndDate = new Date(clinic.trialEndDate);
           const now = new Date();
@@ -128,17 +136,12 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
       }
     }
 
-    // Check report quota
-    if (subscription && subscription.status === 'active') {
-      // Paid subscription - check against plan limit
-      if (currentReports >= subscription.reportsAllowed) {
-        return { limitReached: true, reason: 'quota_exceeded' };
-      }
-    } else {
-      // Trial subscription - 10 report limit
-      if (currentReports >= 10) {
-        return { limitReached: true, reason: 'quota_exceeded' };
-      }
+    // Check report quota against the authoritative clinics columns
+    // (clinics.reports_used / reports_allowed) — never a hardcoded limit.
+    const used = Number(clinic?.reportsUsed ?? clinic?.reports_used ?? 0);
+    const allowed = Number(clinic?.reportsAllowed ?? clinic?.reports_allowed ?? 0);
+    if (clinic && used >= allowed) {
+      return { limitReached: true, reason: 'quota_exceeded' };
     }
 
     return { limitReached: false, reason: null };
@@ -158,11 +161,15 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
       // Reload usage data
       const reports = await DatabaseService.getReportsByClinic(clinicId);
       setCurrentReports(reports.length);
-      
+
       const subscriptions = await DatabaseService.get('subscriptions') || [];
       const clinicSubscription = subscriptions.find(sub => sub.clinicId === clinicId);
       setSubscription(clinicSubscription);
-      
+
+      // Reload authoritative clinic credits after purchase
+      const clinicRec = await DatabaseService.findById('clinics', clinicId);
+      setClinicRecord(clinicRec || null);
+
       toast.success('Subscription updated successfully!');
     } catch (error) {
       console.error('Error updating subscription:', error);
@@ -404,10 +411,12 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
 
         {/* Usage Warning */}
         {(() => {
-          const usageInfo = subscription && subscription.status === 'active' 
-            ? { used: currentReports, allowed: subscription.reportsAllowed, remaining: subscription.reportsAllowed - currentReports, isTrial: false }
-            : { used: currentReports, allowed: 10, remaining: 10 - currentReports, isTrial: true };
-          
+          // Authoritative report credits from clinics.reports_used / reports_allowed
+          if (!clinicRecord) return null;
+          const used = Number(clinicRecord.reportsUsed ?? clinicRecord.reports_used ?? 0);
+          const allowed = Number(clinicRecord.reportsAllowed ?? clinicRecord.reports_allowed ?? 0);
+          const usageInfo = { used, allowed, remaining: allowed - used };
+
           if (usageInfo.remaining <= 2) {
             return (
               <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
