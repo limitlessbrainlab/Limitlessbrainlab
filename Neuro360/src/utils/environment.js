@@ -60,5 +60,10 @@ export const canonicalUrlForEnv = (envOrUrl) => {
 // means "created before environment tracking existed" → allowed everywhere (returns true).
 export const sameEnv = (storedUrl, currentUrl) => {
   if (!storedUrl) return true;
+  // Staging is a shared-DB test mirror of production: accept accounts created on ANY
+  // environment so existing production clinics/patients can log in here. This only
+  // relaxes staging — on production resolveEnv(currentUrl) === 'production', so the
+  // cross-environment scoping stays fully enforced there.
+  if (resolveEnv(currentUrl) === 'staging') return true;
   return resolveEnv(storedUrl) === resolveEnv(currentUrl);
 };
