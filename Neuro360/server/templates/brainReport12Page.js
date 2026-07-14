@@ -157,7 +157,7 @@ function pageHeader(num, section) {
   </div>`;
 }
 function pageFooter(label) {
-  return `<div class="pfoot"><span>NeuroSense • Limitless Brain Lab • limitlessbrainlab.com</span><span>${esc(label)}</span></div>`;
+  return `<div class="pfoot"><span>NeuroSense • Limitless Brain Lab • limitlessbrainlab-eight.vercel.app</span><span>${esc(label)}</span></div>`;
 }
 
 // Split a strategy line ("4-7-8 breathing — twice daily...") into title/body on
@@ -430,7 +430,7 @@ function renderReportHtml(reportData, narrative = {}) {
       <div class="info-card"><div class="k">BRAIN TYPE</div><div class="v">${esc(bt.name)}</div></div>
       <div class="info-card"><div class="k">REPORT ID</div><div class="v">${esc(p.reportId)}</div></div>
     </div>
-    <div class="cover-foot">${p.generatedOn ? `Report generated on: ${esc(p.generatedOn)} by Limitless Brain Lab<br>` : ''}${esc(p.clinicName)} • This AI-generated report is for informational and wellness purposes only and is not a medical diagnosis.<br>limitlessbrainlab.com</div>
+    <div class="cover-foot">${p.generatedOn ? `Report generated on: ${esc(p.generatedOn)} by Limitless Brain Lab<br>` : ''}${esc(p.clinicName)} • This AI-generated report is for informational and wellness purposes only and is not a medical diagnosis.<br>limitlessbrainlab-eight.vercel.app</div>
   </section>
 
   <!-- PAGE 2 — WELCOME / CONTENTS -->
@@ -627,7 +627,7 @@ function renderReportHtml(reportData, narrative = {}) {
       <div class="card" style="background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);max-width:340px;margin:34px auto 0;color:#fff;">
         <div style="letter-spacing:2px;font-size:11px;opacity:.75;">GET IN TOUCH</div>
         <div style="font-weight:800;font-size:22px;margin:8px 0;">+971 58 560 2551</div>
-        <div style="color:#9ec2f0;font-size:13px;">www.limitlessbrainlab.com</div>
+        <div style="color:#9ec2f0;font-size:13px;">limitlessbrainlab-eight.vercel.app</div>
       </div>
     </div>
     <div style="position:absolute;bottom:24mm;left:16mm;right:16mm;font-size:9px;line-height:1.5;color:rgba(255,255,255,.65);text-align:left;">This AI-generated qEEG report is provided for informational, educational, and wellness purposes only. It is not intended to diagnose, treat, cure, mitigate, or prevent any medical condition and is not a substitute for the individualized care of a licensed healthcare professional. The five brain-type framework is the NeuroSense interpretation of common qEEG patterns and is used for educational context only.</div>

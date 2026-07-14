@@ -200,7 +200,7 @@ const html = `<!DOCTYPE html>
       <div class="tagline">Smart EEG Intelligence</div>
     </div>
     <div class="p1-header-right">
-      <div>www.limitlessbrainlab.com</div>
+      <div>limitlessbrainlab-eight.vercel.app</div>
       <div>Assessment: 26/03/2026</div>
     </div>
   </div>
@@ -329,7 +329,7 @@ const html = `<!DOCTYPE html>
 
   <div class="p1-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 1 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 1 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -369,7 +369,7 @@ const html = `<!DOCTYPE html>
   </div>
   <div class="pg-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 2 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 2 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -413,7 +413,7 @@ const html = `<!DOCTYPE html>
   </div>
   <div class="p3-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 3 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 3 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -465,7 +465,7 @@ const html = `<!DOCTYPE html>
 
   <div class="pg-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 4 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 4 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -536,7 +536,7 @@ const html = `<!DOCTYPE html>
   <div style="height:14px;"></div>
   <div class="pg-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 5 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 5 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -612,7 +612,7 @@ const html = `<!DOCTYPE html>
   <div style="height:14px;"></div>
   <div class="pg-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor.</p>
-    <p class="pgnum">Page 6 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 6 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 
@@ -662,7 +662,7 @@ const html = `<!DOCTYPE html>
   </div>
   <div class="p7-footer">
     <p>Report generated on: 26/03/2026 &nbsp;|&nbsp; This AI generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.</p>
-    <p class="pgnum">Page 7 &nbsp;|&nbsp; www.limitlessbrainlab.com</p>
+    <p class="pgnum">Page 7 &nbsp;|&nbsp; limitlessbrainlab-eight.vercel.app</p>
   </div>
 </div>
 

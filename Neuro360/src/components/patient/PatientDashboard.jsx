@@ -2440,7 +2440,7 @@ const PatientDashboard = () => {
             <h4 className="font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2 text-xs sm:text-sm">1. How do I schedule a Neurosense brain assessment?</h4>
             <p className="text-[11px] sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
               You can schedule your assessment directly through the platform{' '}
-              <a href="https://www.limitlessbrainlab.com" target="_blank" rel="noopener noreferrer" className="text-[#323956] dark:text-blue-400 underline">www.limitlessbrainlab.com</a>{' '}
+              <a href="https://limitlessbrainlab-eight.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[#323956] dark:text-blue-400 underline">limitlessbrainlab-eight.vercel.app</a>{' '}
               or WhatsApp{' '}
               <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-[#323956] dark:text-blue-400 underline">Chat with us on WhatsApp</a>.
               Once scheduled, you will receive instructions for your EEG/qEEG scan, either at a center or via a guided setup. Our team will assist you throughout the process.

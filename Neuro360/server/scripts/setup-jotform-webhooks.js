@@ -9,7 +9,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const JOTFORM_API_KEY = process.env.JOTFORM_API_KEY || '';
-const WEBHOOK_URL = process.env.JOTFORM_WEBHOOK_URL || 'https://limitlessbrainlab.com/api/jotform-webhook';
+const WEBHOOK_URL = process.env.JOTFORM_WEBHOOK_URL || 'https://limitlessbrainlab-eight.vercel.app/api/jotform-webhook';
 
 // Every numeric form id referenced by neurosense_assessments.link,
 // PatientDashboard.jsx and the legacy Landing.jsx default.

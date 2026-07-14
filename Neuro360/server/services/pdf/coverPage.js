@@ -171,7 +171,7 @@ function generateCoverPage(doc, patientData, options) {
      .fillColor('#FFFFFF')
      .fillOpacity(0.8)
      .font(FONTS.regular)
-     .text('www.limitlessbrainlab.com', PW - 160, PH - 15, {
+     .text('limitlessbrainlab-eight.vercel.app', PW - 160, PH - 15, {
        width: 148,
        align: 'right',
        lineBreak: false

@@ -375,7 +375,7 @@ function addPageFooter(doc, text = '') {
   doc.fillColor(COLORS.white)
      .font(FONTS.bold)
      .fontSize(9)
-     .text('limitlessbrainlab.com', 450, footerY + 17);
+     .text('limitlessbrainlab-eight.vercel.app', 450, footerY + 17);
 }
 
 /**

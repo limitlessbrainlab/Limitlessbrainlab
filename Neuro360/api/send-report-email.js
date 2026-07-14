@@ -2,16 +2,14 @@ import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import reportEmailTemplate from '../shared/reportEmailTemplate.cjs';
 
-// Hardcoded on purpose: login/dashboard CTAs in emails must always land on production,
-// never a *.vercel.app deployment (FRONTEND_URL may point at a stale one).
-const FRONTEND_URL = 'https://limitlessbrainlab.com';
+// Staging build: login/dashboard CTAs in emails must land on the staging frontend,
+// never production (limitlessbrainlab.com) or a stale *.vercel.app deployment.
+const FRONTEND_URL = 'https://limitlessbrainlab-eight.vercel.app';
 const FROM_ADDRESS = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'info@limitlessbrainlab.com';
 const EMAIL_FROM = `"Limitless Brain Lab" <${FROM_ADDRESS}>`;
-// Load the logo from the brand production domain (aligned with the From domain), never a
-// *.vercel.app host. A remote image from a domain other than the sender's is a spam smell;
-// this serverless function can't reliably read /public for a cid: attachment, so serving it
-// from the same brand domain as the sender is the robust equivalent.
-const LOGO_URL = 'https://limitlessbrainlab.com/IBW%20Logo.png';
+// Staging build: serve the logo from the staging frontend host (which serves /public),
+// aligned with FRONTEND_URL above rather than the production brand domain.
+const LOGO_URL = 'https://limitlessbrainlab-eight.vercel.app/IBW%20Logo.png';
 const { getReportEmailHtml, getNeuroSenseReportEmailHtml } = reportEmailTemplate;
 
 function getBody(req) {

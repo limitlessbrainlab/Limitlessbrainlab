@@ -283,13 +283,12 @@ const EMAIL_FROM = `"Limitless Brain Lab" <${process.env.EMAIL_FROM || 'info@lim
 // Applied per-template (not globally) — see plan.
 const INTERNAL_COPY_EMAIL = process.env.INTERNAL_COPY_EMAIL || 'limitlessbrainlab@gmail.com';
 
-// Canonical production URL for user-facing navigation/login links in emails.
-// Hardcoded on purpose: some backends set FRONTEND_URL to a stale *.vercel.app
-// deployment, and a login link pointing there sends clinics to old code that
-// rejects valid credentials with "Invalid email or password". Login/dashboard
-// CTAs must always land on production, independent of which backend sends the mail.
+// Canonical STAGING URL for user-facing navigation/login links in emails.
+// Hardcoded on purpose so login/dashboard CTAs and assessment take-links always
+// land on the staging frontend, never production (limitlessbrainlab.com) or a
+// stale *.vercel.app deployment, independent of which backend sends the mail.
 // (Stripe success_url/cancel_url still use FRONTEND_URL — that is intentional.)
-const APP_URL = 'https://limitlessbrainlab.com';
+const APP_URL = 'https://limitlessbrainlab-eight.vercel.app';
 
 // Standard grey contact strip — the bottom bar of every email card. attachEmailFooter
 // detects this strip (background:#f8fafc + border-top) and welds the brand footer directly
@@ -298,7 +297,7 @@ const APP_URL = 'https://limitlessbrainlab.com';
 // floating footer. Keep it as the LAST inner element, containing only <p> (no nested <div>),
 // so the stripDivEnd/stripRowTail matchers in attachEmailFooter can find it.
 const CONTACT_STRIP_HTML = `<div style="background:#f8fafc; padding:16px 30px; text-align:center; border-top:1px solid #e5e7eb;">
-            <p style="color:#94a3b8; margin:0; font-size:11px;">Limitlessbrainlab.com &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
+            <p style="color:#94a3b8; margin:0; font-size:11px;">limitlessbrainlab-eight.vercel.app &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
           </div>`;
 
 // Escape user-supplied values before interpolating into email HTML. Without this,
@@ -433,7 +432,7 @@ const getAdminNotificationHtml = (formTitle, dataRows) => `
               </div>
               <p style="color: #555; font-size: 14px; margin: 0 0 4px;">Best regards,</p>
               <p style="color: #323956; font-size: 14px; font-weight: 600; margin: 0 0 2px;">Support Team,</p>
-              <p style="color: #323956; font-size: 14px; margin: 0;">Limitlessbrainlab.com</p>
+              <p style="color: #323956; font-size: 14px; margin: 0;">limitlessbrainlab-eight.vercel.app</p>
             </td>
           </tr>
           <tr>
@@ -506,7 +505,7 @@ const getUserConfirmationHtml = (userName) => `
           <!-- Footer -->
           <tr>
             <td style="background: #f8f9fc; padding: 16px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="color: #aaa; margin: 0; font-size: 11px;">Limitlessbrainlab.com &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
+              <p style="color: #aaa; margin: 0; font-size: 11px;">limitlessbrainlab-eight.vercel.app &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
             </td>
           </tr>
 
@@ -693,7 +692,7 @@ const getReportReceivedHtml = (patientName, clinicName) => `
           <!-- Footer -->
           <tr>
             <td style="background: #f8f9fc; padding: 16px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="color: #aaa; margin: 0; font-size: 11px;">Limitlessbrainlab.com &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
+              <p style="color: #aaa; margin: 0; font-size: 11px;">limitlessbrainlab-eight.vercel.app &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
             </td>
           </tr>
 
@@ -803,7 +802,7 @@ const getProtectMyBrainEmailHtml = (userName) => `
           <!-- Footer -->
           <tr>
             <td style="background: #f8f9fc; padding: 16px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="color: #aaa; margin: 0; font-size: 11px;">Limitlessbrainlab.com &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
+              <p style="color: #aaa; margin: 0; font-size: 11px;">limitlessbrainlab-eight.vercel.app &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
             </td>
           </tr>
 
@@ -905,7 +904,7 @@ const getTreatMyBrainEmailHtml = (userName) => `
           <!-- Footer -->
           <tr>
             <td style="background: #f8f9fc; padding: 16px 32px; border-top: 1px solid #e5e7eb; text-align: center;">
-              <p style="color: #aaa; margin: 0; font-size: 11px;">Limitlessbrainlab.com &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
+              <p style="color: #aaa; margin: 0; font-size: 11px;">limitlessbrainlab-eight.vercel.app &nbsp;|&nbsp; info@limitlessbrainlab.com</p>
             </td>
           </tr>
 
@@ -2634,9 +2633,9 @@ app.post('/api/create-report-checkout', async (req, res) => {
 
     // Return the clinic to the SAME origin it came from after payment, so the
     // per-origin auth session survives the round-trip (a cross-origin return drops
-    // the session and bounces the clinic to /login). Fall back to the canonical
-    // production domain — never the staging vercel.app URL.
-    const baseUrl = req.headers.origin || 'https://limitlessbrainlab.com';
+    // the session and bounces the clinic to /login). Fall back to the staging
+    // frontend domain (this is the staging build).
+    const baseUrl = req.headers.origin || 'https://limitlessbrainlab-eight.vercel.app';
 
     if (!customerEmail || !amount || !currency) {
       return res.status(400).json({
@@ -3417,7 +3416,7 @@ app.post('/api/assessment-link/capture', async (req, res) => {
   }
 });
 
-// JotForm submission webhook. Add https://limitlessbrainlab.com/api/jotform-webhook
+// JotForm submission webhook. Add https://limitlessbrainlab-eight.vercel.app/api/jotform-webhook
 // under each form's Settings → Integrations → WebHooks. JotForm POSTs
 // multipart/form-data with formID, submissionID, pretty ("Q:A, Q:A") and
 // rawRequest (JSON). Marks the matching purchase completed, stores the
@@ -3528,7 +3527,7 @@ app.post('/api/create-coaching-checkout', async (req, res) => {
     }
     const FRONTEND_URL = (requestOrigin && allowedOrigins.includes(requestOrigin))
       ? requestOrigin
-      : (process.env.FRONTEND_URL || 'https://limitlessbrainlab.com');
+      : (process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app');
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
