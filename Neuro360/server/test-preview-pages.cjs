@@ -206,7 +206,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 3: Congratulations
 doc.addPage({ size: 'A4', margin: 0 });
@@ -224,7 +224,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 4: Brainwave Profiles
 doc.addPage({ size: 'A4', margin: 0 });
@@ -242,7 +242,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 5: Full page image
 doc.addPage({ size: 'A4', margin: 0 });
@@ -382,7 +382,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 6: Your Numbers At a Glance
 doc.addPage({ size: 'A4', margin: 0 });
@@ -402,7 +402,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== RADAR CHART HELPER — 3 discrete rings: Low, Medium, High =====
 function drawRadarChart(doc, chartX, chartY, chartW, chartH, labels, datasets) {
@@ -547,7 +547,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 8: Cognition (score-based)
 doc.addPage({ size: 'A4', margin: 0 });
@@ -582,7 +582,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // Page 9: Cognition Details (High/Low Cognition + How to Improve)
 doc.addPage({ size: 'A4', margin: 0 });
@@ -600,7 +600,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 10: Emotional Regulation (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -636,7 +636,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 11: Emotional Regulation Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -688,7 +688,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 12: Brain Burn Out (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -724,7 +724,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 13: Brain Burn Out Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -776,7 +776,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 14: Focus & Attention (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -812,7 +812,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 15: Focus & Attention Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -864,7 +864,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 16: Stress & Mental Overload (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -900,7 +900,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 17: Stress & Mental Overload Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -952,7 +952,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 18: Learning (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -988,7 +988,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 19: Learning Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1040,7 +1040,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 20: Creativity (Gauge) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1076,7 +1076,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 21: Creativity Details =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1127,7 +1127,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 22: Peak Alpha =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1188,7 +1188,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 23: Excessive Delta =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1246,7 +1246,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 24: Arousal Score =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1303,7 +1303,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 25: Focus and Attention (Sub-parameter) =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1361,7 +1361,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 26: Relaxation Score =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1419,7 +1419,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 27: Regeneration and Repair Score =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1480,7 +1480,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 28: Asymmetry Eye Open =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1541,7 +1541,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 // ===== Page 29: Back Cover — Contact Page =====
 doc.addPage({ size: 'A4', margin: 0 });
@@ -1681,7 +1681,7 @@ doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
 doc.fontSize(6).font('Helvetica').fillColor('#FFFFFF')
    .text('This AI-generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 30, 820, { lineBreak: false });
 doc.fontSize(8).font('Helvetica-Bold').fillColor('#FFFFFF')
-   .text('www.limitlessbrainlab.com', 30, 820, { width: 535, align: 'right', lineBreak: false });
+   .text('limitlessbrainlab-eight.vercel.app', 30, 820, { width: 535, align: 'right', lineBreak: false });
 
 doc.end();
 

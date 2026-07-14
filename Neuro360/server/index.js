@@ -923,9 +923,7 @@ const allowedOrigins = [
   'http://localhost:3001',      // Local dev - Vite alternate
   'http://localhost:3002',      // Local dev - Vite alternate
   'http://localhost:5173',      // Local dev - Vite default
-  'https://limitlessbrainlab.com', // Production custom domain
-  'https://www.limitlessbrainlab.com', // Production with www
-  'https://limitlessbrainlab-production.vercel.app', // Production Vercel domain
+  // Production origins removed on staging — this deployment only serves the staging frontend.
   'https://neurosense360.site', // Legacy
   'https://www.neurosense360.site', // Legacy with www
   'http://neurosense360.site',  // Legacy HTTP

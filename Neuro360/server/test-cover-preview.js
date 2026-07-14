@@ -121,7 +121,7 @@ const genAt = '12/01/2025, 12:17 pm';
   doc.fillOpacity(1);
   doc.fontSize(7.5).fillColor('#FFF').font('Helvetica-Bold').text('Page 1', PW-52, PH-30, { lineBreak: false });
   doc.fontSize(7).fillColor('#FFF').fillOpacity(0.8).font('Helvetica')
-     .text('www.limitlessbrainlab.com', PW-160, PH-15, { width: 148, align: 'right', lineBreak: false });
+     .text('limitlessbrainlab-eight.vercel.app', PW-160, PH-15, { width: 148, align: 'right', lineBreak: false });
   doc.fillOpacity(1);
   doc.fontSize(5.5).fillColor('#FFF').fillOpacity(0.5).font('Helvetica-Oblique')
      .text('This AI generated report is not diagnostic. Please consult your doctor for proper interpretation and clinical correlation.', 22, PH-15, { lineBreak: false });
