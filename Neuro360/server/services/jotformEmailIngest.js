@@ -111,6 +111,16 @@ async function withImap(fn) {
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     logger: false
   });
+  // ImapFlow is an EventEmitter: an 'error' event with NO listener (e.g. a socket
+  // timeout when the IMAP port is blocked, as on Render's free tier) is thrown by
+  // Node and CRASHES the whole API server — it fires asynchronously from the
+  // socket, so the try/catch around connect()/the poll cannot catch it. Attach a
+  // listener so such failures are logged and swallowed instead of taking the
+  // process (and any in-flight report generation) down. The awaited connect()
+  // below still rejects normally on failure, handled by the caller's try/catch.
+  client.on('error', (err) => {
+    console.error('jotformEmailIngest: IMAP client error (ignored):', err?.message || err);
+  });
   await client.connect();
   try {
     return await fn(client);
