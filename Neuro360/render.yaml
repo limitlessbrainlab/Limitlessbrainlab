@@ -42,9 +42,10 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: https://limitlessbrainlab-eight.vercel.app
-      # Gmail SMTP. Outbound mail is sent directly via EMAIL_USER/EMAIL_PASS (app password).
-      # NOTE: SMTP ports 25/465/587 are blocked on Render's free tier — a paid plan is
-      # required for Gmail SMTP (port 465) to connect.
+      # Brevo HTTP API handles outbound mail on Render without blocked SMTP ports.
+      - key: BREVO_API_KEY
+        sync: false
+      # Gmail credentials remain for inbound JotForm IMAP and local mail fallback.
       - key: EMAIL_USER
         value: info@limitlessbrainlab.com
       - key: EMAIL_PASS

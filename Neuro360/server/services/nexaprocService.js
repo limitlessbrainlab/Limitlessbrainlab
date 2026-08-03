@@ -1,13 +1,12 @@
 const axios = require('axios');
+const GeminiService = require('./geminiService');
 
 /**
- * Sidecar client for the Nexaproc AI Gateway (AIaaS) on the Hostinger VPS.
+ * Performance Report AI + rendering support.
  *
- * The gateway wraps the Claude CLI. We extract the qEEG PDF's text locally
- * (fast — milliseconds) and POST it to the gateway's /api/report-pdf endpoint;
- * the gateway runs Claude (fast Haiku model) to build a styled HTML report,
- * renders it to a PDF with headless Chromium, and returns the PDF bytes. We
- * send TEXT (not the raw image-heavy PDF) so generation fits the 300s cap.
+ * Gemini transcribes the qEEG PDF values and writes the narrative. The Nexaproc
+ * gateway remains responsible for learned-example storage and primary HTML-to-PDF
+ * rendering, with local Puppeteer as the existing render fallback.
  *
  * Neuro's backend is the "sidecar": the browser never talks to the VPS
  * directly — it calls our route, which forwards to the gateway here.
@@ -20,12 +19,12 @@ const MAX_TEXT_CHARS = 200000;
 
 /**
  * Build the doctor-readable narrative prompt from the deterministic report data.
- * Claude writes ONLY prose — it must echo every number exactly as given and never
+ * Gemini writes ONLY prose — it must echo every number exactly as given and never
  * recompute or invent values.
  */
 
 // Verbatim prose excerpts from Sagar Ahiwale's real report — used as the hardcoded style reference.
-// Claude matches this style/tone/structure; it does NOT copy these numbers for new patients.
+// Gemini matches this style/tone/structure; it does NOT copy these numbers for new patients.
 const SAGAR_TEMPLATE_EXAMPLE = `PATIENT: Sagar Ahiwale | Brain Type: Cautious (Type 5) | Date: 17 Mar 2026
 
 snapshotSummary: "A quick view of where you stand right now. Your stress regulation is exceptional and your cognitive engine runs strong, but your nervous system is sitting on a high arousal baseline — the signature of a driven, vigilant brain that doesn't fully switch off."
@@ -85,7 +84,7 @@ plan.after30: "Regeneration and relaxation scores typically shift first — expe
 
 closing: "You are starting from a position of real strength. Your brain type has genuine advantages — reliability, focus under fire, follow-through. The work ahead isn't about fixing what's broken; it's about adding recovery to an already high-performing system. Your 30-day plan is the lever. Pull it consistently."`;
 
-// The doctor-readable narrative JSON schema, shared by both Claude prompts.
+// The doctor-readable narrative JSON schema used by the Gemini narrative prompt.
 const NARRATIVE_SCHEMA = `{
   "snapshotSummary": "2-3 sentences: where the patient stands overall, referencing the overall score and their standout strength + main watch-zone.",
   "topStrength": { "title": "short", "points": ["2 bullets grounded in the data"] },
@@ -215,31 +214,23 @@ function saveReportExample(narrative, patient) {
 }
 
 /**
- * Ask the VPS Claude (Nexaproc gateway) for the report narrative blocks.
+ * Ask Gemini for the report narrative blocks.
  * Fetches learned examples first for few-shot prompting; saves the result afterwards.
  * @param {object} reportData  Output of buildReportData().
  * @returns {Promise<object>}  Parsed narrative ({} on failure → template falls back).
  */
 async function generateReportNarrative(reportData) {
-  if (!MASTER_KEY) {
-    throw new Error('NEXAPROC_MASTER_KEY is not set on the server. Cannot authenticate to the AIaaS gateway.');
-  }
-
   // Fetch previously-learned examples (fail-safe — returns [] on any error)
   const learnedExamples = await fetchReportExamples();
 
   const payload = buildNarrativePrompt(reportData, learnedExamples);
-  const opts = { headers: { 'X-Nexaproc-Key': MASTER_KEY, 'Content-Type': 'application/json' }, timeout: 300000 };
 
-  // One retry ONLY when the single-flight gateway rejects us fast as "busy" (429) —
-  // that call cost ~nothing, so retrying is cheap. Do NOT retry on a 504/timeout:
-  // that attempt already burned the full timeout, and a second one would double the
-  // total time and blow the caller's 5-min budget. The narrative is best-effort
-  // (the template falls back to framework copy), so failing fast is correct.
+  // One retry when Gemini rejects the request with 429. Other failures keep the
+  // existing best-effort behavior: the template falls back to framework copy.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await axios.post(`${GATEWAY_URL}/api/invoke`, { taskID: 'GENERIC_ASK', payload, useJson: true, model: 'haiku' }, opts);
-      const narrative = parseGatewayJson(response.data);
+      const raw = await GeminiService.generateText(payload);
+      const narrative = parseGatewayJson({ stdout: raw });
 
       // Fire-and-forget: save this narrative as a learned example for future reports
       saveReportExample(narrative, {
@@ -250,7 +241,7 @@ async function generateReportNarrative(reportData) {
 
       return narrative;
     } catch (err) {
-      const status = err.response?.status;
+      const status = err.status || err.response?.status;
       if (attempt === 0 && status === 429) {
         await new Promise((r) => setTimeout(r, 4000));
         continue;
@@ -263,17 +254,12 @@ async function generateReportNarrative(reportData) {
 /**
  * Read an ALREADY-GENERATED brain/qEEG report's text and TRANSCRIBE its numbers
  * verbatim into the `source` object. We never recompute — the uploaded report
- * already prints these values; Claude only transcribes them. Kept deliberately
- * small/fast (numbers only, no prose) so it stays well under the gateway's 300s
- * cap; the doctor-readable prose is fetched separately via generateReportNarrative.
+ * already prints these values; Gemini only transcribes them. The doctor-readable
+ * prose is fetched separately via generateReportNarrative.
  * @param {string} pdfText  Text extracted (pdf-parse) from the uploaded report.
  * @returns {Promise<object|null>}  The `source` object (or null on failure).
  */
 async function extractReportSource(pdfText) {
-  if (!MASTER_KEY) {
-    throw new Error('NEXAPROC_MASTER_KEY is not set on the server. Cannot authenticate to the AIaaS gateway.');
-  }
-
   const payload = `You are given the raw text of an EXISTING brain / qEEG performance report for a
 single patient. It already prints the patient's scores and EEG metric values.
 
@@ -327,38 +313,8 @@ Rules:
 Here is the report text:
 ${pdfText}`;
 
-  // The gateway is single-flight (one CLI call at a time) and shared with other
-  // products, so a "busy" (429) is common. Extract is the FIRST call and has NO
-  // fallback — if it fails the whole report fails. A real report can hold the
-  // gateway for minutes, so a short retry window isn't enough: ride out the
-  // contention with backoff for up to ~2 minutes (429 is rejected instantly, so
-  // this only spends time waiting for the other call to free the gateway). The
-  // SSE heartbeat keeps the client stream alive meanwhile. Do not retry slow
-  // 504/timeouts. On final 429 give a clear, actionable message (not the raw
-  // "Request failed with status code 429").
-  const opts = { headers: { 'X-Nexaproc-Key': MASTER_KEY, 'Content-Type': 'application/json' }, timeout: 300000 };
-  const MAX_BUSY_WAIT_MS = 120000;
-  let response;
-  let waitedMs = 0;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      response = await axios.post(`${GATEWAY_URL}/api/invoke`, { taskID: 'GENERIC_ASK', payload, useJson: true, model: 'haiku' }, opts);
-      break;
-    } catch (err) {
-      if (err.response?.status === 429) {
-        if (waitedMs < MAX_BUSY_WAIT_MS) {
-          const delay = Math.min(5000 + attempt * 5000, 20000);
-          await new Promise((r) => setTimeout(r, delay));
-          waitedMs += delay;
-          continue;
-        }
-        throw new Error('The report service is busy generating another report right now. Please wait a minute and try again.');
-      }
-      throw err;
-    }
-  }
-
-  const parsed = parseGatewayJson(response.data);
+  const raw = await GeminiService.generateText(payload);
+  const parsed = parseGatewayJson({ stdout: raw });
   // The extraction IS the object; tolerate a {source:{...}} wrapper too.
   if (parsed && (parsed.markers || parsed.deepDive)) return parsed;
   if (parsed && parsed.source) return parsed.source;

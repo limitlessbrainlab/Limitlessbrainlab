@@ -9,7 +9,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Gmail SMTP only. Outbound mail uses EMAIL_USER/EMAIL_PASS directly.
+      # Brevo HTTP API handles outbound mail on Render without blocked SMTP ports.
+      - key: BREVO_API_KEY
+        sync: false
+      # Gmail credentials remain for inbound JotForm IMAP and local mail fallback.
       - key: EMAIL_USER
         value: info@limitlessbrainlab.com
       - key: EMAIL_PASS

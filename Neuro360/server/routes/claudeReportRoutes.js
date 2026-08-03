@@ -52,16 +52,16 @@ const upload = multer({
 /**
  * POST /api/qeeg/claude-report
  * Upload an ALREADY-GENERATED brain/qEEG report PDF (field "pdf"). We read its
- * text, have VPS Claude transcribe the numbers + write the narrative, build the
+ * text, have Gemini transcribe the numbers + write the narrative, build the
  * report data deterministically, and return the polished 12-page "Brain Type &
  * Performance Report" PDF. Auth: static long-lived CLAUDE_REPORT_TOKEN.
  */
 // Human-readable label for each streamed stage (frontend shows these verbatim).
 const STAGE_LABELS = {
   reading: 'Reading the document…',
-  extract: 'Claude is reading your numbers…',
+  extract: 'Gemini is reading your numbers…',
   build: 'Building your report…',
-  narrative: 'Claude is writing your report…',
+  narrative: 'Gemini is writing your report…',
   render: 'Rendering the 12-page PDF…',
   saving: 'Saving your report…',
 };
@@ -94,7 +94,7 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
   };
   const progress = (stage) => send('progress', { stage, label: STAGE_LABELS[stage], pct: STAGE_PCT[stage] });
 
-  // Keep the connection alive through the long (30-60s) Claude calls so the
+  // Keep the connection alive through the long (30-60s) Gemini calls so the
   // proxy doesn't drop an idle stream.
   const heartbeat = setInterval(() => {
     try { res.write(`: ping\n\n`); } catch (_) { /* ignore */ }
@@ -109,8 +109,7 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
     try {
       const parsed = await pdfParse(fs.readFileSync(tempPath));
       // Strip NUL bytes and other C0 control chars (except newline/tab) — pdf-parse
-      // can emit \0 from certain PDFs, and those terminate the Claude CLI's C-string
-      // input on the VPS, causing a 500 during the extract stage.
+      // can emit \0 from certain PDFs and corrupt the model input.
       text = (parsed.text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
     } catch (e) {
       throw new Error(`Failed to read the PDF: ${e.message}`);
