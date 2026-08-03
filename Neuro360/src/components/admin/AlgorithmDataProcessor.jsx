@@ -1292,11 +1292,11 @@ const AlgorithmDataProcessor = () => {
   // Ordered stages shown in the progress panel. `upload` is the browser->server
   // fetch (before the first SSE event); the rest are streamed by the backend.
   const CLAUDE_STAGE_ORDER = [
-    { key: 'upload', label: 'Uploading to Claude…', pct: 5 },
+    { key: 'upload', label: 'Uploading your report…', pct: 5 },
     { key: 'reading', label: 'Reading the document…', pct: 10 },
-    { key: 'extract', label: 'Claude is reading your numbers…', pct: 25 },
+    { key: 'extract', label: 'Gemini is reading your numbers…', pct: 25 },
     { key: 'build', label: 'Building your report…', pct: 55 },
-    { key: 'narrative', label: 'Claude is writing your report…', pct: 60 },
+    { key: 'narrative', label: 'Gemini is writing your report…', pct: 60 },
     { key: 'render', label: 'Rendering the 12-page PDF…', pct: 88 },
     { key: 'saving', label: 'Saving your report…', pct: 95 },
   ];
@@ -1315,11 +1315,11 @@ const AlgorithmDataProcessor = () => {
   };
 
   // Mark the active stage done (recording its elapsed time) and flip `nextKey` active.
-  const advanceClaudeStage = (nextKey, stageStartRef) => {
+  const advanceClaudeStage = (nextKey, nextLabel, stageStartRef) => {
     const now = performance.now();
     setClaudeStages((prev) => prev.map((s) => {
       if (s.status === 'active') return { ...s, status: 'done', elapsedMs: now - (stageStartRef.current || now) };
-      if (s.key === nextKey) return { ...s, status: 'active' };
+      if (s.key === nextKey) return { ...s, label: nextLabel || s.label, status: 'active' };
       return s;
     }));
     stageStartRef.current = now;
@@ -1504,7 +1504,7 @@ const AlgorithmDataProcessor = () => {
 
           if (event === 'progress') {
             console.log(`[Claude Report] stage: ${payload.stage} (${payload.pct}%)`);
-            advanceClaudeStage(payload.stage, stageStartRef);
+            advanceClaudeStage(payload.stage, payload.label, stageStartRef);
             setClaudeProgress(payload.pct || pctFor(payload.stage));
             startClaudeCreep(nextPctAfter(payload.stage));
           } else if (event === 'done') {
