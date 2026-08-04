@@ -20,14 +20,11 @@ const { authMiddleware, optionalAuth } = require('./middleware/authMiddleware');
 const { requireRole, requireOwnership } = require('./middleware/rbac');
 const logger = require('./services/logger');
 
-// Initialize Supabase client for server-side operations
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-let supabase = null;
-if (supabaseUrl && supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
-} else {
-}
+// Initialize Supabase client for server-side operations.
+// Routed per-request (prod vs staging by origin) via dbRouter; returns the plain
+// prod client when staging env vars are not configured (no behavior change).
+const { createRoutedClient } = require('./dbRouter');
+const supabase = createRoutedClient();
 
 // Notification de-duplication. Claims a key the first time and returns true (send);
 // returns false if the key was already claimed (skip). Backed by the

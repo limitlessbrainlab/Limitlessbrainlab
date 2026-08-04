@@ -11,6 +11,7 @@ const TemplateBasedPDFGenerator = require('../services/pdfGeneratorTemplate');
 const templateManager = require('../services/pdf/templateManager');
 const AIPdfGenerator = require('../services/aiPdfGenerator');
 const SupabaseStorage = require('../services/supabaseStorage');
+const { createRoutedClient } = require('../dbRouter');
 
 // NEW: Gemini AI Service for report generation
 let GeminiService = null;
@@ -128,8 +129,7 @@ router.post('/process', upload.fields([
     const reqClinicId = req.body && req.body.clinicId;
     if (reqClinicId && reqClinicId !== DEFAULT_CLINIC_ID) {
       try {
-        const { createClient } = require('@supabase/supabase-js');
-        const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        const sb = createRoutedClient();
         const { data: clinic } = await sb.from('clinics').select('reports_allowed, reports_used, name').eq('id', reqClinicId).single();
         const allowed = Number(clinic?.reports_allowed ?? 0);
         const used = Number(clinic?.reports_used ?? 0);
@@ -447,8 +447,7 @@ router.post('/process', upload.fields([
       let patientOccupation = occupation || '';
       if (!patientOccupation && patientId) {
         try {
-          const { createClient } = require('@supabase/supabase-js');
-          const sbClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const sbClient = createRoutedClient();
           const { data: patientRecord } = await sbClient
             .from('patients')
             .select('occupation')
@@ -675,8 +674,7 @@ router.post('/process', upload.fields([
     // concurrency (retry on conflicting writers); fail-open like the guard.
     if (reqClinicId && reqClinicId !== DEFAULT_CLINIC_ID) {
       try {
-        const { createClient } = require('@supabase/supabase-js');
-        const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        const sb = createRoutedClient();
         let metered = false;
         for (let attempt = 0; attempt < 3 && !metered; attempt++) {
           const { data: clinic } = await sb.from('clinics').select('reports_used').eq('id', reqClinicId).single();
@@ -1122,8 +1120,7 @@ router.get('/supabase-pdfs', async (req, res) => {
 
     // Get public URLs for all files
     const pdfs = files.map(file => {
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const supabase = createRoutedClient();
       const { data: urlData } = supabase.storage
         .from('neurosense-reports')
         .getPublicUrl(`reports/${file.name}`);
@@ -1176,7 +1173,7 @@ router.get('/verify-bucket', async (req, res) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createRoutedClient();
 
     // Check if bucket exists
     const { data: buckets, error: listError } = await supabase.storage.listBuckets();

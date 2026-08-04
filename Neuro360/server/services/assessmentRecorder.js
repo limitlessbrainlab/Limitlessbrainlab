@@ -7,11 +7,10 @@
  * when exactly one open row exists for that form.
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { createRoutedClient } = require('../dbRouter');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+// Routed per-request (prod vs staging by origin); plain prod client otherwise.
+const supabase = createRoutedClient();
 
 // Best-effort score pickup for the admin Assessment Results view: the first
 // answered field whose question/key mentions score/result/total/points —

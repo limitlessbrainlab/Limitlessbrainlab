@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
+const { createRoutedClient } = require('../dbRouter');
 
 const router = express.Router();
 
@@ -9,10 +9,7 @@ const SSO_SECRET = process.env.SHARED_SSO_SECRET;
 const DDO_DOCTOR_URL = process.env.DDO_DOCTOR_URL;
 const DDO_PATIENT_URL = process.env.DDO_PATIENT_URL;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createRoutedClient();
 
 router.post('/generate-token', async (req, res) => {
   try {

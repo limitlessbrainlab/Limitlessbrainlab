@@ -1,11 +1,10 @@
 const jwt = require('jsonwebtoken');
-const { createClient } = require('@supabase/supabase-js');
+const { createRoutedClient } = require('../dbRouter');
 
-// Initialize Supabase admin client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Routed per-request (prod vs staging by origin) so JWT verification
+// (supabase.auth.getUser) hits the same DB the request's data queries use.
+// Returns the plain prod client when staging env vars are not configured.
+const supabase = createRoutedClient();
 
 /**
  * Middleware to verify JWT token and attach user to request

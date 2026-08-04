@@ -3,6 +3,9 @@ const helmet = require('helmet');
 const cors = require('cors');
 const express = require('express');
 
+// Per-request prod-vs-staging DB selection (no-op unless STAGING_SUPABASE_* env set)
+const { stagingOriginMiddleware } = require('../dbRouter');
+
 const { authMiddleware, optionalAuth } = require('./authMiddleware');
 const { requireRole } = require('./rbac');
 const { errorHandler, asyncHandler, notFoundHandler } = require('./errorHandler');
@@ -75,6 +78,10 @@ const setupMiddleware = (app, allowedOrigins) => {
     allowedHeaders: ['Content-Type', 'Authorization'],
   };
   app.use(cors(corsOptions));
+
+  // Scope each request to the prod or staging DB by its origin. Must run before
+  // any route so the AsyncLocalStorage context wraps all downstream handlers.
+  app.use(stagingOriginMiddleware);
 
   // Compression
   app.use(compression());

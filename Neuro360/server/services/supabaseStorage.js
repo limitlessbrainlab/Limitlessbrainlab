@@ -3,23 +3,17 @@
  * Handles file uploads to Supabase storage buckets
  */
 
-const { createClient } = require('@supabase/supabase-js');
+const { createRoutedClient } = require('../dbRouter');
 const fs = require('fs');
 const path = require('path');
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Routed per-request (prod vs staging by origin); plain prod client when staging
+// env vars are not configured. null only if prod Supabase creds are missing.
+const supabase = createRoutedClient();
 
-if (!supabaseUrl || !supabaseKey) {
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error('⚠️  Supabase credentials not found in environment variables');
-  console.error('   SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
-  console.error('   SUPABASE_SERVICE_ROLE_KEY:', supabaseKey ? 'Set' : 'Missing');
 }
-
-const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
 
 class SupabaseStorage {
   /**

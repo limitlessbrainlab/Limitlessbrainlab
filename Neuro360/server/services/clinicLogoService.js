@@ -18,11 +18,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
+const { createRoutedClient } = require('../dbRouter');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+// Routed per-request (prod vs staging by origin); plain prod client otherwise.
+const supabase = createRoutedClient();
 
 const LOGO_BUCKET = 'clinic-logos';
 
