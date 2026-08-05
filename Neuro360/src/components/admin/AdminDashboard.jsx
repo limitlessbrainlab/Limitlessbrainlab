@@ -147,7 +147,7 @@ const AdminDashboard = ({ analytics = {} }) => {
               className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md dark:hover:shadow-xl dark:hover:shadow-gray-900/20 transition-shadow"
             >
               <div className="flex items-start justify-between">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{stat.name}</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{stat.value}</p>
                   {stat.subtitle && (
@@ -168,7 +168,7 @@ const AdminDashboard = ({ analytics = {} }) => {
                     )}
                   </div>
                 </div>
-                <div className={`p-3 rounded-lg ${
+                <div className={`shrink-0 p-3 rounded-lg ${
                   stat.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/30' :
                   stat.color === 'green' ? 'bg-green-50 dark:bg-green-900/30' :
                   stat.color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-900/30' :
