@@ -28,7 +28,7 @@ const LOGO_BUCKET = 'clinic-logos';
 /** Render page 1 of a PDF to a PNG buffer. pdf-to-img is ESM-only → dynamic import. */
 async function renderPdfFirstPage(pdfPath) {
   const { pdf } = await import('pdf-to-img');
-  const document = await pdf(pdfPath, { scale: 3 });
+  const document = await pdf(pdfPath, { scale: 2 });
   for await (const image of document) {
     return image; // PNG buffer of page 1
   }
@@ -49,6 +49,11 @@ function cropToContent(pngBuffer) {
     return Promise.resolve(pngBuffer);
   }
   return (async () => {
+    // Auto-crop is best-effort. On memory-constrained instances (e.g. Render
+    // free tier) canvas allocation can throw "out of memory"; fall back to the
+    // original image so the upload still succeeds and the logo appears in the
+    // report (just uncropped) instead of failing with a 500.
+    try {
     const img = await loadImage(pngBuffer);
     const canvas = createCanvas(img.width, img.height);
     const ctx = canvas.getContext('2d');
@@ -80,6 +85,10 @@ function cropToContent(pngBuffer) {
     const out = createCanvas(sw, sh);
     out.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
     return out.toBuffer('image/png');
+    } catch (e) {
+      console.warn('clinicLogo: auto-crop failed, using original image:', e.message);
+      return pngBuffer;
+    }
   })();
 }
 
