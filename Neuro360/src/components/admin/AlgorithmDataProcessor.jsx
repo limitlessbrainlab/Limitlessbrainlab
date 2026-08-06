@@ -1798,8 +1798,8 @@ const AlgorithmDataProcessor = () => {
     }
   };
 
-  // Send the Claude-generated report to Clinic and Patient — mirrors handleSendReport
-  // but sources the URL from claudeReportUrl and marks the report as a Claude Report.
+  // Send the Claude-generated report to Clinic and Patient. The original NeuroSense
+  // EEG report is shared first as well, so the patient receives both reports.
   const handleSendClaudeReport = async () => {
     if (!claudeReportUrl) {
       toast.error('Please generate the Neurosense Performance Report first');
@@ -1815,6 +1815,13 @@ const AlgorithmDataProcessor = () => {
     setIsSendingClaudeReport(true);
 
     try {
+      // Claude mode is built from the NeuroSense EEG report. Keep that source
+      // report available in the patient portal instead of sharing only Claude's
+      // performance report.
+      if (pdfUrl && !reportSent) {
+        await handleSendReport();
+      }
+
       const patientName = getPatientName(selectedPatient);
       const clinicId = selectedPatient.clinicId || selectedPatient.clinic_id || selectedPatient.org_id;
 
@@ -1947,7 +1954,7 @@ const AlgorithmDataProcessor = () => {
           console.error('Failed to send Claude report emails:', emailErrorMessage);
           toast.error(`Report saved, but email delivery failed: ${emailErrorMessage}`);
         } else {
-          toast.success('Neurosense Performance Report sent to patient & clinic + email.', { duration: 5000 });
+          toast.success('NeuroSense EEG and Performance Reports sent to patient & clinic + email.', { duration: 5000 });
           setClaudeReportSent(true);
         }
       } catch (emailError) {
@@ -2035,7 +2042,13 @@ const AlgorithmDataProcessor = () => {
       });
       if (!response.ok) throw new Error(`Server error (${response.status})`);
 
-      toast.success('Neurosense Performance Report sent to patient & clinic.');
+      // The performance report is generated from the base NeuroSense EEG PDF;
+      // share both files when sending a historical processing record as well.
+      if (record.pdfUrl || record.pdf_url) {
+        await sendReportForRecord(record);
+      }
+
+      toast.success('NeuroSense EEG and Performance Reports sent to patient & clinic.');
     } catch (error) {
       console.error('❌ Error sending Claude report for record:', error);
       toast.error(getFriendlyErrorMessage(error, 'Failed to send the Neurosense Performance Report. Please try again.'));
@@ -2870,7 +2883,7 @@ const AlgorithmDataProcessor = () => {
                 />
                 <span>
                   <span className="block text-sm font-medium text-gray-900 dark:text-white">Neurosense Performance Report</span>
-                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Only the Neurosense Performance Report is sent to the patient and the clinic. The SA can view both the Neurosense and Neurosense Performance reports.</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Both the NeuroSense EEG Report and Neurosense Performance Report are sent to the patient and the clinic.</span>
                 </span>
               </label>
             </div>
