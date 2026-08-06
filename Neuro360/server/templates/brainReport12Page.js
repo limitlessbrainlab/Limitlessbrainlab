@@ -364,13 +364,6 @@ function renderReportHtml(reportData, narrative = {}) {
   .tcard { border:1px solid; border-radius:12px; padding:14px; }
   .tcard h4 { font-size:12.5px; margin-bottom:9px; }
   .tcard ul { list-style:none; } .tcard li { display:flex; gap:8px; font-size:10.5px; line-height:1.5; margin:7px 0; color:#41506c; }
-  /* Page 7 only: keep the mind/emotional practice cards breathable. */
-  .page-7 .practice-grid { margin-top:14px; gap:18px; }
-  .page-7 .practice-grid .tcard { padding:16px; }
-  .page-7 .practice-grid .tcard li { line-height:1.6; margin:10px 0; }
-  .page-7 .practice-callout { padding-top:18px; }
-  /* Page 9 only: separate the bandwidth cards from their explanatory callout. */
-  .page-9 .inner-bandwidth-callout { padding-top:18px; }
   .dot { width:6px; height:6px; border-radius:50%; margin-top:5px; flex:none; display:inline-block; text-align:center; }
   /* callout */
   .callout { border:1px solid; border-radius:12px; padding:14px 16px; }
@@ -542,7 +535,7 @@ function renderReportHtml(reportData, narrative = {}) {
   </section>
 
   <!-- PAGE 7 — STRATEGY GUIDE -->
-  <section class="page page-7">
+  <section class="page">
     ${pageHeader('04', 'TYPE STRATEGY')}
     <div class="eyebrow">What Works For Your Type</div>
     <h2>${esc(bt.name)}-brain <span class="hl">strategy guide</span></h2>
@@ -554,8 +547,8 @@ function renderReportHtml(reportData, narrative = {}) {
       <div class="card"><div class="mini-title">😴 Sleep</div><p class="mini-body">${esc(bt.strategy.sleep)}</p></div>
     </div>
     <h3 class="h3">Mind &amp; emotional practices</h3>
-    <div class="grid2 practice-grid">${toneCard('✓ Do more of', bt.strategy.doMore, 'good', true)}${toneCard('! Less of', bt.strategy.lessOf, 'warn', true)}</div>
-    <div class="practice-callout">${calloutBox(`The Type ${bt.id} superpower (when supported)`, typeSuperpower, 'info')}</div>
+    <div class="grid2">${toneCard('✓ Do more of', bt.strategy.doMore, 'good', true)}${toneCard('! Less of', bt.strategy.lessOf, 'warn', true)}</div>
+    ${calloutBox(`The Type ${bt.id} superpower (when supported)`, typeSuperpower, 'info')}
     ${pageFooter('Page 7 • Type-Specific Strategy')}
   </section>
 
@@ -576,7 +569,7 @@ function renderReportHtml(reportData, narrative = {}) {
   </section>
 
   <!-- PAGE 9 — EMOTION / LEARNING / CREATIVITY -->
-  <section class="page page-9">
+  <section class="page">
     ${pageHeader('05', 'INNER BANDWIDTH')}
     <div class="eyebrow">Section 5 — Inner Bandwidth</div>
     <h2>Emotion, learning &amp; <span class="hl">creativity</span></h2>
@@ -586,7 +579,7 @@ function renderReportHtml(reportData, narrative = {}) {
       ${innerCard('📚 Learning Capacity', d.innerBandwidth.learning, n.innerBandwidth?.learning)}
       ${innerCard('🎨 Creativity', d.innerBandwidth.creativity, n.innerBandwidth?.creativity)}
     </div>
-    <div class="inner-bandwidth-callout">${calloutBox('The hidden link between these three', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise — usually together. That\'s why the plan focuses on calming and recovering, not on adding more.', 'info')}</div>
+    ${calloutBox('The hidden link between these three', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise — usually together. That\'s why the plan focuses on calming and recovering, not on adding more.', 'info')}
     <h3 class="h3">For your type — Type ${bt.id} specific advice</h3>
     <div class="grid2">
       <div class="advice-col"><h5>Emotional regulation</h5><ul>${emotionAdvice.map((i) => `<li><span class="dot"></span><span>${esc(i)}</span></li>`).join('')}</ul></div>
