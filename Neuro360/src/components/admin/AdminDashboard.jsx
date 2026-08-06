@@ -102,7 +102,7 @@ const AdminDashboard = ({ analytics = {} }) => {
     },
     {
       name: 'Total Revenue',
-      value: `₹${Number(realTimeData.monthlyRevenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+      value: `₹${(Math.round((Number(realTimeData.monthlyRevenue) || 0) * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       change: '+8.12%',
       changeType: 'increase',
       icon: Banknote,
