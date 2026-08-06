@@ -259,6 +259,16 @@ const Wallet = () => {
         })));
       }
 
+      // Existing accounts may have a successfully granted patient tier even
+      // when an older payment callback failed to write payment_history.
+      const { data: patientSubscriptionRows } = await supabase
+        .from('patients')
+        .select('subscription_tier, subscription_status')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const currentPatientSubscription = patientSubscriptionRows?.[0];
+
       // 6. patient_payments — the unified table EVERY patient purchase writes to
       // (coaching, frequency, meditation, assessment). Coaching is written ONLY
       // here, so without this read it never appears in the Wallet. Pushed last so
@@ -327,6 +337,19 @@ const Wallet = () => {
         const key = String(p.tier || 'Subscription').toLowerCase();
         if (!byTier[key] || new Date(p.created_at) > new Date(byTier[key].created_at)) byTier[key] = p;
       });
+      const patientTier = String(currentPatientSubscription?.subscription_tier || '').trim();
+      if (patientTier && patientTier.toLowerCase() !== 'free') {
+        const patientTierKey = patientTier.toLowerCase();
+        if (!byTier[patientTierKey]) {
+          byTier[patientTierKey] = {
+            id: `patient-${email}-${patientTierKey}`,
+            tier: patientTier,
+            status: currentPatientSubscription.subscription_status || 'active',
+            amount: 0,
+            created_at: new Date().toISOString()
+          };
+        }
+      }
       const paymentSubscriptions = Object.entries(byTier).map(([tierKey, p]) => ({
         id: `payment-${p.id}`,
         name: `${p.tier || tierKey} Plan`,
