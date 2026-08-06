@@ -157,21 +157,19 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
       reportData = buildReportDataFromSource(source, patientMeta, algorithmResults);
     }
 
-    // Clinic logo ONLY when this request carries the logoUrl from an Other
-    // Documents upload made in the same admin session — never resolved from
-    // stored state. Non-fatal: the report must never fail because of the logo.
+    // Resolve the latest saved clinic logo so replacement uploads are used.
     const clinicLogoUrl = (req.body && req.body.clinicLogoUrl) || '';
-    if (clinicLogoUrl) {
-      try {
-        const { resolveClinicLogoDataUri } = require('../services/clinicLogoService');
-        const logoDataUri = await resolveClinicLogoDataUri(clinicLogoUrl);
-        if (logoDataUri) {
-          reportData.patient.clinicLogoDataUri = logoDataUri;
-          console.log('[Claude Report] 🎨 Using session-uploaded clinic logo');
-        }
-      } catch (logoErr) {
-        console.warn('[Claude Report] Clinic logo resolution failed (using default):', logoErr.message);
+    try {
+      const { resolveClinicLogoToPath } = require('../services/clinicLogoService');
+      const logoPath = await resolveClinicLogoToPath(req.body && req.body.clinicId, clinicLogoUrl);
+      if (logoPath) {
+        const fs = require('fs');
+        reportData.patient.clinicLogoDataUri = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+        try { fs.unlinkSync(logoPath); } catch (_) { /* best effort cleanup */ }
+        console.log('[Claude Report] 🎨 Using latest clinic logo');
       }
+    } catch (logoErr) {
+      console.warn('[Claude Report] Clinic logo resolution failed (using default):', logoErr.message);
     }
 
     // Call 2 (inside): fetch the doctor-readable narrative, then render to PDF.
