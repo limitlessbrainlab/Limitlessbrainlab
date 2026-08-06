@@ -58,7 +58,7 @@ const AdminDashboard = ({ analytics = {} }) => {
 
       // Calculate real-time analytics
       const activeClinicCount = clinics.filter(c => c.isActive).length;
-      const totalRevenue = paymentAmounts.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+      const totalRevenue = paymentAmounts.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
 
       setRealTimeData({
         totalClinics: activeClinicCount,
@@ -151,7 +151,7 @@ const AdminDashboard = ({ analytics = {} }) => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{stat.name}</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{stat.value}</p>
+                  <p className={`text-2xl font-bold text-gray-900 dark:text-white mb-1 ${stat.valueClassName || ''}`}>{stat.value}</p>
                   {stat.subtitle && (
                     <p className="text-xs text-gray-500 dark:text-gray-500">{stat.subtitle}</p>
                   )}
@@ -170,7 +170,7 @@ const AdminDashboard = ({ analytics = {} }) => {
                     )}
                   </div>
                 </div>
-                <div className={`p-3 rounded-lg ${
+                <div className={`shrink-0 p-3 rounded-lg ${stat.iconClassName || ''} ${
                   stat.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/30' :
                   stat.color === 'green' ? 'bg-green-50 dark:bg-green-900/30' :
                   stat.color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-900/30' :
