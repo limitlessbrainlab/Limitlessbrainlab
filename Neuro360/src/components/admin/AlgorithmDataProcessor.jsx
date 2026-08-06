@@ -99,12 +99,21 @@ const AlgorithmDataProcessor = () => {
   // Reports swap the NeuroSense logo ONLY when this is set for the selected
   // patient's clinic; without a fresh upload every report keeps the default logo.
   const [sessionClinicLogo, setSessionClinicLogo] = useState(null); // { clinicId, logoUrl }
+  // Keep the latest upload available synchronously. This avoids a report request
+  // racing React's asynchronous state update immediately after an upload.
+  const sessionClinicLogoRef = useRef(null);
+
+  const saveSessionClinicLogo = (logo) => {
+    sessionClinicLogoRef.current = logo;
+    setSessionClinicLogo(logo);
+  };
 
   // Logo URL to send with a generation request — only when an Other Documents
   // upload happened this session for the SAME clinic as the given patient.
   const sessionLogoUrlFor = (patient) => {
     const cid = patient?.clinicId || patient?.clinic_id || patient?.org_id;
-    return sessionClinicLogo && cid && sessionClinicLogo.clinicId === cid ? sessionClinicLogo.logoUrl : '';
+    const logo = sessionClinicLogoRef.current || sessionClinicLogo;
+    return logo && cid && String(logo.clinicId) === String(cid) ? logo.logoUrl : '';
   };
 
   // Report mode: 'neurosense' (default, shared with patient & clinic) or 'claude'
@@ -662,7 +671,7 @@ const AlgorithmDataProcessor = () => {
           );
           if (logoResp.ok) {
             const logoJson = await logoResp.json().catch(() => ({}));
-            if (logoJson.logoUrl) setSessionClinicLogo({ clinicId, logoUrl: logoJson.logoUrl });
+            if (logoJson.logoUrl) saveSessionClinicLogo({ clinicId, logoUrl: logoJson.logoUrl });
             toast.success('Clinic logo saved — reports generated in this session will use it.');
           } else {
             const err = await logoResp.json().catch(() => ({}));
