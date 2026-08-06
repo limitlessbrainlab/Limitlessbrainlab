@@ -369,6 +369,8 @@ function renderReportHtml(reportData, narrative = {}) {
   .page-7 .practice-grid .tcard { padding:16px; }
   .page-7 .practice-grid .tcard li { line-height:1.6; margin:10px 0; }
   .page-7 .practice-callout { padding-top:18px; }
+  /* Page 9 only: separate the bandwidth cards from their explanatory callout. */
+  .page-9 .inner-bandwidth-callout { padding-top:18px; }
   .dot { width:6px; height:6px; border-radius:50%; margin-top:5px; flex:none; display:inline-block; text-align:center; }
   /* callout */
   .callout { border:1px solid; border-radius:12px; padding:14px 16px; }
@@ -574,7 +576,7 @@ function renderReportHtml(reportData, narrative = {}) {
   </section>
 
   <!-- PAGE 9 — EMOTION / LEARNING / CREATIVITY -->
-  <section class="page">
+  <section class="page page-9">
     ${pageHeader('05', 'INNER BANDWIDTH')}
     <div class="eyebrow">Section 5 — Inner Bandwidth</div>
     <h2>Emotion, learning &amp; <span class="hl">creativity</span></h2>
@@ -584,7 +586,7 @@ function renderReportHtml(reportData, narrative = {}) {
       ${innerCard('📚 Learning Capacity', d.innerBandwidth.learning, n.innerBandwidth?.learning)}
       ${innerCard('🎨 Creativity', d.innerBandwidth.creativity, n.innerBandwidth?.creativity)}
     </div>
-    ${calloutBox('The hidden link between these three', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise — usually together. That\'s why the plan focuses on calming and recovering, not on adding more.', 'info')}
+    <div class="inner-bandwidth-callout">${calloutBox('The hidden link between these three', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise — usually together. That\'s why the plan focuses on calming and recovering, not on adding more.', 'info')}</div>
     <h3 class="h3">For your type — Type ${bt.id} specific advice</h3>
     <div class="grid2">
       <div class="advice-col"><h5>Emotional regulation</h5><ul>${emotionAdvice.map((i) => `<li><span class="dot"></span><span>${esc(i)}</span></li>`).join('')}</ul></div>
