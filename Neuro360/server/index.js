@@ -3074,6 +3074,45 @@ async function applySubscriptionPurchase(session) {
   }, { onConflict: 'stripe_session_id', ignoreDuplicates: true })
     .then(({ error: e }) => { if (e) console.warn('applySubscriptionPurchase payments insert skipped:', e.message); });
 
+  // Keep the patient wallet's subscription tab in sync with the authoritative
+  // Stripe fulfillment. The wallet UI reads this table first, so recording the
+  // purchase here prevents a successful plan/credit purchase from appearing
+  // only in payment history while the subscription tab remains empty.
+  try {
+    const walletPlanName = `${tier} Plan`;
+    const { data: walletRows, error: walletReadError } = await supabase
+      .from('wallet_subscriptions')
+      .select('id, name, plan, status')
+      .eq('patient_email', email);
+    if (!walletReadError) {
+      const existingWalletRow = (walletRows || []).find((row) =>
+        String(row.name || '').toLowerCase() === walletPlanName.toLowerCase() ||
+        String(row.plan || '').toLowerCase() === tier.toLowerCase()
+      );
+      const walletSubscription = {
+        patient_email: email,
+        name: walletPlanName,
+        plan: tier,
+        status: 'Active',
+        amount,
+        period: 'mo',
+        icon: 'star',
+        updated_at: new Date().toISOString()
+      };
+      if (existingWalletRow?.id) {
+        await supabase.from('wallet_subscriptions').update(walletSubscription).eq('id', existingWalletRow.id);
+      } else {
+        await supabase.from('wallet_subscriptions').insert(walletSubscription);
+      }
+    } else {
+      console.warn('applySubscriptionPurchase wallet subscription lookup skipped:', walletReadError.message);
+    }
+  } catch (walletError) {
+    // Do not turn a paid Stripe checkout into a failure if this legacy wallet
+    // table is unavailable; payment_history remains the source of truth.
+    console.warn('applySubscriptionPurchase wallet subscription sync skipped:', walletError.message);
+  }
+
   // 3. One-shot side effects: only the first caller for this session runs them.
   const firstTime = await claimNotificationOnce(`subscription:${session.id}:granted`);
   if (!firstTime) {
