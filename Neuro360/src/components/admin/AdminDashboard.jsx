@@ -108,8 +108,8 @@ const AdminDashboard = ({ analytics = {} }) => {
       icon: Banknote,
       color: 'yellow',
       subtitle: 'All time earnings',
-      valueClassName: 'leading-tight break-words',
-      iconClassName: 'ml-2'
+      valueClassName: 'leading-tight break-all pr-2',
+      iconClassName: 'ml-3'
     }
   ];
 
