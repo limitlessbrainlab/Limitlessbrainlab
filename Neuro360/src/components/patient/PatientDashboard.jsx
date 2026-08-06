@@ -10097,7 +10097,9 @@ const PatientDashboard = () => {
 
   // Download NeuroSense Report Section - accessible only after profile completion
   const NeuroSenseReportSection = () => {
-    const [showAllReports, setShowAllReports] = useState(false);
+    // Show the complete report set by default so the NeuroSense EEG report and
+    // its corresponding Performance Report are visible together.
+    const [showAllReports, setShowAllReports] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const PAGE_SIZE = 10;
 
@@ -10236,7 +10238,7 @@ const PatientDashboard = () => {
                   : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
-              Previous Reports ({neurosenseReports.length})
+              All Reports ({neurosenseReports.length})
             </button>
           </div>
         )}
