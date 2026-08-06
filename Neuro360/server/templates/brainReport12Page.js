@@ -368,7 +368,7 @@ function renderReportHtml(reportData, narrative = {}) {
   .page-7 .practice-grid { margin-top:14px; gap:18px; }
   .page-7 .practice-grid .tcard { padding:16px; }
   .page-7 .practice-grid .tcard li { line-height:1.6; margin:10px 0; }
-  .page-7 .practice-callout { margin-top:18px; }
+  .page-7 .practice-callout { padding-top:18px; }
   .dot { width:6px; height:6px; border-radius:50%; margin-top:5px; flex:none; display:inline-block; text-align:center; }
   /* callout */
   .callout { border:1px solid; border-radius:12px; padding:14px 16px; }
