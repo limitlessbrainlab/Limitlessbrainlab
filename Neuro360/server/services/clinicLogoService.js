@@ -7,12 +7,9 @@
  * PDF's first page, auto-crop to the non-white content bounding box, store the
  * PNG in the `clinic-logos` bucket and save the public URL on clinics.logo_url.
  *
- * Report side: the logo is NEVER looked up from stored state. The generation
- * request must carry the logoUrl returned by the upload in the SAME admin
- * session; resolveLogoUrlToPath(logoUrl) downloads that PNG to a temp file for
- * PDFKit / data-URI embedding. No upload → no logoUrl → reports keep the
- * default NeuroSense logo. Every failure returns null — reports must never
- * fail because of the logo.
+ * Report side: resolve the current logo saved for the clinic first, with the
+ * request URL as a fallback for backwards compatibility. This is important
+ * when an uploaded logo replaces an older one while the admin page is open.
  */
 
 const fs = require('fs');
@@ -154,6 +151,31 @@ async function resolveLogoUrlToPath(logoUrl) {
   }
 }
 
+/**
+ * Resolve the latest logo for a clinic. The database value is authoritative
+ * because the storage object uses a stable path and the browser may still be
+ * holding an older session URL. The request URL is retained as a fallback for
+ * older callers that do not send a clinic id.
+ */
+async function resolveClinicLogoToPath(clinicId, requestedLogoUrl) {
+  let logoUrl = String(requestedLogoUrl || '').trim();
+
+  try {
+    if (supabase && clinicId) {
+      const { data, error } = await supabase
+        .from('clinics')
+        .select('logo_url')
+        .eq('id', String(clinicId))
+        .maybeSingle();
+      if (!error && data?.logo_url) logoUrl = String(data.logo_url).trim();
+    }
+  } catch (e) {
+    console.warn('clinicLogo: latest logo lookup failed, using request URL:', e.message);
+  }
+
+  return resolveLogoUrlToPath(logoUrl);
+}
+
 /** Same as resolveLogoUrlToPath but returns a data URI for HTML reports. */
 async function resolveClinicLogoDataUri(logoUrl) {
   const p = await resolveLogoUrlToPath(logoUrl);
@@ -167,4 +189,9 @@ async function resolveClinicLogoDataUri(logoUrl) {
   }
 }
 
-module.exports = { setClinicLogoFromUpload, resolveLogoUrlToPath, resolveClinicLogoDataUri };
+module.exports = {
+  setClinicLogoFromUpload,
+  resolveLogoUrlToPath,
+  resolveClinicLogoToPath,
+  resolveClinicLogoDataUri
+};

@@ -462,15 +462,15 @@ router.post('/process', upload.fields([
         }
       }
 
-      // Clinic logo ONLY when this request carries the logoUrl from an Other
-      // Documents upload made in the same admin session. Never resolved from
-      // stored state — no upload means the default NeuroSense logo.
+      // Resolve the latest saved clinic logo so replacing an Other Documents
+      // logo is reflected in the report immediately.
       let clinicLogoPath = null;
       try {
-        if (req.body.clinicLogoUrl) {
-          clinicLogoPath = await require('../services/clinicLogoService').resolveLogoUrlToPath(req.body.clinicLogoUrl);
-          if (clinicLogoPath) console.log('   🎨 Using session-uploaded clinic logo for report');
-        }
+        clinicLogoPath = await require('../services/clinicLogoService').resolveClinicLogoToPath(
+          req.body.clinicId,
+          req.body.clinicLogoUrl
+        );
+        if (clinicLogoPath) console.log('   🎨 Using latest clinic logo for report');
       } catch (logoErr) {
         console.warn('   ⚠️ Clinic logo resolution failed (using default):', logoErr.message);
       }
@@ -855,16 +855,16 @@ router.post('/generate-pdf', async (req, res) => {
     console.log('🏥 Clinic:', patientData.clinicName || 'Not specified');
     console.log('📊 Parameters:', algorithmResults.parameters?.length);
 
-    // Clinic logo ONLY when this request carries the logoUrl from an Other
-    // Documents upload made in the same admin session (never from stored state).
+    // Resolve the latest saved clinic logo so replacement uploads are used.
     patientData.clinicLogoPath = null;
-    if (patientData.clinicLogoUrl) {
-      try {
-        patientData.clinicLogoPath = await require('../services/clinicLogoService').resolveLogoUrlToPath(patientData.clinicLogoUrl);
-        if (patientData.clinicLogoPath) console.log('🎨 Using session-uploaded clinic logo for report');
-      } catch (logoErr) {
-        console.warn('⚠️ Clinic logo resolution failed (using default):', logoErr.message);
-      }
+    try {
+      patientData.clinicLogoPath = await require('../services/clinicLogoService').resolveClinicLogoToPath(
+        patientData.clinicId,
+        patientData.clinicLogoUrl
+      );
+      if (patientData.clinicLogoPath) console.log('🎨 Using latest clinic logo for report');
+    } catch (logoErr) {
+      console.warn('⚠️ Clinic logo resolution failed (using default):', logoErr.message);
     }
     console.log('📝 Notes received from frontend:', parameterNotes ? `"${parameterNotes.substring(0, 50)}..."` : '(EMPTY - no notes provided)');
     console.log('📝 Notes type:', typeof parameterNotes);
