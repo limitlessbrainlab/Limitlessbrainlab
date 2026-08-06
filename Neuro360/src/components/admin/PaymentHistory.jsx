@@ -60,6 +60,8 @@ const PaymentHistory = ({ selectedClinic }) => {
       // Normalize every source (raw snake_case rows) into one common shape
       const normalize = (rows, sourceTable) => (rows || []).map(p => ({
         id: p.id,
+        paymentId: p.payment_id || p.paymentId || p.razorpay_payment_id || p.stripe_payment_id || p.invoice_id || null,
+        orderId: p.order_id || p.orderId || null,
         clinicId: p.clinic_id || p.clinicId || null,
         patientEmail: p.patient_email || p.patientEmail || null,
         amount: Number(p.amount) || 0,
@@ -67,6 +69,11 @@ const PaymentHistory = ({ selectedClinic }) => {
         status: p.status || 'completed',
         type: p.type || p.payment_type || 'payment',
         packageName: p.package_name || p.item_name || p.tier || null,
+        description: p.description || p.item_name || p.package_name || p.tier || null,
+        reports: p.reports || p.reports_allowed || p.reportsAllowed || null,
+        planDetails: p.plan_details || p.planDetails || {},
+        subscription: p.subscription || {},
+        paymentDetails: p.payment_details || p.paymentDetails || {},
         createdAt: p.created_at || p.createdAt || null,
         stripeSessionId: p.stripe_session_id || null,
         paymentSourceTable: sourceTable
@@ -211,6 +218,64 @@ const PaymentHistory = ({ selectedClinic }) => {
         return paymentDate >= thirtyDaysAgo && getPaymentStatus(p).status === 'success';
       })
       .reduce((sum, p) => sum + (p.amount || 0), 0);
+  };
+
+  const handleDownloadReceipt = (payment) => {
+    try {
+      const escapeHtml = (value) => String(value ?? '').replace(/[&<>\"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '\"': '&quot;',
+        "'": '&#39;'
+      }[character]));
+      const receiptId = payment.paymentId || payment.id || 'receipt';
+      const issuedAt = payment.createdAt ? new Date(payment.createdAt) : new Date();
+      const issued = issuedAt.toLocaleDateString('en-IN', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      const issuedTime = issuedAt.toLocaleTimeString('en-IN');
+      const description = getPaymentType(payment);
+      const customerName = payment.clinicName || payment.patientEmail || 'Customer';
+      const customerEmail = payment.clinicEmail || payment.patientEmail || '';
+      const amount = formatAmount(payment.amount);
+
+      const receiptHtml = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Receipt ${escapeHtml(receiptId)}</title>
+<style>
+  * { box-sizing: border-box; } body { margin: 0; padding: 40px; font-family: Arial, sans-serif; color: #1f2937; }
+  .receipt { max-width: 720px; margin: 0 auto; } .header { display: flex; justify-content: space-between;
+  border-bottom: 2px solid #2563eb; padding-bottom: 18px; } .brand { color: #2563eb; font-size: 24px; font-weight: 700; }
+  .muted { color: #6b7280; font-size: 13px; } h1 { font-size: 22px; margin: 28px 0 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  th { background: #f9fafb; color: #6b7280; font-size: 12px; text-transform: uppercase; } .right { text-align: right; }
+  .total { font-size: 18px; font-weight: 700; } .status { color: #15803d; font-weight: 700; }
+  .footer { margin-top: 36px; text-align: center; color: #6b7280; font-size: 12px; }
+</style></head><body><main class="receipt">
+  <div class="header"><div><div class="brand">Neuro360</div><div class="muted">Payment Receipt</div></div>
+  <div class="right"><strong>RECEIPT</strong><div class="muted">${escapeHtml(receiptId)}</div><div class="muted">${escapeHtml(issued)} ${escapeHtml(issuedTime)}</div></div></div>
+  <h1>Payment received</h1><div>${escapeHtml(customerName)}<br><span class="muted">${escapeHtml(customerEmail)}</span></div>
+  <table><thead><tr><th>Description</th><th class="right">Amount</th></tr></thead><tbody>
+    <tr><td>${escapeHtml(description)}</td><td class="right">${escapeHtml(amount)}</td></tr>
+  </tbody><tfoot><tr><td class="right total">Total</td><td class="right total">${escapeHtml(amount)}</td></tr>
+  <tr><td class="right">Status</td><td class="right status">${escapeHtml(payment.status || 'Paid')}</td></tr></tfoot></table>
+  <div class="footer">Thank you for choosing Neuro360. This is a computer-generated receipt.</div>
+</main></body></html>`;
+
+      const blob = new Blob([receiptHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Receipt-${String(receiptId).replace(/[^a-z0-9_-]/gi, '_')}.html`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Receipt downloaded');
+    } catch (error) {
+      console.error('Receipt download failed:', error);
+      toast.error('Could not download the receipt');
+    }
   };
 
   const viewPaymentDetails = (payment) => {
@@ -435,10 +500,7 @@ const PaymentHistory = ({ selectedClinic }) => {
                           <FileText className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => {
-                            // Generate receipt/invoice
-                            toast.success('Receipt generated');
-                          }}
+                          onClick={() => handleDownloadReceipt(payment)}
                           className="text-gray-600 hover:text-gray-900"
                           title="Download Receipt"
                         >

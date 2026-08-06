@@ -8,6 +8,7 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   const packageInfo = payment.planDetails || {};
   const subscriptionInfo = payment.subscription || {};
   const paymentDetails = payment.paymentDetails || {};
+  const paymentId = String(payment.paymentId || payment.id || 'UNKNOWN');
   
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -29,11 +30,12 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
     Math.ceil((new Date(subscriptionInfo.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
 
   const generateInvoiceHTML = () => {
-    const invoiceNumber = `INV-${(payment.paymentId || '').slice(-8).toUpperCase()}`;
-    const txnId = `TXN-${(payment.paymentId || '').slice(-12).toUpperCase()}`;
-    const ordId = `ORD-${(payment.orderId || '').slice(-12).toUpperCase()}`;
-    const pkgName = packageInfo.name || payment.packageName || 'EEG Reports';
-    const reportsCount = packageInfo.reportsIncluded || payment.reports || 0;
+    const invoiceNumber = `INV-${paymentId.slice(-8).toUpperCase()}`;
+    const txnId = `TXN-${paymentId.slice(-12).toUpperCase()}`;
+    const orderId = String(payment.orderId || paymentId);
+    const ordId = `ORD-${orderId.slice(-12).toUpperCase()}`;
+    const pkgName = packageInfo.name || payment.packageName || payment.description || 'EEG Reports';
+    const reportsCount = packageInfo.reportsIncluded || payment.reports || payment.reportsAllowed || 0;
     const amount = payment.amount || 0;
     const currency = payment.currency === 'USD' ? 'USD ' : '\u20b9';
     const logoUrl = window.location.origin + '/IBW%20Logo.png';
@@ -189,18 +191,22 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   };
 
   const downloadInvoice = () => {
-    const htmlContent = generateInvoiceHTML();
-    const dataBlob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `invoice-${payment.paymentId.slice(-8).toUpperCase()}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Professional invoice downloaded successfully!');
+    try {
+      const htmlContent = generateInvoiceHTML();
+      const dataBlob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice-${paymentId.slice(-8).toUpperCase()}.html`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Professional invoice downloaded successfully!');
+    } catch (error) {
+      console.error('Invoice download failed:', error);
+      toast.error('Could not download the invoice');
+    }
   };
 
   const printInvoice = () => {
@@ -249,13 +255,13 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
                 <span className="text-gray-600">Transaction ID:</span>
                 <div
                   className="font-mono text-gray-900 bg-white px-2 py-1 rounded mt-1 cursor-pointer hover:bg-gray-50 truncate text-xs"
-                  title={payment.paymentId}
+                  title={paymentId}
                   onClick={() => {
-                    navigator.clipboard.writeText(payment.paymentId || '');
+                    navigator.clipboard.writeText(paymentId);
                     toast.success('Transaction ID copied!');
                   }}
                 >
-                  TXN-{(payment.paymentId || '').slice(-12).toUpperCase()}
+                  TXN-{paymentId.slice(-12).toUpperCase()}
                 </div>
               </div>
               <div>
