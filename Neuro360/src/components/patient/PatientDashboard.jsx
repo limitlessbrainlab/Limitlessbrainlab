@@ -1928,7 +1928,7 @@ const PatientDashboard = () => {
         icon: iconMap[param.icon] || Lightbulb
       }))
     },
-    { id: 'neurosense-reports', label: 'Neurosense Performance Reports', icon: Download },
+    { id: 'neurosense-reports', label: 'NeuroSense & Performance Reports', icon: Download },
     { id: 'care-program', label: 'Customized Care Program', icon: ClipboardList },
     { id: 'ans-reset', label: 'Breath Reset Protocol', icon: RefreshCw },
     // { id: 'movers', label: 'MOVERS', icon: Activity },
@@ -3937,7 +3937,7 @@ const PatientDashboard = () => {
             <div className="p-1.5 sm:p-2 bg-[#E4EFFF] dark:bg-blue-900/30 rounded-lg">
               <Brain className="h-5 w-5 sm:h-6 sm:w-6 text-[#323956] dark:text-blue-400" />
             </div>
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Neurosense Performance Reports</h2>
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">NeuroSense & Performance Reports</h2>
           </div>
 
         <div className="grid gap-3 sm:gap-4">
@@ -10176,7 +10176,7 @@ const PatientDashboard = () => {
                 <Download className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-xl font-bold leading-tight">Download Neurosense Performance & Other Reports</h2>
+                <h2 className="text-sm sm:text-xl font-bold leading-tight">Download NeuroSense & Performance Reports</h2>
                 <p className="text-xs sm:text-sm text-white/70 mt-1">Access your brain assessment reports</p>
               </div>
             </div>
@@ -10186,7 +10186,7 @@ const PatientDashboard = () => {
               <Shield className="h-8 w-8 sm:h-10 sm:w-10 text-amber-500 dark:text-amber-400" />
               <div>
                 <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Complete Your Profile First</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please complete your profile to access and download your Neurosense Performance Reports.</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Please complete your profile to access and download your NeuroSense EEG and Performance Reports.</p>
               </div>
               <button
                 onClick={() => navigate('/dashboard/profile')}
@@ -10247,7 +10247,8 @@ const PatientDashboard = () => {
               {displayedReports.map((report) => {
                 const reportData = report.reportData || report.report_data || {};
                 const title = reportData.title || report.fileName || report.file_name || 'Neurosense Performance Report';
-                const reportType = reportData.reportType || 'Report';
+                const reportType = reportData.reportType || report.reportType || 'Report';
+                const isPerformanceReport = reportType.toLowerCase().includes('claude') || reportType.toLowerCase().includes('performance');
                 const createdAt = report.createdAt || report.created_at;
                 const isResponse = reportData.isResponseReport;
 
@@ -10260,6 +10261,13 @@ const PatientDashboard = () => {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{title}</p>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                            isPerformanceReport
+                              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                              : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                          }`}>
+                            {isPerformanceReport ? 'NeuroSense Performance Report' : 'NeuroSense EEG Report'}
+                          </span>
                           {isResponse && (
                             <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">Response Report</span>
                           )}
@@ -10319,7 +10327,7 @@ const PatientDashboard = () => {
             <div className="text-center py-6 sm:py-8">
               <FileText className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 text-gray-300 dark:text-gray-600" />
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No Reports Available Yet</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Your Neurosense Performance Reports will appear here once shared by your clinic.</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Your NeuroSense EEG and Performance Reports will appear here once shared by your clinic.</p>
             </div>
           )}
         </div>
