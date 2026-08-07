@@ -56,6 +56,7 @@ if (process.env.STRIPE_SECRET_KEY) {
 // Outbound mail uses Brevo's HTTP API on Render (no blocked SMTP ports).
 // Gmail stays as a local fallback and supplies the IMAP credentials used elsewhere.
 const brevoConfigured = !!process.env.BREVO_API_KEY;
+const brevoSmtpConfigured = !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_KEY);
 const gmailConfigured = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 const gmailFallbackConfigured = process.env.NODE_ENV !== 'production' && gmailConfigured;
 
@@ -138,6 +139,20 @@ function createBrevoTransporter(apiKey) {
 
 const activeTransporter = (() => {
   if (brevoConfigured) return createBrevoTransporter(process.env.BREVO_API_KEY);
+  if (brevoSmtpConfigured) {
+    return nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: Number(process.env.BREVO_SMTP_PORT) || 2525,
+      secure: false,
+      auth: {
+        user: process.env.BREVO_SMTP_USER,
+        pass: process.env.BREVO_SMTP_KEY
+      },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000
+    });
+  }
   if (gmailFallbackConfigured) {
     return nodemailer.createTransport({
       host: 'smtp.gmail.com',
@@ -157,8 +172,10 @@ const activeTransporter = (() => {
 })();
 
 const emailTransporter = activeTransporter;
-const mailerConfigured = brevoConfigured || gmailFallbackConfigured;
-const ACTIVE_MAIL_PROVIDER = brevoConfigured ? 'brevo-api' : (gmailFallbackConfigured ? 'gmail' : 'none');
+const mailerConfigured = brevoConfigured || brevoSmtpConfigured || gmailFallbackConfigured;
+const ACTIVE_MAIL_PROVIDER = brevoConfigured
+  ? 'brevo-api'
+  : (brevoSmtpConfigured ? 'brevo-smtp' : (gmailFallbackConfigured ? 'gmail' : 'none'));
 
 // Deliverability: HTML-only mail scores worse with spam filters, so derive a
 // plain-text alternative for every outbound mail, and set Reply-To so replies
@@ -323,7 +340,7 @@ if (emailTransporter) {
     if (error) {
       console.error('EMAIL TRANSPORTER ERROR:', error.message);
       console.error('Active provider:', ACTIVE_MAIL_PROVIDER);
-      if (ACTIVE_MAIL_PROVIDER === 'gmail') console.error('Set BREVO_API_KEY on Render; Gmail SMTP ports are blocked there.');
+      if (ACTIVE_MAIL_PROVIDER === 'gmail') console.error('Set BREVO_API_KEY or Brevo SMTP relay credentials on Render; Gmail SMTP ports are blocked there.');
       console.error('EMAIL_USER:', process.env.EMAIL_USER);
       console.error('EMAIL_PASS length:', (process.env.EMAIL_PASS || '').length);
       console.error('EMAIL_PASS has spaces:', (process.env.EMAIL_PASS || '').includes(' '));
@@ -332,7 +349,7 @@ if (emailTransporter) {
     }
   });
 } else {
-  console.warn('Email transporter not configured. Set BREVO_API_KEY on Render.');
+  console.warn('Email transporter not configured. Set BREVO_API_KEY or Brevo SMTP relay credentials on Render.');
 }
 
 const app = express();
