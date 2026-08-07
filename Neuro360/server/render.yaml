@@ -18,6 +18,13 @@ services:
         sync: false
       - key: BREVO_SMTP_PORT
         value: "2525"
+      # Configure these on staging to relay mail through production.
+      - key: MAIL_TRANSPORT
+        sync: false
+      - key: PRODUCTION_MAIL_BACKEND_URL
+        sync: false
+      - key: PRODUCTION_MAIL_RELAY_SECRET
+        sync: false
       # Gmail credentials remain for inbound JotForm IMAP and local mail fallback.
       - key: EMAIL_USER
         value: info@limitlessbrainlab.com
