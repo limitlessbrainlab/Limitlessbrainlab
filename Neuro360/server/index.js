@@ -1180,12 +1180,6 @@ app.post('/api/contact', async (req, res) => {
       if (dbError) console.error('contact_inquiries insert failed:', dbError.message);
     }
 
-    // Send success response (lead captured / notification underway)
-    res.json({
-      success: true,
-      message: 'Message received successfully'
-    });
-
     // Send admin notification email
     const mailOptions = {
       from: EMAIL_FROM,
@@ -1200,11 +1194,6 @@ app.post('/api/contact', async (req, res) => {
       ]),
       attachments: getLogoAttachment()
     };
-
-    emailTransporter.sendMail(mailOptions)
-      .catch((emailError) => {
-        console.error('Email sending failed:', emailError.message);
-      });
 
     // Send confirmation email to user
     const userConfirmation = {
@@ -1222,8 +1211,22 @@ app.post('/api/contact', async (req, res) => {
           : getUserConfirmationHtml(fullName),
       attachments: getFullAttachments()
     };
-    emailTransporter.sendMail(userConfirmation)
-      .catch((err) => console.error('User confirmation email failed:', err.message));
+    const [adminDelivery, userDelivery] = await Promise.allSettled([
+      emailTransporter.sendMail(mailOptions),
+      emailTransporter.sendMail(userConfirmation)
+    ]);
+    if (adminDelivery.status === 'rejected') {
+      console.error('Email sending failed:', adminDelivery.reason?.message || adminDelivery.reason);
+    }
+    if (userDelivery.status === 'rejected') {
+      throw userDelivery.reason;
+    }
+
+    res.json({
+      success: true,
+      message: 'Message received successfully',
+      emailSent: true
+    });
 
   } catch (error) {
     console.error('Error processing contact form:', error);
@@ -1262,12 +1265,6 @@ app.post('/api/clinic-enquiry', async (req, res) => {
       if (dbError) console.error('clinic_enquiries insert failed:', dbError.message);
     }
 
-    // Send success response (lead captured / notification underway)
-    res.json({
-      success: true,
-      message: 'Request received successfully'
-    });
-
     // Send admin notification email
     const mailOptions = {
       from: EMAIL_FROM,
@@ -1282,9 +1279,6 @@ app.post('/api/clinic-enquiry', async (req, res) => {
       ]),
       attachments: getLogoAttachment()
     };
-    emailTransporter.sendMail(mailOptions)
-      .catch((emailError) => console.error('Clinic request admin email failed:', emailError.message));
-
     // Send confirmation email to user
     const userConfirmation = {
       from: EMAIL_FROM,
@@ -1293,8 +1287,22 @@ app.post('/api/clinic-enquiry', async (req, res) => {
       html: getUserConfirmationHtml(name),
       attachments: getFullAttachments()
     };
-    emailTransporter.sendMail(userConfirmation)
-      .catch((err) => console.error('Clinic request user confirmation email failed:', err.message));
+    const [adminDelivery, userDelivery] = await Promise.allSettled([
+      emailTransporter.sendMail(mailOptions),
+      emailTransporter.sendMail(userConfirmation)
+    ]);
+    if (adminDelivery.status === 'rejected') {
+      console.error('Clinic request admin email failed:', adminDelivery.reason?.message || adminDelivery.reason);
+    }
+    if (userDelivery.status === 'rejected') {
+      throw userDelivery.reason;
+    }
+
+    res.json({
+      success: true,
+      message: 'Request received successfully',
+      emailSent: true
+    });
 
   } catch (error) {
     console.error('Error processing clinic enquiry:', error);
