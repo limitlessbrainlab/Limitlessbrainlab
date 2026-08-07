@@ -12,6 +12,12 @@ services:
       # Brevo HTTP API handles outbound mail on Render without blocked SMTP ports.
       - key: BREVO_API_KEY
         sync: false
+      - key: BREVO_SMTP_USER
+        sync: false
+      - key: BREVO_SMTP_KEY
+        sync: false
+      - key: BREVO_SMTP_PORT
+        value: "2525"
       # Gmail credentials remain for inbound JotForm IMAP and local mail fallback.
       - key: EMAIL_USER
         value: info@limitlessbrainlab.com
