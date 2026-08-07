@@ -268,6 +268,10 @@ function attachEmailFooter(html) {
 // attachment the footer references is present, and keep the existing plain-text + reply-to behaviour.
 function enhanceMailOptions(mailOptions) {
   const enhanced = { ...mailOptions };
+  // Every outbound message uses the verified production sender. Individual
+  // templates may provide a legacy `from` value, but it must never bypass the
+  // shared Brevo sender used by report and payment emails.
+  enhanced.from = EMAIL_FROM;
   if (enhanced.html && !enhanced.html.includes('lbl-email-footer')) {
     enhanced.html = attachEmailFooter(enhanced.html);
     if (fs.existsSync(SIGNATURE_PATH)) {
@@ -3782,7 +3786,7 @@ app.post('/api/wallet/invoice-email', async (req, res) => {
       : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: EMAIL_FROM,
       to: email,
       subject: `Your Neuro360 Invoice ${invoice.id}`,
       attachments: getLogoAttachment(),
@@ -5010,7 +5014,7 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
 
     if (mailerConfigured && customerEmail) {
       const failedMail = {
-        from: process.env.EMAIL_USER,
+        from: EMAIL_FROM,
         to: customerEmail,
         subject: `Payment Failed - Action Required - Limitless Brain Lab`,
         attachments: [{ filename: 'logo.png', path: LOGO_PATH, cid: LOGO_CID }],
@@ -6925,8 +6929,8 @@ app.post('/api/create-patient-auth', async (req, res) => {
 // Send Welcome Email with Login Credentials to Patient
 app.post('/api/send-welcome-email', async (req, res) => {
   try {
-    const { patientName, email, password, clinicName, clinicSmtpEmail, clinicSmtpPassword, clinicEmail } = req.body;
-    console.log('📧 send-welcome-email called:', { patientName, email, clinicName, hasClinicSmtp: !!(clinicSmtpEmail && clinicSmtpPassword), clinicEmail });
+    const { patientName, email, password, clinicName, clinicEmail } = req.body;
+    console.log('📧 send-welcome-email called:', { patientName, email, clinicName, clinicEmail });
 
     if (!email || !password || !patientName) {
       console.log('❌ Missing required fields:', { email: !!email, password: !!password, patientName: !!patientName });
@@ -6936,38 +6940,12 @@ app.post('/api/send-welcome-email', async (req, res) => {
       });
     }
 
-    // Use clinic's own SMTP if configured, otherwise use default
-    let transporter = emailTransporter;
-    let fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-    console.log('✅ Using fromEmail:', fromEmail);
-
-    if (clinicSmtpEmail && clinicSmtpPassword) {
-      try {
-        transporter = patchSendMail(nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: {
-            user: clinicSmtpEmail,
-            pass: clinicSmtpPassword
-          },
-          connectionTimeout: 120000,
-          greetingTimeout: 60000,
-          socketTimeout: 120000,
-          tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' }
-        }));
-        fromEmail = clinicSmtpEmail;
-        console.log('✅ Using clinic SMTP:', clinicSmtpEmail);
-      } catch (smtpError) {
-        console.error('❌ Clinic SMTP setup failed, falling back to default:', smtpError.message);
-        transporter = emailTransporter;
-        fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-      }
-    } else if (clinicSmtpEmail || clinicSmtpPassword) {
-      console.warn('⚠️ Clinic SMTP incomplete - missing email or password, using default');
-    } else {
-      console.log('ℹ️ Using default email service for patient welcome email');
-    }
+    // All outbound mail uses the production transporter and sender. Clinic SMTP
+    // credentials are accepted for backward-compatible request payloads only and
+    // are intentionally ignored so this flow cannot bypass Brevo in production.
+    const transporter = emailTransporter;
+    const fromEmail = EMAIL_FROM;
+    console.log('✅ Using production email sender:', fromEmail);
 
     const loginUrl = `${APP_URL}/patient/login`;
 
@@ -7039,23 +7017,7 @@ app.post('/api/send-welcome-email', async (req, res) => {
       `
     };
 
-    // Clinic SMTP auth/connection failures only surface at send time —
-    // createTransport never validates credentials, so a wrong value (e.g. a Gmail
-    // login password pasted in instead of a 16-char App Password) passes setup but
-    // throws here. Fall back to the default transporter so the patient still gets
-    // the email instead of receiving nothing.
-    let sendResult;
-    try {
-      sendResult = await transporter.sendMail(mailOptions);
-    } catch (sendErr) {
-      if (transporter !== emailTransporter) {
-        console.error('❌ Clinic SMTP send failed, retrying with default transporter:', sendErr.message);
-        mailOptions.from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-        sendResult = await emailTransporter.sendMail(mailOptions);
-      } else {
-        throw sendErr;
-      }
-    }
+    const sendResult = await transporter.sendMail(mailOptions);
     console.log('✅ Welcome email sent successfully:', { to: email, messageId: sendResult?.messageId });
 
     // Also notify the clinic that a new patient was created. Separate template with
@@ -7136,7 +7098,6 @@ app.post('/api/send-welcome-email', async (req, res) => {
       message: errorMsg,
       code: error?.code,
       response: error?.response,
-      clinicSmtpUsed: !!(clinicSmtpEmail && clinicSmtpPassword),
       defaultEmailUser: process.env.EMAIL_USER
     });
     res.status(500).json({
@@ -7149,7 +7110,7 @@ app.post('/api/send-welcome-email', async (req, res) => {
 // Send Email Updated Notification
 app.post('/api/send-email-update-notification', async (req, res) => {
   try {
-    const { patientName, newEmail, password, emailChanged, passwordChanged, clinicName, clinicUrl, clinicSmtpEmail, clinicSmtpPassword, clinicEmail } = req.body;
+    const { patientName, newEmail, password, emailChanged, passwordChanged, clinicName, clinicUrl, clinicEmail } = req.body;
     console.log('📧 send-email-update-notification called:', { patientName, newEmail, clinicName, emailChanged: !!emailChanged, passwordChanged: !!passwordChanged, clinicEmail });
 
     if (!newEmail || !patientName) {
@@ -7160,33 +7121,11 @@ app.post('/api/send-email-update-notification', async (req, res) => {
       });
     }
 
-    // Use clinic's own SMTP if configured, otherwise use default
-    let transporter = emailTransporter;
-    let fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-
-    if (clinicSmtpEmail && clinicSmtpPassword) {
-      try {
-        transporter = patchSendMail(nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: {
-            user: clinicSmtpEmail,
-            pass: clinicSmtpPassword
-          },
-          connectionTimeout: 120000,
-          greetingTimeout: 60000,
-          socketTimeout: 120000,
-          tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' }
-        }));
-        fromEmail = clinicSmtpEmail;
-        console.log('✅ Using clinic SMTP:', clinicSmtpEmail);
-      } catch (smtpError) {
-        console.error('❌ Clinic SMTP setup failed, falling back to default:', smtpError.message);
-        transporter = emailTransporter;
-        fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-      }
-    }
+    // Keep the sender consistent with report and payment emails. Clinic SMTP
+    // credentials remain accepted in the payload for older clients, but are not
+    // used for outbound delivery.
+    const transporter = emailTransporter;
+    const fromEmail = EMAIL_FROM;
 
     // Always show the plain-text password when one is provided. When the password was
     // changed this edit it's the new one; on an email-only edit the caller passes the
@@ -7270,20 +7209,7 @@ app.post('/api/send-email-update-notification', async (req, res) => {
       `
     };
 
-    // Same send-time fallback as the welcome email: a bad clinic App Password
-    // fails only on send, so retry via the default transporter to guarantee delivery.
-    let sendResult;
-    try {
-      sendResult = await transporter.sendMail(mailOptions);
-    } catch (sendErr) {
-      if (transporter !== emailTransporter) {
-        console.error('❌ Clinic SMTP send failed, retrying with default transporter:', sendErr.message);
-        mailOptions.from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-        sendResult = await emailTransporter.sendMail(mailOptions);
-      } else {
-        throw sendErr;
-      }
-    }
+    const sendResult = await transporter.sendMail(mailOptions);
     console.log('✅ Credentials update email sent successfully:', { to: newEmail, messageId: sendResult?.messageId, passwordChanged });
 
     // Also notify the clinic that a patient's login details changed (no password shown, non-fatal).

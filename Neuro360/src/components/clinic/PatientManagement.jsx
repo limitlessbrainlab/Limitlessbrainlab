@@ -107,9 +107,8 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
 
   const clinicId = getClinicId();
 
-  // Get clinic name and SMTP config - fetch directly from database
+  // Get clinic name and contact email directly from the database.
   const [clinicDisplayName, setClinicDisplayName] = useState('unknown_clinic');
-  const [clinicSmtpConfig, setClinicSmtpConfig] = useState({ smtp_email: '', smtp_password: '' });
   const [clinicEmail, setClinicEmail] = useState('');
   useEffect(() => {
     const fetchClinicName = async () => {
@@ -123,13 +122,6 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         }
         // Clinic contact email — used to notify the clinic when a new patient is added
         setClinicEmail(clinicData?.email || '');
-        // Store SMTP config for sending emails from clinic's own email
-        // Note: findById converts snake_case to camelCase, so smtp_email becomes smtpEmail
-        const smtpEmail = clinicData?.smtpEmail || clinicData?.smtp_email || '';
-        const smtpPass = clinicData?.smtpPassword || clinicData?.smtp_password || '';
-        if (smtpEmail && smtpPass) {
-          setClinicSmtpConfig({ smtp_email: smtpEmail, smtp_password: smtpPass });
-        }
       } catch (e) {
         console.warn('Could not fetch clinic name:', e);
         setClinicDisplayName(user?.clinicName || user?.name || 'unknown_clinic');
@@ -430,8 +422,6 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
             email: sanitizedEmail,
             password: data.password,
             clinicName: user?.clinicName || user?.name || 'Your Clinic',
-            clinicSmtpEmail: clinicSmtpConfig.smtp_email || '',
-            clinicSmtpPassword: clinicSmtpConfig.smtp_password || '',
             clinicEmail: clinicEmail || user?.email || ''
           })
         }).catch(emailError => {
@@ -497,12 +487,6 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
         const baseUrl = apiUrl.replace(/\/api\/?$/, '');
 
-        // Get clinic SMTP config
-        const clinicData = await DatabaseService.findById('clinics', user?.clinicId || clinicId);
-        const smtpEmail = clinicData?.smtpEmail || clinicData?.smtp_email || '';
-        const smtpPass = clinicData?.smtpPassword || clinicData?.smtp_password || '';
-        const clinicUrl = clinicData?.website_url || clinicData?.website || '';
-
         const { data: emailSessionData } = await supabase.auth.getSession();
         const emailAuthToken = emailSessionData?.session?.access_token;
         const emailUpdateHeaders = { 'Content-Type': 'application/json' };
@@ -518,9 +502,6 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
             emailChanged,
             passwordChanged,
             clinicName: user?.clinicName || user?.name || 'Your Clinic',
-            clinicUrl: clinicUrl,
-            clinicSmtpEmail: smtpEmail,
-            clinicSmtpPassword: smtpPass,
             clinicEmail: clinicEmail || user?.email || ''
           })
         }).catch(emailError => {
