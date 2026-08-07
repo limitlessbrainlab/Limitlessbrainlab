@@ -17,6 +17,13 @@ import {
 import DatabaseService from '../../services/databaseService';
 import { buildRecentActivities, getIconColor } from './recentActivitiesHelpers';
 
+const formatRevenue = (value) => new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+}).format(Number(value) || 0);
+
 const AdminDashboard = ({ analytics = {} }) => {
   const navigate = useNavigate();
   const [realTimeData, setRealTimeData] = useState({});
@@ -102,7 +109,7 @@ const AdminDashboard = ({ analytics = {} }) => {
     },
     {
       name: 'Total Revenue',
-      value: `₹${(Math.round((Number(realTimeData.monthlyRevenue) || 0) * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: formatRevenue(realTimeData.monthlyRevenue),
       change: '+8.12%',
       changeType: 'increase',
       icon: Banknote,
