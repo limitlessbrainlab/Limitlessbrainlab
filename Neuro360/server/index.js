@@ -1115,7 +1115,10 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    mailProvider: ACTIVE_MAIL_PROVIDER,
+    mailConfigured: !!emailTransporter,
+    mailSender: EMAIL_FROM
   });
 });
 
