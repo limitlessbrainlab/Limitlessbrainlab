@@ -7648,6 +7648,15 @@ app.post('/api/request-demo-report', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and phone are required' });
     }
 
+    // Persist server-side with the service-role client so this public form does
+    // not depend on the browser's anonymous Supabase RLS policy.
+    if (supabase) {
+      const { error: dbError } = await supabase
+        .from('demo_report_requests')
+        .insert([{ email, phone }]);
+      if (dbError) console.error('Demo report request persistence failed:', dbError.message);
+    }
+
     await emailTransporter.sendMail({
       from: EMAIL_FROM,
       to: process.env.EMAIL_TO || process.env.EMAIL_USER,

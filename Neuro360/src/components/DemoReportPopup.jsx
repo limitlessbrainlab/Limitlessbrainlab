@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Loader2, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabaseClient';
 import { countryCodes } from '../utils/countryCodes';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
@@ -41,14 +40,9 @@ const DemoReportPopup = ({ isOpen, onClose }) => {
     try {
       const fullPhone = `${countryCode} ${phone}`;
 
-      // Save to Supabase
-      const { error: dbError } = await supabase
-        .from('demo_report_requests')
-        .insert([{ email, phone: fullPhone }]);
-
-      if (dbError) throw dbError;
-
-      // Send the demo report to the requester's email
+      // The backend persists the request with its service-role connection and
+      // sends the email. Keeping both operations server-side avoids anonymous
+      // Supabase RLS failures that previously stopped the email request.
       const response = await fetch(`${BASE_URL}/api/request-demo-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
