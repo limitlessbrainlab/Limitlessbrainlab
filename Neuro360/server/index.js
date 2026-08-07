@@ -59,6 +59,9 @@ const brevoConfigured = !!process.env.BREVO_API_KEY;
 const brevoSmtpConfigured = !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_KEY);
 const gmailConfigured = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 const gmailFallbackConfigured = process.env.NODE_ENV !== 'production' && gmailConfigured;
+const productionMailRelayUrl = (process.env.PRODUCTION_MAIL_BACKEND_URL || '').replace(/\/$/, '');
+const productionMailRelaySecret = process.env.PRODUCTION_MAIL_RELAY_SECRET || '';
+const productionMailRelayConfigured = !!(productionMailRelayUrl && productionMailRelaySecret);
 
 function parseMailAddress(address) {
   if (!address) return null;
@@ -77,6 +80,42 @@ function toMailAddressList(value) {
   if (!value) return [];
   const values = Array.isArray(value) ? value : String(value).split(',');
   return values.map(parseMailAddress).filter(Boolean);
+}
+
+function serializeMailAttachments(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.reduce((result, attachment) => {
+    if (!attachment) return result;
+    let content = null;
+    if (Buffer.isBuffer(attachment.content)) content = attachment.content;
+    else if (typeof attachment.content === 'string') content = Buffer.from(attachment.content);
+    else if (attachment.path) {
+      try { content = fs.readFileSync(attachment.path); } catch (_) { /* optional attachment */ }
+    }
+    if (!content) return result;
+    result.push({ filename: attachment.filename || attachment.name || 'attachment', content: content.toString('base64'), ...(attachment.cid ? { cid: attachment.cid } : {}), ...(attachment.contentType ? { contentType: attachment.contentType } : {}) });
+    return result;
+  }, []);
+}
+
+// Mail-only staging relay: form data remains in staging, while delivery uses
+// the production backend's verified sender and mail provider.
+function createProductionMailRelayTransporter() {
+  return {
+    sendMail(mailOptions, callback) {
+      const request = (async () => {
+        const payload = { from: mailOptions.from, to: toMailAddressList(mailOptions.to), cc: toMailAddressList(mailOptions.cc), bcc: toMailAddressList(mailOptions.bcc), replyTo: parseMailAddress(mailOptions.replyTo), subject: mailOptions.subject || '(no subject)', html: mailOptions.html || '', text: mailOptions.text || '', headers: mailOptions.headers || {}, attachments: serializeMailAttachments(mailOptions.attachments) };
+        if (!payload.to.length && !payload.cc.length && !payload.bcc.length) throw new Error('No recipients defined');
+        const response = await fetch(`${productionMailRelayUrl}/api/internal/mail-relay`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-production-mail-relay-secret': productionMailRelaySecret }, body: JSON.stringify(payload) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || `Production mail relay error: HTTP ${response.status}`);
+        return { accepted: data.accepted || payload.to.map(({ email }) => email), rejected: data.rejected || [], messageId: data.messageId || '', response: '250 2.0.0 Ok (production mail relay)' };
+      })();
+      if (typeof callback === 'function') request.then((info) => callback(null, info), callback);
+      return request;
+    },
+    verify(callback) { if (typeof callback === 'function') callback(null, true); return Promise.resolve(true); },
+  };
 }
 
 // Match nodemailer's sendMail(options[, callback]) contract so every existing
@@ -138,6 +177,7 @@ function createBrevoTransporter(apiKey) {
 }
 
 const activeTransporter = (() => {
+  if (productionMailRelayConfigured && process.env.MAIL_TRANSPORT === 'production') return createProductionMailRelayTransporter();
   if (brevoConfigured) return createBrevoTransporter(process.env.BREVO_API_KEY);
   if (brevoSmtpConfigured) {
     return nodemailer.createTransport({
@@ -172,10 +212,12 @@ const activeTransporter = (() => {
 })();
 
 const emailTransporter = activeTransporter;
-const mailerConfigured = brevoConfigured || brevoSmtpConfigured || gmailFallbackConfigured;
-const ACTIVE_MAIL_PROVIDER = brevoConfigured
-  ? 'brevo-api'
-  : (brevoSmtpConfigured ? 'brevo-smtp' : (gmailFallbackConfigured ? 'gmail' : 'none'));
+const mailerConfigured = productionMailRelayConfigured || brevoConfigured || brevoSmtpConfigured || gmailFallbackConfigured;
+const ACTIVE_MAIL_PROVIDER = productionMailRelayConfigured && process.env.MAIL_TRANSPORT === 'production'
+  ? 'production-relay'
+  : (brevoConfigured
+    ? 'brevo-api'
+    : (brevoSmtpConfigured ? 'brevo-smtp' : (gmailFallbackConfigured ? 'gmail' : 'none')));
 
 // Deliverability: HTML-only mail scores worse with spam filters, so derive a
 // plain-text alternative for every outbound mail, and set Reply-To so replies
@@ -1120,6 +1162,34 @@ app.get('/api/health', (req, res) => {
     mailConfigured: !!emailTransporter,
     mailSender: EMAIL_FROM
   });
+});
+
+// Mail-only relay used by staging. It never writes production form/database data.
+app.post('/api/internal/mail-relay', async (req, res) => {
+  if (!productionMailRelaySecret || req.get('x-production-mail-relay-secret') !== productionMailRelaySecret) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+  const { to, cc, bcc, subject, html, text, replyTo, headers, attachments } = req.body || {};
+  if ((!Array.isArray(to) || !to.length) && (!Array.isArray(cc) || !cc.length) && (!Array.isArray(bcc) || !bcc.length)) {
+    return res.status(400).json({ success: false, message: 'At least one recipient is required' });
+  }
+  if (!subject || (!html && !text)) return res.status(400).json({ success: false, message: 'Subject and message content are required' });
+  if (!emailTransporter) return res.status(503).json({ success: false, message: 'Production mail is not configured' });
+  try {
+    const info = await emailTransporter.sendMail({
+      from: EMAIL_FROM, to, cc, bcc, subject, html, text, replyTo, headers,
+      attachments: Array.isArray(attachments) ? attachments.map((attachment) => ({
+        filename: attachment.filename || attachment.name || 'attachment',
+        content: Buffer.from(attachment.content || '', 'base64'),
+        ...(attachment.cid ? { cid: attachment.cid } : {}),
+        ...(attachment.contentType ? { contentType: attachment.contentType } : {}),
+      })) : [],
+    });
+    return res.status(200).json({ success: true, messageId: info.messageId || '', accepted: info.accepted || [] });
+  } catch (error) {
+    console.error('Production mail relay failed:', error.message);
+    return res.status(502).json({ success: false, message: 'Production mail delivery failed' });
+  }
 });
 
 // Per-deploy backend version — the frontend polls this to force logout on a new deploy.
