@@ -47,6 +47,19 @@ async function claimNotificationOnce(key) {
   }
 }
 
+// A notification claim must not permanently suppress a payment email when the
+// relay/provider fails after the claim is inserted. The webhook or the landing
+// page verification can then retry the same session safely.
+async function releaseNotificationClaim(key) {
+  if (!key || !supabase) return;
+  try {
+    const { error } = await supabase.from('sent_notifications').delete().eq('dedupe_key', key);
+    if (error) console.warn('releaseNotificationClaim error:', error.message);
+  } catch (e) {
+    console.warn('releaseNotificationClaim exception:', e.message);
+  }
+}
+
 // Initialize Stripe (conditionally)
 let stripe = null;
 if (process.env.STRIPE_SECRET_KEY) {
@@ -2756,10 +2769,6 @@ app.get('/api/stripe/verify-session/:sessionId', async (req, res) => {
           attachments: getFullAttachments()
         };
 
-        emailTransporter.sendMail(confirmationMail)
-          .then(() => console.log(`SUCCESS: ${paymentType === 'assessment' ? 'Assessment' : 'Payment confirmation'} email sent to ${customerEmail} (verify-session)`))
-          .catch(err => console.error('Payment confirmation email failed:', err.message));
-
         // Also notify admin
         const adminMail = {
           from: EMAIL_FROM,
@@ -2776,8 +2785,16 @@ app.get('/api/stripe/verify-session/:sessionId', async (req, res) => {
           attachments: getLogoAttachment()
         };
 
-        emailTransporter.sendMail(adminMail)
-          .catch(err => console.error('Admin payment email failed:', err.message));
+        try {
+          await Promise.all([
+            emailTransporter.sendMail(confirmationMail),
+            emailTransporter.sendMail(adminMail)
+          ]);
+          console.log(`SUCCESS: ${paymentType === 'assessment' ? 'Assessment' : 'Payment confirmation'} emails sent for ${sessionId} (verify-session)`);
+        } catch (err) {
+          await releaseNotificationClaim(emailClaimKey);
+          console.error('Payment confirmation emails failed; claim released for retry:', err.message);
+        }
       }
 
     } else {
@@ -4575,8 +4592,9 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
             : false;
 
           // Send assessment link email to customer
+          let assessmentMailOptions = null;
           if (assessmentEmailsClaimed && assessmentEmailLink) {
-            const assessmentMailOptions = {
+            assessmentMailOptions = {
               from: EMAIL_FROM,
               to: session.customer_email,
               subject: `Your ${assessmentName} is ready - Limitless Brain Lab`,
@@ -4590,13 +4608,10 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
               })
             };
 
-            emailTransporter.sendMail(assessmentMailOptions)
-              .then(() => console.log(`SUCCESS: Assessment email sent to ${session.customer_email} (webhook)`))
-              .catch(err => console.error('Assessment email sending failed:', err.message));
           }
 
           // Also notify admin about the purchase
-          if (assessmentEmailsClaimed) {
+          if (assessmentEmailsClaimed && assessmentMailOptions) {
             const adminMailOptions = {
               from: EMAIL_FROM,
               to: process.env.EMAIL_TO || process.env.EMAIL_USER,
@@ -4616,8 +4631,16 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
               `
             };
 
-            emailTransporter.sendMail(adminMailOptions)
-              .catch(err => console.error('Admin email failed:', err.message));
+            try {
+              await Promise.all([
+                emailTransporter.sendMail(assessmentMailOptions),
+                emailTransporter.sendMail(adminMailOptions)
+              ]);
+              console.log(`SUCCESS: Assessment emails sent to ${session.customer_email} (webhook)`);
+            } catch (err) {
+              await releaseNotificationClaim(`assessment:${session.id}:emails`);
+              console.error('Assessment emails failed; claim released for retry:', err.message);
+            }
           }
 
         } else if (paymentType === 'clinic_report') {
