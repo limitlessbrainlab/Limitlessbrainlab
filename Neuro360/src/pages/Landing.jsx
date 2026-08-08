@@ -127,15 +127,25 @@ const Landing = () => {
       setPaymentSuccessInfo({ verifying: true });
       if (sessionId) {
         fetch(`${API_BASE_URL}/stripe/verify-session/${sessionId}`)
-          .then((r) => r.json())
+          .then(async (r) => {
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || data?.success === false) {
+              throw new Error(data?.error || data?.message || 'Payment verification failed');
+            }
+            return data;
+          })
           .then((data) => setPaymentSuccessInfo({
             verifying: false,
             assessmentName: data?.assessmentName || '',
             // One-time gate URL preferred over the raw JotForm link
             assessmentLink: data?.takeUrl || data?.assessmentLink || '',
-            customerEmail: data?.customerEmail || ''
+            customerEmail: data?.customerEmail || '',
+            verificationFailed: false
           }))
-          .catch(() => setPaymentSuccessInfo({ verifying: false }));
+          .catch(() => setPaymentSuccessInfo({
+            verifying: false,
+            verificationFailed: true
+          }));
       } else {
         setPaymentSuccessInfo({ verifying: false });
       }
@@ -2577,11 +2587,13 @@ const Landing = () => {
               ) : (
                 <>
                   <p className="text-gray-700 text-sm">
-                    Your purchase{paymentSuccessInfo.assessmentName ? <> of <strong>{paymentSuccessInfo.assessmentName}</strong></> : ''} is confirmed.
+                    You purchased{paymentSuccessInfo.assessmentName ? <> <strong>{paymentSuccessInfo.assessmentName}</strong></> : ' your assessment'}.
                   </p>
                   <p className="text-gray-500 text-sm mt-2">
-                    A confirmation email{paymentSuccessInfo.assessmentLink ? ' with your assessment link' : ''} has been sent
-                    {paymentSuccessInfo.customerEmail ? <> to <strong>{paymentSuccessInfo.customerEmail}</strong></> : ''}.
+                    {paymentSuccessInfo.verificationFailed
+                      ? 'Your payment was successful. Your assessment access email will arrive shortly.'
+                      : <>A confirmation email with your one-time assessment link has been sent
+                        {paymentSuccessInfo.customerEmail ? <> to <strong>{paymentSuccessInfo.customerEmail}</strong></> : ''}.</>}
                   </p>
                   {paymentSuccessInfo.assessmentLink && (
                     <a
