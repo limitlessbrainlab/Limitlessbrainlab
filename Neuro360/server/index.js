@@ -4549,22 +4549,30 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
             }
           }
 
-          // Save to payments table for SuperAdmin dashboard (both sources)
-          await supabase.from('payments').insert({
-            clinic_id: metaClinicId || null,
-            patient_email: session.customer_email.toLowerCase(),
-            amount: session.amount_total / 100,
-            currency: session.currency?.toUpperCase() || 'USD',
-            status: 'completed',
-            type: 'assessment',
-            package_name: assessmentName || 'Brain Assessment',
-            payment_method: 'stripe',
-            payment_id: session.payment_intent || session.id,
-            stripe_payment_id: session.payment_intent || session.id,
-            stripe_session_id: session.id,
-            source: purchaseSource,
-            created_at: new Date().toISOString()
-          }).catch(err => console.warn('payments table insert skipped:', err.message));
+          // Save to payments table for SuperAdmin dashboard (both sources).
+          // The routed Supabase client is thenable but does not expose a
+          // Promise.catch method; keep this audit write from stopping the
+          // payment email path when the insert fails.
+          try {
+            const { error: paymentInsertError } = await supabase.from('payments').insert({
+              clinic_id: metaClinicId || null,
+              patient_email: session.customer_email.toLowerCase(),
+              amount: session.amount_total / 100,
+              currency: session.currency?.toUpperCase() || 'USD',
+              status: 'completed',
+              type: 'assessment',
+              package_name: assessmentName || 'Brain Assessment',
+              payment_method: 'stripe',
+              payment_id: session.payment_intent || session.id,
+              stripe_payment_id: session.payment_intent || session.id,
+              stripe_session_id: session.id,
+              source: purchaseSource,
+              created_at: new Date().toISOString()
+            });
+            if (paymentInsertError) console.warn('payments table insert skipped:', paymentInsertError.message);
+          } catch (paymentInsertException) {
+            console.warn('payments table insert skipped:', paymentInsertException.message);
+          }
 
           // One-time gate URL replaces the raw JotForm link in the email
           let assessmentTakeUrl = null;
