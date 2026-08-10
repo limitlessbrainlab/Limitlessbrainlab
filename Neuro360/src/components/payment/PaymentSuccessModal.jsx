@@ -1,21 +1,25 @@
 import React from 'react';
-import { 
-  CheckCircle, 
-  Download, 
-  FileText, 
-  Calendar, 
+import {
+  CheckCircle,
+  Download,
+  FileText,
+  Calendar,
   CreditCard,
-  X
+  X,
+  Receipt,
+  ArrowRight,
+  Brain
 } from 'lucide-react';
 
-const PaymentSuccessModal = ({ 
+const PaymentSuccessModal = ({
   isOpen = true,
-  paymentData, 
-  packageInfo, 
-  onClose, 
-  onDownloadInvoice 
+  paymentData,
+  packageInfo,
+  onClose,
+  onDownloadInvoice
 }) => {
   if (!isOpen || !paymentData) return null;
+
   const handleDownloadInvoice = () => {
     if (onDownloadInvoice) {
       onDownloadInvoice(paymentData);
@@ -62,75 +66,71 @@ Thank you for your business!
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-md w-full">
-        {/* Success Animation */}
-        <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-[#E4EFFF]0 opacity-10"></div>
-          <div className="relative p-6 text-center">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
-              <CheckCircle className="h-8 w-8 text-green-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
-            <p className="text-gray-600">
-              Your payment has been processed successfully. EEG reports have been added to your account.
-            </p>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
+        {/* Header - Navy gradient with CheckCircle icon */}
+        <div className="bg-gradient-to-r from-[#323956] to-[#4a5578] px-6 py-6 text-center">
+          <div className="w-14 h-14 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-2">
+            <CheckCircle className="h-8 w-8 text-white" />
           </div>
+          <h2 className="text-xl font-bold text-white">Thank You! Payment Successful</h2>
         </div>
 
-        {/* Payment Details */}
-        <div className="px-6 pb-6 space-y-6">
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        {/* Body */}
+        <div className="p-6 text-center">
+          {/* Payment Details */}
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-6">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Payment ID</span>
               <span className="text-sm font-medium text-gray-900 font-mono">
-                {paymentData.paymentId}
+                {paymentData.paymentId || 'N/A'}
               </span>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Package</span>
               <span className="text-sm font-medium text-gray-900">
-                {paymentData.packageName}
+                {paymentData.packageName || 'N/A'}
               </span>
             </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Reports Added</span>
-              <span className="text-sm font-medium text-green-600">
-                +{packageInfo?.reports || 'N/A'} reports
-              </span>
-            </div>
-            
+
+            {packageInfo?.reports !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Reports Added</span>
+                <span className="text-sm font-medium text-green-600">
+                  +{packageInfo.reports} reports
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Amount Paid</span>
               <span className="text-lg font-bold text-gray-900">
                 ₹{paymentData.amount?.toLocaleString() || 'N/A'}
               </span>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Date & Time</span>
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-900">
-                  {new Date(paymentData.createdAt).toLocaleDateString()}
+                  {paymentData.createdAt ? new Date(paymentData.createdAt).toLocaleDateString() : 'N/A'}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {new Date(paymentData.createdAt).toLocaleTimeString()}
+                  {paymentData.createdAt ? new Date(paymentData.createdAt).toLocaleTimeString() : ''}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Success Highlights */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          {/* Success Message */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div className="flex items-start">
-              <FileText className="h-5 w-5 text-green-500 mt-0.5 mr-3" />
-              <div>
-                <h4 className="text-sm font-medium text-green-800">Reports Activated</h4>
-                <p className="text-sm text-green-700 mt-1">
-                  Your new EEG reports are now available in your dashboard. 
-                  You can start uploading and analyzing patient data immediately.
+              <Brain className="h-5 w-5 text-[#323956] mt-0.5 mr-3" />
+              <div className="text-left">
+                <h4 className="text-sm font-medium text-[#323956]">Payment Confirmed</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Your purchase has been successfully processed. {packageInfo?.reports ? `Your ${packageInfo.reports} reports are now available in your dashboard.` : 'You can access your purchase from your dashboard.'}
                 </p>
               </div>
             </div>
@@ -147,14 +147,15 @@ Thank you for your business!
             </button>
             <button
               onClick={onClose}
-              className="flex-1 py-2 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              className="flex-1 py-2 px-4 bg-gradient-to-r from-[#323956] to-[#4a5578] text-white rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center"
             >
               Continue
+              <ArrowRight className="h-4 w-4 ml-2" />
             </button>
           </div>
 
           {/* Footer Message */}
-          <div className="text-center">
+          <div className="mt-4">
             <p className="text-xs text-gray-500">
               A confirmation email has been sent to your registered email address.
             </p>

@@ -95,7 +95,6 @@ const SubscriptionTab = ({ onPaymentSuccess } = {}) => {
       // and the credit update would never run when the effect re-fires.
       if (!user?.clinicId) return;
 
-      toast.success(`Successfully purchased ${reports} report credits!`);
       window.history.replaceState({}, document.title, window.location.pathname);
 
       // Credits are applied authoritatively + idempotently on the backend
@@ -111,6 +110,16 @@ const SubscriptionTab = ({ onPaymentSuccess } = {}) => {
         console.error('confirm-report-credits failed:', e);
       }
       localStorage.removeItem('pending_payment');
+
+      // Show success modal
+      setPaymentData({
+        paymentId: sessionId || `CREDITS-${Date.now()}`,
+        packageName: `${reports} Report Credits`,
+        amount: 0,
+        createdAt: new Date().toISOString()
+      });
+      setSelectedPackage({ reports: Number(reports) });
+      setShowSuccessModal(true);
 
       await loadUsageStats();
       if (onPaymentSuccess) onPaymentSuccess();
