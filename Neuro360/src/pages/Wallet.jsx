@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+import AccessControlService, { SUBSCRIPTION_TIERS } from '../services/accessControlService';
 import {
   Wallet as WalletIcon,
   CreditCard,
@@ -132,6 +133,7 @@ const Wallet = () => {
 
   // Subscriptions
   const [subscriptions, setSubscriptions] = useState([]);
+  const [currentSubscription, setCurrentSubscription] = useState(null);
 
   // Session Packs
   const [sessionPacks, setSessionPacks] = useState([]);
@@ -343,6 +345,21 @@ const Wallet = () => {
       }
       setSubscriptions(subscriptionsForUi);
 
+      // Fetch current active subscription tier from patients table
+      try {
+        const currentSub = await AccessControlService.getUserSubscription(email);
+        setCurrentSubscription({
+          tier: currentSub.tier,
+          tierData: currentSub.tierData,
+          reportsIncluded: currentSub.reportsIncluded || 0,
+          status: currentSub.reportsUnlocked ? 'Active' : 'Inactive',
+          isActive: currentSub.reportsUnlocked || currentSub.dashboardAccess
+        });
+      } catch (err) {
+        console.error('Error fetching current subscription:', err);
+        setCurrentSubscription(null);
+      }
+
       // Fetch session packs/credits
       const { data: packs } = await supabase
         .from('wallet_credits')
@@ -435,6 +452,7 @@ const Wallet = () => {
       setUpiIds([]);
       setPurchases([]);
       setSubscriptions([]);
+      setCurrentSubscription(null);
       setSessionPacks([]);
       setInvoices([]);
       setSpendChange(0);
@@ -1162,7 +1180,38 @@ const Wallet = () => {
             </div>
 
             <div className="space-y-3 sm:space-y-4">
-              {subscriptions.length === 0 && (
+              {/* Current Active Plan from patients table */}
+              {currentSubscription && currentSubscription.isActive && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 rounded-xl sm:rounded-2xl border-2 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
+                  <div className="flex items-start space-x-3 sm:space-x-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                      <Star className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center flex-wrap gap-2 mb-1">
+                        <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
+                          {currentSubscription.tier} Plan
+                        </h4>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                          Active
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                        <span>Reports Included: <strong>{currentSubscription.reportsIncluded}</strong></span>
+                        <span>Full Access to {currentSubscription.tier} Features</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate('/dashboard/subscription')}
+                    className="px-2.5 sm:px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg text-xs sm:text-sm hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                  >
+                    Manage
+                  </button>
+                </div>
+              )}
+
+              {subscriptions.length === 0 && !currentSubscription?.isActive && (
                 <p className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 py-6">No active subscriptions.</p>
               )}
               {subscriptions.map((sub) => {
