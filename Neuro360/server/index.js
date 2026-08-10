@@ -3151,6 +3151,7 @@ async function applySubscriptionPurchase(session) {
       subscription_tier: tier.toLowerCase(),
       subscription_status: 'active',
       dashboard_access: true,
+      reports_unlocked: true, // Enable report access for paid subscriptions
       updated_at: new Date().toISOString()
     })
     .eq('email', email);
@@ -3266,6 +3267,27 @@ async function applySubscriptionPurchase(session) {
     });
   } catch (err) {
     console.warn('applySubscriptionPurchase patient_payments insert skipped:', err.message);
+  }
+
+  // 4. wallet_subscriptions row for Wallet UI display
+  try {
+    const tierNameMap = { 'basic': 'Basic', 'pro': 'Pro', 'premium': 'Premium' };
+    const iconNameMap = { 'basic': 'star', 'pro': 'star', 'premium': 'crown' };
+    const renewalDate = new Date();
+    renewalDate.setDate(renewalDate.getDate() + 30); // 30 days from now
+
+    await supabase.from('wallet_subscriptions').insert({
+      patient_email: email,
+      name: `${tier} Subscription`,
+      plan: tierNameMap[tier.toLowerCase()] || tier,
+      status: 'Active',
+      amount,
+      period: 'mo',
+      icon: iconNameMap[tier.toLowerCase()] || 'star',
+      renewal_date: renewalDate.toISOString().split('T')[0]
+    });
+  } catch (err) {
+    console.warn('applySubscriptionPurchase wallet_subscriptions insert skipped:', err.message);
   }
 
   // Admin dashboard notification

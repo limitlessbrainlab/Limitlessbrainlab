@@ -174,7 +174,8 @@ class AccessControlService {
         tierData: SUBSCRIPTION_TIERS[tier],
         reportsUnlocked: patient.reports_unlocked || false,
         dashboardAccess: patient.dashboard_access || false,
-        clinicId: patient.clinic_id
+        clinicId: patient.clinic_id,
+        reportsIncluded: SUBSCRIPTION_TIERS[tier]?.reports || 0
       };
     } catch (error) {
       console.error('Error fetching user subscription:', error);
@@ -183,7 +184,8 @@ class AccessControlService {
         tierData: SUBSCRIPTION_TIERS.FREE,
         reportsUnlocked: false,
         dashboardAccess: false,
-        clinicId: null
+        clinicId: null,
+        reportsIncluded: 0
       };
     }
   }
