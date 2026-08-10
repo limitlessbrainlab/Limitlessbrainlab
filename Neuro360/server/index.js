@@ -3272,19 +3272,13 @@ async function applySubscriptionPurchase(session) {
   // 4. wallet_subscriptions row for Wallet UI display
   try {
     const tierNameMap = { 'basic': 'Basic', 'pro': 'Pro', 'premium': 'Premium' };
-    const iconNameMap = { 'basic': 'star', 'pro': 'star', 'premium': 'crown' };
-    const renewalDate = new Date();
-    renewalDate.setDate(renewalDate.getDate() + 30); // 30 days from now
 
     await supabase.from('wallet_subscriptions').insert({
       patient_email: email,
-      name: `${tier} Subscription`,
-      plan: tierNameMap[tier.toLowerCase()] || tier,
+      patient_id: session.metadata?.patient_id || null,
+      plan_name: tierNameMap[tier.toLowerCase()] || `${tier} Plan`,
       status: 'Active',
-      amount,
-      period: 'mo',
-      icon: iconNameMap[tier.toLowerCase()] || 'star',
-      renewal_date: renewalDate.toISOString().split('T')[0]
+      stripe_subscription_id: session.subscription_id || session.id
     });
   } catch (err) {
     console.warn('applySubscriptionPurchase wallet_subscriptions insert skipped:', err.message);
