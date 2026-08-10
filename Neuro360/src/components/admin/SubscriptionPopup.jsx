@@ -80,15 +80,7 @@ const SubscriptionPopup = ({ isOpen, onClose, clinicId, currentUsage, onSubscrib
     const reports = urlParams.get('reports');
 
     if (payment === 'success' && reports) {
-      // Set success modal data instead of toast
-      setSuccessPaymentData({
-        paymentId: `SUB-${Date.now()}`,
-        packageName: `${reports} Report Credits`,
-        amount: 0,
-        createdAt: new Date().toISOString()
-      });
-      setSuccessPackageInfo({ reports: Number(reports) });
-      setShowSuccessModal(true);
+      toast.success(`Successfully purchased ${reports} reports!`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   };
