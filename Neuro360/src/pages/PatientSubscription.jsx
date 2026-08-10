@@ -87,8 +87,10 @@ const PatientSubscription = () => {
         );
 
         if (result.success) {
-          toast.success(`Successfully upgraded to ${tier}!`);
-          setCurrentTier(tier);
+          // Refresh subscription data from database to get accurate tier
+          await loadSubscription();
+          const subscription = await AccessControlService.getUserSubscription(user.email);
+          toast.success(`Successfully upgraded to ${subscription.tier}!`);
           // Clean URL
           window.history.replaceState({}, document.title, window.location.pathname);
           // Redirect after delay

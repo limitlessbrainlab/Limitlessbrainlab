@@ -3134,6 +3134,7 @@ async function applySubscriptionPurchase(session) {
       subscription_tier: tier.toLowerCase(),
       subscription_status: 'active',
       dashboard_access: true,
+      reports_unlocked: true, // Enable report access for paid subscriptions
       updated_at: new Date().toISOString()
     })
     .eq('email', email);
