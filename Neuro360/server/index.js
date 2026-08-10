@@ -2295,6 +2295,14 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
       ],
       mode: 'payment',
       customer_email: customerEmail,
+      customer_creation: 'always',
+      billing_address_collection: {
+        allowed_countries: ['US', 'IN', 'GB', 'CA', 'AU', 'AE', 'SG', 'DE', 'FR', 'IT', 'ES', 'NL'],
+        mode: 'required'
+      },
+      phone_number_collection: {
+        enabled: true
+      },
       // Honor the caller's return URLs (patient portal on its own origin, e.g.
       // /dashboard/frequencies) instead of hardcoding the Vercel production URL.
       success_url: (req.body.successUrl && req.body.successUrl.includes('{CHECKOUT_SESSION_ID}'))
@@ -2457,6 +2465,14 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       mode: 'payment',
       customer_email: customerEmail,
+      customer_creation: 'always', // Always create a customer for future reuse
+      billing_address_collection: {
+        allowed_countries: ['US', 'IN', 'GB', 'CA', 'AU', 'AE', 'SG', 'DE', 'FR', 'IT', 'ES', 'NL'],
+        mode: 'required' // Require billing address for better consistency
+      },
+      phone_number_collection: {
+        enabled: true // Collect phone number during checkout
+      },
       success_url: successUrl || `${req.headers.origin}/dashboard?payment=success&tier=${tierId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${req.headers.origin}/dashboard/subscription?payment=cancelled`,
       metadata: {
