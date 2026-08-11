@@ -1088,11 +1088,36 @@ function resolveCheckoutBase(req) {
   return process.env.FRONTEND_URL || '';
 }
 
+// Where the logo is served from FOR STRIPE is a different question from where the buyer
+// is redirected back to. Stripe fetches the image from its own servers, so the URL must
+// point at a host that is public AND actually has the file — and the frontend origin is
+// neither, reliably:
+//   - localhost is unreachable from Stripe's network entirely;
+//   - neurosense360.site runs a deploy that predates this asset, so the path falls through
+//     to the SPA and answers 200 text/html, which Stripe discards.
+// Both failures are silent: the checkout page just renders with no logo. This backend
+// ships the image in the same repo as this file, so it can never be out of step with the
+// code that builds the URL. Serve it from here and the logo is on every checkout page.
+const CHECKOUT_LOGO_FILE = path.join(__dirname, '..', 'public', 'LBL-Circular-Logo-White.png');
+const CHECKOUT_LOGO_ROUTE = '/checkout-logo.png';
+
+// Public https base of this backend. Render injects RENDER_EXTERNAL_URL automatically;
+// BACKEND_PUBLIC_URL covers any other host. Empty on local dev, which has no public URL.
+function resolveCheckoutAssetBase() {
+  const base = (process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_PUBLIC_URL || '').replace(/\/$/, '');
+  return base.startsWith('https://') ? base : '';
+}
+
 // Omit `images` entirely when no base resolves — Stripe rejects a relative URL, and a
-// missing logo is better than a failed checkout session.
+// missing logo is better than a failed checkout session. The frontend copy stays as a
+// fallback for deployments that are not behind a public backend URL, but it is only used
+// over https, since Stripe can never fetch a localhost address.
 function checkoutProductImages(req) {
-  const base = resolveCheckoutBase(req);
-  return base ? [`${base}${CHECKOUT_LOGO_PATH}`] : [];
+  const assetBase = resolveCheckoutAssetBase();
+  if (assetBase) return [`${assetBase}${CHECKOUT_LOGO_ROUTE}`];
+
+  const origin = resolveCheckoutBase(req);
+  return origin.startsWith('https://') ? [`${origin}${CHECKOUT_LOGO_PATH}`] : [];
 }
 
 // Card + Link (Apple Pay rides on 'card'), prefilled email, cardholder name, country.
@@ -1170,6 +1195,18 @@ app.get('/uploads/:filename', (req, res) => {
 
   // Send file
   res.sendFile(filePath);
+});
+
+// Brand logo for Stripe Checkout. Stripe fetches this URL from its own servers and caches
+// the result against the URL, so it must stay public, unauthenticated and stable.
+app.get(CHECKOUT_LOGO_ROUTE, (req, res) => {
+  if (!fs.existsSync(CHECKOUT_LOGO_FILE)) {
+    console.warn('Checkout logo file not found:', CHECKOUT_LOGO_FILE);
+    return res.status(404).json({ error: 'Logo not found' });
+  }
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(CHECKOUT_LOGO_FILE);
 });
 
 // ===== PUBLIC ROUTES (No Auth Required) =====
