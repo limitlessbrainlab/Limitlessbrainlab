@@ -2272,7 +2272,7 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -2282,7 +2282,7 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
               description: isBundle
                 ? 'Unlock all 6 brainwave frequency packs: Delta, Theta, Alpha, Beta, Gamma, and Solfeggio frequencies for complete brain optimization.'
                 : `Unlock the full ${packName} frequency pack for enhanced brain performance.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/LBL-Circular-Logo.png`],
               metadata: {
                 pack_id: packId,
                 is_bundle: isBundle ? 'true' : 'false'
@@ -2374,7 +2374,7 @@ app.post('/api/create-meditation-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -2384,7 +2384,7 @@ app.post('/api/create-meditation-checkout', async (req, res) => {
               description: isBundle
                 ? 'Unlock all 6 guided meditation packs: Morning Awakening, Stress Relief, Focus & Clarity, Deep Sleep, Gratitude & Joy, and Body Healing.'
                 : `Unlock the full ${packName} meditation pack for enhanced mental wellness.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/LBL-Circular-Logo.png`],
               metadata: {
                 pack_id: packId,
                 is_bundle: isBundle ? 'true' : 'false',
@@ -2462,7 +2462,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     }
 
     let sessionConfig = {
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       mode: 'payment',
       customer_email: customerEmail,
       customer_creation: 'always', // Always create a customer for future reuse
@@ -2497,7 +2497,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
           product_data: {
             name: `Limitless Brain Lab ${tierName} Subscription`,
             description: `Access to ${tierName} features - Monthly subscription`,
-            images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/favicon.ico`]
+            images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/LBL-Circular-Logo.png`]
           },
           unit_amount: Math.round(price * 100) // Convert to cents
         },
@@ -2854,7 +2854,7 @@ app.post('/api/create-report-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -2862,7 +2862,7 @@ app.post('/api/create-report-checkout', async (req, res) => {
             product_data: {
               name: `${packageName} - ${reports} EEG Reports`,
               description: `Purchase ${reports} EEG brain reports for your clinic`,
-              images: [`${baseUrl}/IBW%20Logo.png`],
+              images: [`${baseUrl}/LBL-Circular-Logo.png`],
               metadata: {
                 package_id: packageId,
                 reports: reports.toString(),
@@ -3740,7 +3740,7 @@ app.post('/api/create-coaching-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -3748,7 +3748,7 @@ app.post('/api/create-coaching-checkout', async (req, res) => {
             product_data: {
               name: `Brain Coaching Session with ${coachName}`,
               description: '30-minute online brain coaching session',
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/LBL-Circular-Logo.png`],
               metadata: {
                 type: 'coaching_session',
                 coach_id: coachId,
@@ -3847,7 +3847,7 @@ app.post('/api/create-assessment-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'link'],
       line_items: [
         {
           price_data: {
@@ -3855,7 +3855,7 @@ app.post('/api/create-assessment-checkout', async (req, res) => {
             product_data: {
               name: `${assessmentName} - Brain Assessment`,
               description: `Unlock your ${assessmentName} to understand your brain health better.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/LBL-Circular-Logo.png`],
               metadata: {
                 assessment_id: assessmentId,
                 type: 'assessment'
