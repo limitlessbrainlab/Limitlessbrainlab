@@ -9,7 +9,7 @@ const FROM_ADDRESS = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'info@l
 const EMAIL_FROM = `"Limitless Brain Lab" <${FROM_ADDRESS}>`;
 // Staging build: serve the logo from the staging frontend host (which serves /public),
 // aligned with FRONTEND_URL above rather than the production brand domain.
-const LOGO_URL = 'https://limitlessbrainlab-eight.vercel.app/LBL-Circular-Logo.png';
+const LOGO_URL = 'https://limitlessbrainlab-eight.vercel.app/IBW Logo.png';
 const { getReportEmailHtml, getNeuroSenseReportEmailHtml } = reportEmailTemplate;
 
 function getBody(req) {
