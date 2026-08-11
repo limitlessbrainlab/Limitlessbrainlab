@@ -8205,12 +8205,12 @@ const PatientDashboard = () => {
       setIsProcessingPayment(selectedMedPack.id);
       try {
         const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-        const response = await fetch(`${API_URL}/create-frequency-checkout`, {
+        const response = await fetch(`${API_URL}/create-meditation-checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             packId: selectedMedPack.id,
-            packName: `${selectedMedPack.name} Meditation`,
+            packName: selectedMedPack.name,
             customerEmail: medPaymentEmail,
             customerName: medPaymentName.toUpperCase(),
             currency: 'USD',

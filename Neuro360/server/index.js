@@ -4670,8 +4670,12 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
         } else {
           // Handle frequency/meditation purchases
 
-          // Check if this is a meditation purchase (has type: 'meditation' in product metadata)
-          const isMeditationPurchase = session.metadata?.pack_id?.startsWith('solfeggio_') ||
+          // Meditation checkouts stamp metadata.type = 'meditation', so trust that first.
+          // The pack_id heuristic stays as a fallback for legacy sessions created before
+          // the meditations UI was pointed at /api/create-meditation-checkout — without it
+          // packs like 'gamma' (no 'solfeggio_' prefix) were filed as frequency purchases.
+          const isMeditationPurchase = paymentType === 'meditation' ||
+                                       session.metadata?.pack_id?.startsWith('solfeggio_') ||
                                        session.metadata?.pack_id?.includes('meditation');
 
           if (isMeditationPurchase) {
