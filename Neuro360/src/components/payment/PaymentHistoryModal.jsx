@@ -28,8 +28,12 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   const daysUntilExpiry = subscriptionInfo.expiryDate ? 
     Math.ceil((new Date(subscriptionInfo.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
 
+  // Admin-side rows are normalized without a paymentId, so fall back through the
+  // other identifiers before giving up — otherwise the invoice number is empty
+  const referenceId = payment.paymentId || payment.orderId || payment.stripeSessionId || payment.id || '';
+
   const generateInvoiceHTML = () => {
-    const invoiceNumber = `INV-${(payment.paymentId || '').slice(-8).toUpperCase()}`;
+    const invoiceNumber = `INV-${referenceId.toString().slice(-8).toUpperCase()}`;
     const txnId = `TXN-${(payment.paymentId || '').slice(-12).toUpperCase()}`;
     const ordId = `ORD-${(payment.orderId || '').slice(-12).toUpperCase()}`;
     const pkgName = packageInfo.name || payment.packageName || 'EEG Reports';
@@ -189,18 +193,25 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   };
 
   const downloadInvoice = () => {
-    const htmlContent = generateInvoiceHTML();
-    const dataBlob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `invoice-${payment.paymentId.slice(-8).toUpperCase()}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Professional invoice downloaded successfully!');
+    try {
+      const htmlContent = generateInvoiceHTML();
+      const dataBlob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(dataBlob);
+      const suffix = referenceId.toString().slice(-8).toUpperCase() || 'DETAILS';
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice-${suffix}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Revoking synchronously can cancel the download in some browsers
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toast.success('Professional invoice downloaded successfully!');
+    } catch (error) {
+      console.error('ERROR: Invoice download failed:', error);
+      toast.error('Could not download the invoice. Please try Print instead.');
+    }
   };
 
   const printInvoice = () => {
