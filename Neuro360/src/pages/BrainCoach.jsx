@@ -967,7 +967,7 @@ const BrainCoach = () => {
         localStorage.setItem('paymentReturnUrl', `/dashboard/brain-coach?${returnParams.toString()}`);
         window.location.href = data.url;
       } else {
-        toast.error(getFriendlyErrorMessage(data.message, 'The payment could not be started. Please try again.'));
+        toast.error(getFriendlyErrorMessage(data, 'The payment could not be started. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);

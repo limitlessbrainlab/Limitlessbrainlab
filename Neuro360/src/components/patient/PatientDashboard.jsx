@@ -694,7 +694,7 @@ const PatientDashboard = () => {
         localStorage.setItem('paymentReturnUrl', `/dashboard/about-brain?payment=success&assessment=${assessmentId}`);
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
+        toast.error(getFriendlyErrorMessage(data, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -2146,7 +2146,7 @@ const PatientDashboard = () => {
         });
         const data = await res.json();
         if (data.success && data.checkoutUrl) { window.location.href = data.checkoutUrl; }
-        else { toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.')); }
+        else { toast.error(getFriendlyErrorMessage(data, 'The payment page could not be opened. Please try again.')); }
       } catch { toast.error('Something went wrong. Please try again.'); }
       finally { setBcProcessing(false); }
     };
@@ -8224,7 +8224,7 @@ const PatientDashboard = () => {
           localStorage.setItem('paymentReturnUrl', `/dashboard/meditations?meditation_payment=success&pack=${selectedMedPack.id}`);
           window.location.href = data.checkoutUrl;
         } else {
-          toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
+          toast.error(getFriendlyErrorMessage(data, 'The payment page could not be opened. Please try again.'));
         }
       } catch (error) {
         console.error('Payment error:', error);

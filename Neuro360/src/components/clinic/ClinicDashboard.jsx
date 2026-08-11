@@ -135,7 +135,7 @@ const PendingSubscriptionGate = ({ user, clinic, onPaymentSuccess }) => {
         }));
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
+        toast.error(getFriendlyErrorMessage(data, 'The payment page could not be opened. Please try again.'));
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -348,7 +348,7 @@ const CreditsExhaustedPopup = ({ user, clinic, onDismiss, onPaymentSuccess }) =>
         }));
         window.location.href = data.checkoutUrl;
       } else {
-        toast.error(getFriendlyErrorMessage(data.message, 'The payment page could not be opened. Please try again.'));
+        toast.error(getFriendlyErrorMessage(data, 'The payment page could not be opened. Please try again.'));
       }
     } catch (err) {
       console.error('Payment error:', err);
