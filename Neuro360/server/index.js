@@ -1076,7 +1076,7 @@ const allowedOrigins = [
 // Single source of truth for the look of every Stripe Checkout page, so the
 // assessment / credits / frequencies / meditations / coaching / subscription
 // flows cannot drift apart again.
-const CHECKOUT_LOGO_PATH = '/LBL-Circular-Logo.png';
+const CHECKOUT_LOGO_PATH = '/LBL-Circular-Logo-White.png';
 
 // Resolve the asset host from the origin the payment actually started on, validated
 // against allowedOrigins so Stripe is never pointed at an attacker-supplied host.
