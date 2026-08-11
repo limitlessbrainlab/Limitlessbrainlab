@@ -159,7 +159,9 @@ const ProgramFormPopup = ({ isOpen, onClose }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Phone accepts digits only, capped at 10 — letters/symbols never reach state.
+    const nextValue = name === 'phone' ? value.replace(/\D/g, '').slice(0, 10) : value;
+    setFormData(prev => ({ ...prev, [name]: nextValue }));
   };
 
   const handleSubmit = async (e) => {
@@ -167,6 +169,11 @@ const ProgramFormPopup = ({ isOpen, onClose }) => {
 
     if (!formData.name || !formData.email || !formData.phone) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!/^\d{10}$/.test(formData.phone)) {
+      toast.error('Please enter a valid 10-digit mobile number');
       return;
     }
 
@@ -380,7 +387,16 @@ const ProgramFormPopup = ({ isOpen, onClose }) => {
                       onChange={handleInputChange}
                       onFocus={() => setFocusedField('phone')}
                       onBlur={() => setFocusedField(null)}
-                      placeholder="98765 43210"
+                      onKeyDown={(e) => {
+                        // Block "e", "+", "-", "." which type="tel"/number inputs otherwise allow
+                        if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+                      }}
+                      placeholder="9876543210"
+                      inputMode="numeric"
+                      autoComplete="tel-national"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Enter a 10-digit mobile number"
                       className="flex-1 h-11 sm:h-12 px-3 sm:px-4 bg-white border-2 border-gray-200 rounded-lg sm:rounded-xl text-base focus:ring-0 focus:border-[#323956] focus:shadow-lg focus:shadow-[#323956]/10 transition-all duration-200 placeholder-gray-400"
                       required
                     />
