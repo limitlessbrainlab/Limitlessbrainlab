@@ -8926,9 +8926,9 @@ const PatientDashboard = () => {
                   <span className="text-sm text-gray-500">Date & Time</span>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{medPaymentSuccessDetails.date}, {medPaymentSuccessDetails.time}</span>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-500">Transaction ID</span>
-                  <span className="text-xs font-mono text-gray-500 truncate ml-2 max-w-[180px]">{medPaymentSuccessDetails.transactionId}</span>
+                <div className="flex justify-between items-center py-2 gap-4">
+                  <span className="text-sm text-gray-500 shrink-0">Transaction ID</span>
+                  <span className="text-xs font-mono text-gray-500 truncate min-w-0 text-right">{medPaymentSuccessDetails.transactionId}</span>
                 </div>
               </div>
               <div className="px-5 pb-5">
@@ -10922,9 +10922,9 @@ const PatientDashboard = () => {
               <span className="text-sm text-gray-500 dark:text-gray-400">Date</span>
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{paymentSuccessDetails.date}</span>
             </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Transaction ID</span>
-              <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate ml-2 max-w-[180px]">{paymentSuccessDetails.transactionId}</span>
+            <div className="flex justify-between items-center py-2 gap-4">
+              <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">Transaction ID</span>
+              <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate min-w-0 text-right">{paymentSuccessDetails.transactionId}</span>
             </div>
           </div>
 

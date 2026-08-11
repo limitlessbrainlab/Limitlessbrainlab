@@ -2210,9 +2210,9 @@ const BrainCoach = () => {
                   <span className="text-sm text-gray-600">Date & Time</span>
                   <span className="text-sm font-medium text-gray-900">{coachPaymentDetails.date}, {coachPaymentDetails.time}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Transaction ID</span>
-                  <span className="text-xs font-mono text-gray-500 truncate">{coachPaymentDetails.transactionId}</span>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-gray-600 shrink-0">Transaction ID</span>
+                  <span className="text-xs font-mono text-gray-500 truncate min-w-0 text-right">{coachPaymentDetails.transactionId}</span>
                 </div>
               </div>
 
