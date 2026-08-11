@@ -97,11 +97,17 @@ const PatientSubscription = () => {
           // Clean URL
           window.history.replaceState({}, document.title, window.location.pathname);
 
+          // Resolve the purchased tier's pricing for the receipt. `tierData`
+          // was referenced here but only ever declared inside handleUpgrade,
+          // so this threw a ReferenceError and the success modal never showed.
+          const paidTier = localizedPackages.find(pkg => pkg.id === subscription.tier)
+            || SUBSCRIPTION_TIERS[subscription.tier];
+
           // Show success modal
           setSuccessPaymentData({
             paymentId: sessionId || `SUB-${Date.now()}`,
             packageName: `${subscription.tier} Subscription`,
-            amount: tierData?.price || 0,
+            amount: paidTier?.price || 0,
             createdAt: new Date().toISOString()
           });
           setSuccessPackageInfo({
