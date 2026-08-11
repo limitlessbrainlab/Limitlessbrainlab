@@ -2184,43 +2184,42 @@ const BrainCoach = () => {
       {/* Payment Modal */}
       {/* Coaching Payment Success Popup */}
       {showCoachPaymentSuccess && coachPaymentDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <CheckCircle className="h-9 w-9 text-white" />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowCoachPaymentSuccess(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()} style={{ animation: 'slideUp 0.3s ease-out' }}>
+            <div className="bg-gradient-to-r from-[#323956] to-[#4a5578] px-6 py-6 text-center">
+              <div className="w-14 h-14 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-2">
+                <CheckCircle className="h-8 w-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-white">Booking Confirmed!</h3>
-              <p className="text-green-100 text-sm mt-1">Thank you! Our team will email you the session link shortly</p>
+              <h2 className="text-xl font-bold text-white">Thank You! Booking Confirmed</h2>
             </div>
-            <div className="p-5 space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500">Coach</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{coachPaymentDetails.coachName}</span>
+            <div className="p-6 text-center">
+              <p className="text-gray-700 text-sm mb-2">
+                Your coaching session with <strong>{coachPaymentDetails.coachName}</strong> is confirmed.
+              </p>
+              <p className="text-gray-500 text-sm mb-5">
+                A confirmation email with the session link will be sent to <strong>{coachPaymentDetails.email}</strong>.
+              </p>
+
+              {/* Payment Details */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3 mb-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Amount Paid</span>
+                  <span className="text-sm font-bold text-gray-900">{coachPaymentDetails.amount}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Date & Time</span>
+                  <span className="text-sm font-medium text-gray-900">{coachPaymentDetails.date}, {coachPaymentDetails.time}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Transaction ID</span>
+                  <span className="text-xs font-mono text-gray-500 truncate">{coachPaymentDetails.transactionId}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500">Amount Paid</span>
-                <span className="text-sm font-semibold text-green-600">{coachPaymentDetails.amount}</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500">Email</span>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate ml-2">{coachPaymentDetails.email}</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500">Date & Time</span>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{coachPaymentDetails.date}, {coachPaymentDetails.time}</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-500">Transaction ID</span>
-                <span className="text-xs font-mono text-gray-500 truncate ml-2 max-w-[180px]">{coachPaymentDetails.transactionId}</span>
-              </div>
-            </div>
-            <div className="px-5 pb-5">
+
               <button
                 onClick={() => setShowCoachPaymentSuccess(false)}
-                className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-[#323956] to-[#4a5578] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
               >
-                <CheckCircle className="h-4 w-4" />
                 Done
               </button>
             </div>

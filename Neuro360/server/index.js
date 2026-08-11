@@ -1085,6 +1085,38 @@ const allowedOrigins = [
 ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 ];
 
+// ===== STRIPE CHECKOUT BRANDING =====
+// Single source of truth for the look of every Stripe Checkout page, so the
+// assessment / credits / frequencies / meditations / coaching / subscription
+// flows cannot drift apart again.
+const CHECKOUT_LOGO_PATH = '/LBL-Circular-Logo.png';
+
+// Resolve the asset host from the origin the payment actually started on, validated
+// against allowedOrigins so Stripe is never pointed at an attacker-supplied host.
+// Falls back to FRONTEND_URL. Nothing is hardcoded, so staging and production each
+// serve their own copy of the logo.
+function resolveCheckoutBase(req) {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) return origin;
+  return process.env.FRONTEND_URL || '';
+}
+
+// Omit `images` entirely when no base resolves — Stripe rejects a relative URL, and a
+// missing logo is better than a failed checkout session.
+function checkoutProductImages(req) {
+  const base = resolveCheckoutBase(req);
+  return base ? [`${base}${CHECKOUT_LOGO_PATH}`] : [];
+}
+
+// Card + Link (Apple Pay rides on 'card'), prefilled email, cardholder name, country.
+// No phone number and no forced billing address — keeps every checkout page to the
+// same approved shape.
+const CHECKOUT_UI = Object.freeze({
+  payment_method_types: ['card', 'link'],
+  billing_address_collection: 'auto',
+  customer_creation: 'always', // invisible on the form; lets Link reuse saved cards
+});
+
 // Setup all security and utility middleware
 setupMiddleware(app, allowedOrigins);
 
@@ -2285,7 +2317,7 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       line_items: [
         {
           price_data: {
@@ -2295,7 +2327,7 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
               description: isBundle
                 ? 'Unlock all 6 brainwave frequency packs: Delta, Theta, Alpha, Beta, Gamma, and Solfeggio frequencies for complete brain optimization.'
                 : `Unlock the full ${packName} frequency pack for enhanced brain performance.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: checkoutProductImages(req),
               metadata: {
                 pack_id: packId,
                 is_bundle: isBundle ? 'true' : 'false'
@@ -2312,8 +2344,8 @@ app.post('/api/create-frequency-checkout', async (req, res) => {
       // /dashboard/frequencies) instead of hardcoding the Vercel production URL.
       success_url: (req.body.successUrl && req.body.successUrl.includes('{CHECKOUT_SESSION_ID}'))
         ? req.body.successUrl
-        : `${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/dashboard/frequencies?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: req.body.cancelUrl || `${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/dashboard/frequencies?payment=cancelled`,
+        : `${resolveCheckoutBase(req)}/dashboard/frequencies?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: req.body.cancelUrl || `${resolveCheckoutBase(req)}/dashboard/frequencies?payment=cancelled`,
       metadata: {
         pack_id: packId,
         customer_email: customerEmail,
@@ -2379,7 +2411,7 @@ app.post('/api/create-meditation-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       line_items: [
         {
           price_data: {
@@ -2389,7 +2421,7 @@ app.post('/api/create-meditation-checkout', async (req, res) => {
               description: isBundle
                 ? 'Unlock all 6 guided meditation packs: Morning Awakening, Stress Relief, Focus & Clarity, Deep Sleep, Gratitude & Joy, and Body Healing.'
                 : `Unlock the full ${packName} meditation pack for enhanced mental wellness.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: checkoutProductImages(req),
               metadata: {
                 pack_id: packId,
                 is_bundle: isBundle ? 'true' : 'false',
@@ -2403,8 +2435,12 @@ app.post('/api/create-meditation-checkout', async (req, res) => {
       ],
       mode: 'payment',
       customer_email: customerEmail,
-      success_url: `${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/dashboard/meditations?meditation_payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/dashboard/meditations?meditation_payment=cancelled`,
+      // Honor the caller's return URLs (patient portal on its own origin, e.g.
+      // /dashboard/meditations) instead of hardcoding the frontend host.
+      success_url: (req.body.successUrl && req.body.successUrl.includes('{CHECKOUT_SESSION_ID}'))
+        ? req.body.successUrl
+        : `${resolveCheckoutBase(req)}/dashboard/meditations?meditation_payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: req.body.cancelUrl || `${resolveCheckoutBase(req)}/dashboard/meditations?meditation_payment=cancelled`,
       metadata: {
         pack_id: packId,
         customer_email: customerEmail,
@@ -2467,11 +2503,11 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     }
 
     let sessionConfig = {
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       mode: 'payment',
       customer_email: customerEmail,
-      success_url: successUrl || `${req.headers.origin}/dashboard?payment=success&tier=${tierId}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${req.headers.origin}/dashboard/subscription?payment=cancelled`,
+      success_url: successUrl || `${resolveCheckoutBase(req)}/dashboard?payment=success&tier=${tierId}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${resolveCheckoutBase(req)}/dashboard/subscription?payment=cancelled`,
       metadata: {
         tier: tierId,
         type: 'subscription',
@@ -2494,7 +2530,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
           product_data: {
             name: `Limitless Brain Lab ${tierName} Subscription`,
             description: `Access to ${tierName} features - Monthly subscription`,
-            images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/favicon.ico`]
+            images: checkoutProductImages(req)
           },
           unit_amount: Math.round(price * 100) // Convert to cents
         },
@@ -2829,7 +2865,7 @@ app.post('/api/create-report-checkout', async (req, res) => {
     // per-origin auth session survives the round-trip (a cross-origin return drops
     // the session and bounces the clinic to /login). Fall back to the staging
     // frontend domain (this is the staging build).
-    const baseUrl = req.headers.origin || 'https://limitlessbrainlab-eight.vercel.app';
+    const baseUrl = resolveCheckoutBase(req);
 
     if (!customerEmail || !amount || !currency) {
       return res.status(400).json({
@@ -2855,7 +2891,7 @@ app.post('/api/create-report-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       line_items: [
         {
           price_data: {
@@ -2863,7 +2899,7 @@ app.post('/api/create-report-checkout', async (req, res) => {
             product_data: {
               name: `${packageName} - ${reports} EEG Reports`,
               description: `Purchase ${reports} EEG brain reports for your clinic`,
-              images: [`${baseUrl}/IBW%20Logo.png`],
+              images: checkoutProductImages(req),
               metadata: {
                 package_id: packageId,
                 reports: reports.toString(),
@@ -3776,11 +3812,11 @@ app.post('/api/create-coaching-checkout', async (req, res) => {
     }
     const FRONTEND_URL = (requestOrigin && allowedOrigins.includes(requestOrigin))
       ? requestOrigin
-      : (process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app');
+      : resolveCheckoutBase(req);
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       line_items: [
         {
           price_data: {
@@ -3788,7 +3824,7 @@ app.post('/api/create-coaching-checkout', async (req, res) => {
             product_data: {
               name: `Brain Coaching Session with ${coachName}`,
               description: '30-minute online brain coaching session',
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: checkoutProductImages(req),
               metadata: {
                 type: 'coaching_session',
                 coach_id: coachId,
@@ -3870,7 +3906,7 @@ app.post('/api/create-assessment-checkout', async (req, res) => {
     const multiplier = currencyMultipliers[currency] || 100;
     const amountInSmallestUnit = Math.round(amount * multiplier);
 
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app';
+    const FRONTEND_URL = resolveCheckoutBase(req);
 
     // Redirect back to the EXACT domain the payment was started from (req.headers.origin),
     // so a patient paying on limitlessbrainlab.com is not bounced to the Vercel URL — where
@@ -3887,7 +3923,7 @@ app.post('/api/create-assessment-checkout', async (req, res) => {
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      ...CHECKOUT_UI,
       line_items: [
         {
           price_data: {
@@ -3895,7 +3931,7 @@ app.post('/api/create-assessment-checkout', async (req, res) => {
             product_data: {
               name: `${assessmentName} - Brain Assessment`,
               description: `Unlock your ${assessmentName} to understand your brain health better.`,
-              images: [`${process.env.FRONTEND_URL || 'https://limitlessbrainlab-eight.vercel.app'}/IBW%20Logo.png`],
+              images: checkoutProductImages(req),
               metadata: {
                 assessment_id: assessmentId,
                 type: 'assessment'
@@ -4704,8 +4740,12 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
         } else {
           // Handle frequency/meditation purchases
 
-          // Check if this is a meditation purchase (has type: 'meditation' in product metadata)
-          const isMeditationPurchase = session.metadata?.pack_id?.startsWith('solfeggio_') ||
+          // Meditation checkouts stamp metadata.type = 'meditation', so trust that first.
+          // The pack_id heuristic stays as a fallback for legacy sessions created before
+          // the meditations UI was pointed at /api/create-meditation-checkout — without it
+          // packs like 'gamma' (no 'solfeggio_' prefix) were filed as frequency purchases.
+          const isMeditationPurchase = paymentType === 'meditation' ||
+                                       session.metadata?.pack_id?.startsWith('solfeggio_') ||
                                        session.metadata?.pack_id?.includes('meditation');
 
           if (isMeditationPurchase) {

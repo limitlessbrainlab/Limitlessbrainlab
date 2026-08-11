@@ -38,7 +38,7 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
     const reportsCount = packageInfo.reportsIncluded || payment.reports || payment.reportsAllowed || 0;
     const amount = payment.amount || 0;
     const currency = payment.currency === 'USD' ? 'USD ' : '\u20b9';
-    const logoUrl = window.location.origin + '/IBW%20Logo.png';
+    const logoUrl = window.location.origin + '/IBW Logo.png';
 
     return `<!DOCTYPE html>
 <html>

@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import AccessControlService, { SUBSCRIPTION_TIERS } from '../services/accessControlService';
 import PaymentGatewayService from '../services/paymentGatewayService';
 import ContactFormPopup from '../components/ContactFormPopup';
+import PaymentSuccessModal from '../components/payment/PaymentSuccessModal';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
@@ -38,6 +39,9 @@ const PatientSubscription = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [localizedPackages, setLocalizedPackages] = useState([]);
   const [showContactForm, setShowContactForm] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successPaymentData, setSuccessPaymentData] = useState(null);
+  const [successPackageInfo, setSuccessPackageInfo] = useState(null);
 
   useEffect(() => {
     loadSubscription();
@@ -90,11 +94,29 @@ const PatientSubscription = () => {
           // Refresh subscription data from database to get accurate tier
           await loadSubscription();
           const subscription = await AccessControlService.getUserSubscription(user.email);
-          toast.success(`Successfully upgraded to ${subscription.tier}!`);
           // Clean URL
           window.history.replaceState({}, document.title, window.location.pathname);
-          // Redirect after delay
-          setTimeout(() => navigate('/dashboard'), 2000);
+
+          // Resolve the purchased tier's pricing for the receipt. `tierData`
+          // was referenced here but only ever declared inside handleUpgrade,
+          // so this threw a ReferenceError and the success modal never showed.
+          const paidTier = localizedPackages.find(pkg => pkg.id === subscription.tier)
+            || SUBSCRIPTION_TIERS[subscription.tier];
+
+          // Show success modal
+          setSuccessPaymentData({
+            paymentId: sessionId || `SUB-${Date.now()}`,
+            packageName: `${subscription.tier} Subscription`,
+            amount: paidTier?.price || 0,
+            createdAt: new Date().toISOString()
+          });
+          setSuccessPackageInfo({
+            tier: subscription.tier,
+            tierData: SUBSCRIPTION_TIERS[subscription.tier] || { reports: 0 },
+            reportsIncluded: subscription.reportsIncluded || 0
+          });
+          setShowSuccessModal(true);
+          setCurrentTier(subscription.tier);
         }
       } catch (error) {
         console.error('Payment callback error:', error);
@@ -151,13 +173,21 @@ const PatientSubscription = () => {
             );
 
             if (updateResult.success) {
-              toast.success(`Successfully upgraded to ${tierData.name}!`);
               setCurrentTier(tierId);
 
-              // Redirect to dashboard after 2 seconds
-              setTimeout(() => {
-                navigate('/dashboard');
-              }, 2000);
+              // Show success modal
+              setSuccessPaymentData({
+                paymentId: paymentData.paymentId || `SUB-${Date.now()}`,
+                packageName: `${tierData.name} Subscription`,
+                amount: tierData.price,
+                createdAt: new Date().toISOString()
+              });
+              setSuccessPackageInfo({
+                tier: tierId,
+                tierData: tierData,
+                reportsIncluded: tierData.reports || 0
+              });
+              setShowSuccessModal(true);
             }
           },
           onError: (error) => {
@@ -543,6 +573,16 @@ const PatientSubscription = () => {
       <ContactFormPopup
         isOpen={showContactForm}
         onClose={() => setShowContactForm(false)}
+      />
+
+      <PaymentSuccessModal
+        isOpen={showSuccessModal}
+        paymentData={successPaymentData}
+        packageInfo={successPackageInfo}
+        onClose={() => {
+          setShowSuccessModal(false);
+          navigate('/dashboard');
+        }}
       />
     </div>
   );
