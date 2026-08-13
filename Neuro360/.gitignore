@@ -110,6 +110,7 @@ supabase/.temp
 
 # Migration results
 migration-results-*.json
+e2e-tests/artifacts/
 
 # Monorepo
 pnpm-lock.yaml

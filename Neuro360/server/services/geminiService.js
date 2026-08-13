@@ -325,6 +325,13 @@ Generate the INFOGRAPHIC report now based on the brain parameters data provided 
       if (n.includes('pro')) return 2;
       return 3;
     };
+    // Exclude non-text models (image/tts/embedding) — they can't generate the
+    // JSON report and only waste a billed call + rate-limit wait on escalation.
+    const isTextModel = (name) => {
+      const n = name.toLowerCase();
+      if (n.includes('image') || n.includes('tts') || n.includes('embed') || n.includes('aqa')) return false;
+      return true;
+    };
     const push = (name) => { if (name && !chain.includes(name)) chain.push(name); };
     const chain = [];
 
@@ -334,15 +341,19 @@ Generate the INFOGRAPHIC report now based on the brain parameters data provided 
         const hit = available.find(m => m.name.toLowerCase().includes(explicit.toLowerCase()));
         if (hit) push(hit.name);
       }
-      // Then every other available model, cheapest tier first
+      // Then other available TEXT models, cheapest tier first
       [...available]
+        .filter(m => isTextModel(m.name))
         .sort((a, b) => tierOf(a.name) - tierOf(b.name))
         .forEach(m => push(m.name));
     }
 
+    // Hard cap: never escalate through more than 3 models, so a pathological
+    // validation failure can't burn many calls + rate-limit waits (timeout risk).
+    const capped = chain.slice(0, 3);
     // Last resort: couldn't enumerate models — try the configured default literally
-    if (!chain.length) chain.push(explicit || 'gemini-2.5-flash-lite');
-    return chain;
+    if (!capped.length) capped.push(explicit || 'gemini-2.5-flash-lite');
+    return capped;
   }
 
   /**
@@ -374,10 +385,14 @@ Generate the INFOGRAPHIC report now based on the brain parameters data provided 
     if (!reportData || !Array.isArray(reportData.parameters) || reportData.parameters.length === 0) {
       return { valid: false, reportData, reason: 'missing/empty parameters array' };
     }
+    // Normalize names the same way on both sides: input keys use '&' -> 'And'
+    // (transformToGeminiFormat), while Gemini returns display names like
+    // 'Focus & Attention'. Lowercase, '&' -> 'and', drop non-alphanumerics.
+    const norm = (s) => (s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
     const inputKeys = Object.keys(brainParameters).filter(k => brainParameters[k]);
     for (const key of inputKeys) {
       const inp = brainParameters[key];
-      const out = reportData.parameters.find(p => p && p.name && p.name.replace(/\s+/g, '') === key);
+      const out = reportData.parameters.find(p => p && p.name && norm(p.name) === norm(key));
       if (!out) return { valid: false, reportData, reason: `output missing ${key}` };
       if (inp.score !== undefined && out.score !== inp.score) {
         return { valid: false, reportData, reason: `score mismatch for ${key} (in=${inp.score} out=${out.score})` };
