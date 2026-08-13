@@ -1,5 +1,12 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
 const rateLimiter = require('./geminiRateLimiter'); // Shared rate limiter
+
+// Stage B (AI brain-performance report) result cache.
+// Keyed on hash(brainParameters + patient name + notes), so an identical
+// re-run returns the cached report for $0 and ANY change in scores, name,
+// or notes forces a fresh Gemini call. Mirrors QEEGParser's extractionCache.
+const reportCache = new Map();
 
 class GeminiService {
   constructor() {
@@ -114,18 +121,9 @@ class GeminiService {
       }
     });
 
-    // Test the model
-    console.log('📞 Testing model...');
-    try {
-      const testResult = await this.model.generateContent('Hello');
-      const testResponse = await testResult.response;
-      testResponse.text();
-      console.log('✅ Model initialized and tested successfully for PDF generation');
-    } catch (testError) {
-      console.error(`❌ Model test failed:`, testError.message);
-      throw new Error(`Failed to test model ${modelName}: ${testError.message}`);
-    }
-
+    // NOTE: no "Hello" probe call — it was a billed no-op on every cold init
+    // (the QEEG anti-pattern). The first real generateContent() validates it.
+    console.log('✅ Model initialized for PDF generation');
     return this.model;
   }
 
@@ -303,26 +301,125 @@ Generate the INFOGRAPHIC report now based on the brain parameters data provided 
   }
 
   /**
-   * Generate brain performance report using Gemini AI
-   * @param {Object} brainParameters - The 7 brain parameters with scores and buckets
+   * Resolve the Stage B report model chain, cheapest first.
+   * Primary tier is gemini-2.5-flash-lite (override via GEMINI_REPORT_MODEL),
+   * escalating to flash then pro only if a tier fails validation.
+   *
+   * Safety: ONLY models confirmed live by Google's /v1/models endpoint are
+   * tried, so a deprecated/absent model ID is never attempted (no wasted
+   * failed call or extra rate-limit delay per report). The configured default
+   * is used as a literal last resort only if the models list can't be fetched.
+   * @returns {Promise<string[]>} ordered model-name strings
+   */
+  async resolveReportModelChain() {
+    const explicit = process.env.GEMINI_REPORT_MODEL;
+    let available = [];
+    try { available = await this.fetchAvailableModels(); } catch (_) { /* ignore */ }
+
+    // Cheapest tier = 0. flash-lite beats flash (note: 'flash' is a substring
+    // of 'flash-lite', so check flash-lite first).
+    const tierOf = (name) => {
+      const n = name.toLowerCase();
+      if (n.includes('flash-lite') || n.includes('flashlite')) return 0;
+      if (n.includes('flash')) return 1;
+      if (n.includes('pro')) return 2;
+      return 3;
+    };
+    const push = (name) => { if (name && !chain.includes(name)) chain.push(name); };
+    const chain = [];
+
+    if (available.length) {
+      // Primary: explicitly configured model — but only if it's actually live
+      if (explicit) {
+        const hit = available.find(m => m.name.toLowerCase().includes(explicit.toLowerCase()));
+        if (hit) push(hit.name);
+      }
+      // Then every other available model, cheapest tier first
+      [...available]
+        .sort((a, b) => tierOf(a.name) - tierOf(b.name))
+        .forEach(m => push(m.name));
+    }
+
+    // Last resort: couldn't enumerate models — try the configured default literally
+    if (!chain.length) chain.push(explicit || 'gemini-2.5-flash-lite');
+    return chain;
+  }
+
+  /**
+   * Build a deterministic generative model handle for a given model name.
+   * Config matches the original (temperature 0, topK 1, topP 1). Thinking is
+   * intentionally left at default to preserve report quality.
+   */
+  getReportModelByName(modelName) {
+    return this.genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0, topK: 1, topP: 1 }
+    });
+  }
+
+  /**
+   * Validate a Gemini report response against the input scores.
+   * Quality gate: the cheap model's output is only accepted when every input
+   * parameter is present with EXACT score + bucket, and the JSON parsed.
+   * @returns {{valid:boolean, reportData?:Object, reason?:string}}
+   */
+  validateReport(text, brainParameters) {
+    let reportData;
+    try {
+      const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      reportData = JSON.parse(jsonText);
+    } catch (e) {
+      return { valid: false, reason: `JSON parse failed: ${e.message}` };
+    }
+    if (!reportData || !Array.isArray(reportData.parameters) || reportData.parameters.length === 0) {
+      return { valid: false, reportData, reason: 'missing/empty parameters array' };
+    }
+    const inputKeys = Object.keys(brainParameters).filter(k => brainParameters[k]);
+    for (const key of inputKeys) {
+      const inp = brainParameters[key];
+      const out = reportData.parameters.find(p => p && p.name && p.name.replace(/\s+/g, '') === key);
+      if (!out) return { valid: false, reportData, reason: `output missing ${key}` };
+      if (inp.score !== undefined && out.score !== inp.score) {
+        return { valid: false, reportData, reason: `score mismatch for ${key} (in=${inp.score} out=${out.score})` };
+      }
+      if (inp.bucket !== undefined && out.bucket !== inp.bucket) {
+        return { valid: false, reportData, reason: `bucket mismatch for ${key} (in=${inp.bucket} out=${out.bucket})` };
+      }
+    }
+    return { valid: true, reportData };
+  }
+
+  /**
+   * Generate brain performance report using Gemini AI.
+   *
+   * Cost optimised: tries gemini-2.5-flash-lite first and only escalates
+   * (flash -> 3-pro) if the output fails the score/bucket validation gate, so
+   * quality is guaranteed at the 3-pro floor while the cheap tier serves the
+   * common case. Results are cached by hash(brainParameters + cacheContext);
+   * a cache hit costs $0 and any score/name/notes change forces a miss.
+   *
+   * @param {Object} brainParameters - The brain parameters with scores and buckets
+   * @param {string} [cacheContext] - Patient name + notes folded into the cache key
    * @returns {Promise<Object>} Generated report structure
    */
-  async generateBrainPerformanceReport(brainParameters) {
+  async generateBrainPerformanceReport(brainParameters, cacheContext = '') {
     try {
-      console.log('\n🔑 Checking Gemini API configuration...');
-      console.log('   API Key exists:', !!this.apiKey);
-      console.log('   API Key length:', this.apiKey ? this.apiKey.length : 0);
-      console.log('   API Key preview:', this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'MISSING');
+      if (!this.genAI) {
+        throw new Error('Gemini API not initialized. Please check GEMINI_API_KEY.');
+      }
 
-      if (!this.model) {
-        console.log('📱 Initializing Gemini model...');
-        await this.initModel();
+      // --- CACHE CHECK (free re-runs; invalidates on any data/name/notes change) ---
+      const cacheKey = crypto
+        .createHash('md5')
+        .update(JSON.stringify(brainParameters) + '|' + (cacheContext || ''))
+        .digest('hex');
+      if (reportCache.has(cacheKey)) {
+        console.log(`\n💰 Stage B CACHE HIT — returning cached report ($0). Key=${cacheKey.slice(0, 8)}`);
+        return reportCache.get(cacheKey);
       }
 
       console.log('\n🤖 Generating brain performance report with Gemini AI...');
       console.log('📊 Input parameters count:', Object.keys(brainParameters).length);
-
-      // Log actual scores being sent
       console.log('📊 ACTUAL SCORES BEING SENT TO GEMINI:');
       Object.keys(brainParameters).forEach(key => {
         const param = brainParameters[key];
@@ -334,74 +431,67 @@ Generate the INFOGRAPHIC report now based on the brain parameters data provided 
       // Create the prompt with system instructions and data
       const systemPrompt = this.getReportGenerationPrompt();
       const dataPrompt = `\n\n⚠️ CRITICAL: Use these EXACT scores - do not modify them!\n\nBrain Parameters Data:\n${JSON.stringify(brainParameters, null, 2)}\n\n⚠️ REMINDER: Copy the score, maxScore, and bucket values EXACTLY as shown above. Do not generate your own scores!\n\nPlease generate the infographic report description in JSON format as specified.`;
-
       const fullPrompt = systemPrompt + dataPrompt;
       console.log('📝 Prompt length:', fullPrompt.length, 'characters');
 
-      // 🛡️ RATE LIMITING: Wait before making API call to respect quotas
-      await rateLimiter.waitForRateLimit();
+      // --- FALLBACK CHAIN: cheapest model first, escalate on validation failure ---
+      const chain = await this.resolveReportModelChain();
+      console.log(`💰 Report model chain: ${chain.join(' -> ')}`);
 
-      // Generate content
-      console.log('⏳ Calling Gemini API...');
-      const result = await this.model.generateContent(fullPrompt);
+      let lastText = null;
+      let lastReason = 'no model produced output';
+      for (let tier = 0; tier < chain.length; tier++) {
+        const modelName = chain[tier];
+        const model = this.getReportModelByName(modelName);
 
-      // ✅ Record successful API call for quota tracking
-      rateLimiter.recordRequest();
+        await rateLimiter.waitForRateLimit();
+        let text;
+        try {
+          console.log(`⏳ Calling Gemini (${modelName}) [tier ${tier}]...`);
+          const result = await model.generateContent(fullPrompt);
+          rateLimiter.recordRequest();
+          text = (await result.response).text();
+          console.log(`✅ ${modelName} responded (${text.length} chars)`);
+        } catch (callErr) {
+          console.warn(`⚠️ ${modelName} call failed: ${callErr.message} -> escalate`);
+          lastReason = `${modelName} call failed: ${callErr.message}`;
+          continue;
+        }
+        lastText = text;
 
-      const response = await result.response;
-      const text = response.text();
-
-      console.log('✅ Gemini response received!');
-      console.log('   Response length:', text.length, 'characters');
-
-      // Try to parse JSON from the response
-      let reportData;
-      try {
-        // Remove markdown code blocks if present
-        const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        reportData = JSON.parse(jsonText);
-
-        // Log what Gemini returned
-        console.log('\n📊 SCORES RETURNED BY GEMINI:');
-        if (reportData.parameters) {
-          reportData.parameters.forEach(param => {
+        const check = this.validateReport(text, brainParameters);
+        if (check.valid) {
+          console.log(`✅ ${modelName} VALIDATION PASSED — using this result`);
+          console.log('\n📊 SCORES RETURNED BY GEMINI:');
+          check.reportData.parameters.forEach(param => {
             console.log(`   ${param.name}: ${param.score}/${param.maxScore} (${param.bucket})`);
           });
-
-          // VALIDATION: Check if Gemini changed the scores
-          console.log('\n🔍 VALIDATING SCORES (Input vs Gemini Output):');
-          reportData.parameters.forEach(param => {
-            const paramKey = param.name.replace(/\s+/g, '');
-            const inputParam = brainParameters[paramKey];
-            if (inputParam) {
-              const scoreMatch = inputParam.score === param.score;
-              const bucketMatch = inputParam.bucket === param.bucket;
-              if (!scoreMatch || !bucketMatch) {
-                console.log(`   ⚠️ MISMATCH for ${param.name}:`);
-                console.log(`      Input:  score=${inputParam.score}, bucket=${inputParam.bucket}`);
-                console.log(`      Gemini: score=${param.score}, bucket=${param.bucket}`);
-              } else {
-                console.log(`   ✅ ${param.name}: Scores match correctly`);
-              }
-            }
-          });
+          const out = { success: true, data: check.reportData, rawResponse: text, model: modelName };
+          reportCache.set(cacheKey, out); // only cache validated results
+          return out;
         }
-      } catch (parseError) {
-        console.error('Failed to parse JSON response:', parseError);
-        // Return raw text if JSON parsing fails
-        reportData = {
-          title: 'Brain Performance Report',
-          rawContent: text,
-          parameters: [],
-          error: 'Failed to parse structured response'
-        };
+        console.warn(`⚠️ ${modelName} validation failed (${check.reason}) -> escalate`);
+        lastReason = check.reason;
       }
 
-      return {
-        success: true,
-        data: reportData,
-        rawResponse: text
-      };
+      // Every tier failed validation — return last best-effort, do NOT cache.
+      console.error('❌ All report model tiers failed validation; returning last best-effort (uncached).');
+      if (lastText) {
+        let bestEffort;
+        try {
+          const jsonText = lastText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          bestEffort = JSON.parse(jsonText);
+        } catch (_) {
+          bestEffort = {
+            title: 'Brain Performance Report',
+            rawContent: lastText,
+            parameters: [],
+            error: 'Failed to parse structured response'
+          };
+        }
+        return { success: true, data: bestEffort, rawResponse: lastText, degraded: true };
+      }
+      return { success: false, error: lastReason, data: null };
 
     } catch (error) {
       console.error('\n❌ === GEMINI API ERROR ===');

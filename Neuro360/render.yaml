@@ -24,6 +24,11 @@ services:
         value: "2000"
       - key: GEMINI_DAILY_LIMIT
         value: "50"
+      # Stage B (AI brain-performance report) model. Defaults to the cheapest
+      # tier (gemini-2.5-flash-lite); escalates to flash -> 3-pro only if the
+      # output fails the score/bucket validation gate.
+      - key: GEMINI_REPORT_MODEL
+        value: "gemini-2.5-flash-lite"
       - key: NEXAPROC_GATEWAY_URL
         value: http://187.127.176.1/neuro-sidecar
       - key: NEXAPROC_MASTER_KEY

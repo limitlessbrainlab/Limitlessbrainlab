@@ -318,8 +318,12 @@ class GeminiPdfGenerator {
     });
 
     try {
-      // Use Gemini service only
-      const result = await GeminiService.generateBrainPerformanceReport(brainParameters);
+      // Use Gemini service only.
+      // cacheContext = patient name + notes, folded into the Stage B cache key
+      // so an identical re-run is free ($0) and any name/notes/score change
+      // forces a fresh Gemini call.
+      const cacheContext = `${this.patientData?.name || ''}::${this.parameterNotes || ''}`;
+      const result = await GeminiService.generateBrainPerformanceReport(brainParameters, cacheContext);
 
       if (!result.success) {
         console.error(`❌ Gemini API returned error:`, result.error);
