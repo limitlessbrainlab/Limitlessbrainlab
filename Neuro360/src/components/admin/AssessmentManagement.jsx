@@ -104,6 +104,8 @@ const AssessmentManagement = () => {
         sale_price_aed: data.sale_price_aed ? parseFloat(data.sale_price_aed) : null,
         original_price_inr: data.original_price_inr ? parseFloat(data.original_price_inr) : null,
         sale_price_inr: data.sale_price_inr ? parseFloat(data.sale_price_inr) : null,
+        show_aed_price: data.show_aed_price === true || data.show_aed_price === 'true',
+        show_inr_price: data.show_inr_price === true || data.show_inr_price === 'true',
         display_order: parseInt(data.display_order) || 0,
         is_active: data.is_active === true || data.is_active === 'true',
         category: data.category || 'individual',
@@ -146,6 +148,8 @@ const AssessmentManagement = () => {
         sale_price_aed: data.sale_price_aed ? parseFloat(data.sale_price_aed) : null,
         original_price_inr: data.original_price_inr ? parseFloat(data.original_price_inr) : null,
         sale_price_inr: data.sale_price_inr ? parseFloat(data.sale_price_inr) : null,
+        show_aed_price: data.show_aed_price === true || data.show_aed_price === 'true',
+        show_inr_price: data.show_inr_price === true || data.show_inr_price === 'true',
         display_order: parseInt(data.display_order) || 0,
         is_active: data.is_active === true || data.is_active === 'true',
         category: data.category || 'individual',
@@ -225,6 +229,8 @@ const AssessmentManagement = () => {
     setValue('sale_price_aed', assessment.sale_price_aed || '');
     setValue('original_price_inr', assessment.original_price_inr || '');
     setValue('sale_price_inr', assessment.sale_price_inr || '');
+    setValue('show_aed_price', assessment.show_aed_price);
+    setValue('show_inr_price', assessment.show_inr_price);
     setValue('display_order', assessment.display_order || 0);
     setValue('is_active', assessment.is_active);
     setValue('category', assessment.category || 'individual');
@@ -250,6 +256,8 @@ const AssessmentManagement = () => {
       sale_price_aed: '',
       original_price_inr: '',
       sale_price_inr: '',
+      show_aed_price: true,
+      show_inr_price: true,
       bundle_includes: ''
     });
     setShowModal(true);
@@ -700,6 +708,29 @@ const AssessmentManagement = () => {
                     />
                   </div>
                 </div>
+
+                {/* Price Visibility: Show AED / INR price to customers */}
+                <div className="flex items-center space-x-6">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register('show_aed_price')}
+                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show AED price to customers</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register('show_inr_price')}
+                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show INR price to customers</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+                  USD pricing is always shown and remains the checkout currency.
+                </p>
 
                 {/* Submit Buttons */}
                 <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">

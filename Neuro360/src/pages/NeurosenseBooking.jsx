@@ -58,6 +58,8 @@ const NeurosenseBooking = () => {
           link: item.link || null,
           isFree: item.is_free,
           inquire: item.is_inquire,
+          showAedPrice: item.show_aed_price,
+          showInrPrice: item.show_inr_price,
           originalPrice: {
             usd: parseFloat(item.original_price_usd) || 0,
             ...(item.original_price_aed != null && { aed: parseFloat(item.original_price_aed) }),
@@ -379,10 +381,14 @@ const NeurosenseBooking = () => {
                               <span className="text-gray-400 line-through text-[10px] sm:text-xs md:text-sm">USD {service.originalPrice.usd}</span>
                               <span className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-[#323956] to-[#4A6FA5] bg-clip-text text-transparent">USD {service.salePrice.usd}</span>
                             </div>
-                            {service.originalPrice.aed && (
+                            {(service.originalPrice.aed || service.originalPrice.inr) && (
                               <div className="flex gap-2 sm:gap-3 text-[9px] sm:text-[10px] md:text-[11px] text-gray-400">
-                                <span><span className="line-through">AED {service.originalPrice.aed}</span> <span className="font-semibold text-[#323956]">AED {service.salePrice.aed}</span></span>
-                                <span><span className="line-through">INR {service.originalPrice.inr}</span> <span className="font-semibold text-[#323956]">INR {service.salePrice.inr}</span></span>
+                                {service.originalPrice.aed && service.showAedPrice !== false && (
+                                  <span><span className="line-through">AED {service.originalPrice.aed}</span> <span className="font-semibold text-[#323956]">AED {service.salePrice.aed}</span></span>
+                                )}
+                                {service.originalPrice.inr && service.showInrPrice !== false && (
+                                  <span><span className="line-through">INR {service.originalPrice.inr}</span> <span className="font-semibold text-[#323956]">INR {service.salePrice.inr}</span></span>
+                                )}
                               </div>
                             )}
                           </>
