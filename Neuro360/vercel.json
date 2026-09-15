@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path((?!send-report-email$).*)",
+      "source": "/api/:path",
       "destination": "https://limitlessbrainlab-backend.onrender.com/api/:path"
     },
     {

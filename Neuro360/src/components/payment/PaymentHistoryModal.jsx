@@ -8,7 +8,6 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   const packageInfo = payment.planDetails || {};
   const subscriptionInfo = payment.subscription || {};
   const paymentDetails = payment.paymentDetails || {};
-  
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -36,8 +35,8 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
     const invoiceNumber = `INV-${referenceId.toString().slice(-8).toUpperCase()}`;
     const txnId = `TXN-${(payment.paymentId || '').slice(-12).toUpperCase()}`;
     const ordId = `ORD-${(payment.orderId || '').slice(-12).toUpperCase()}`;
-    const pkgName = packageInfo.name || payment.packageName || 'EEG Reports';
-    const reportsCount = packageInfo.reportsIncluded || payment.reports || 0;
+    const pkgName = packageInfo.name || payment.packageName || payment.description || 'EEG Reports';
+    const reportsCount = packageInfo.reportsIncluded || payment.reports || payment.reportsAllowed || 0;
     const amount = payment.amount || 0;
     const currency = payment.currency === 'USD' ? 'USD ' : '\u20b9';
     const logoUrl = window.location.origin + '/IBW Logo.png';
@@ -195,7 +194,7 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
   const downloadInvoice = () => {
     try {
       const htmlContent = generateInvoiceHTML();
-      const dataBlob = new Blob([htmlContent], { type: 'text/html' });
+      const dataBlob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(dataBlob);
       const suffix = referenceId.toString().slice(-8).toUpperCase() || 'DETAILS';
       const link = document.createElement('a');
@@ -260,13 +259,13 @@ const PaymentHistoryModal = ({ isOpen, payment, onClose }) => {
                 <span className="text-gray-600">Transaction ID:</span>
                 <div
                   className="font-mono text-gray-900 bg-white px-2 py-1 rounded mt-1 cursor-pointer hover:bg-gray-50 truncate text-xs"
-                  title={payment.paymentId}
+                  title={referenceId.toString()}
                   onClick={() => {
-                    navigator.clipboard.writeText(payment.paymentId || '');
+                    navigator.clipboard.writeText(referenceId.toString());
                     toast.success('Transaction ID copied!');
                   }}
                 >
-                  TXN-{(payment.paymentId || '').slice(-12).toUpperCase()}
+                  TXN-{referenceId.toString().slice(-12).toUpperCase()}
                 </div>
               </div>
               <div>

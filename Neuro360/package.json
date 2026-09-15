@@ -13,6 +13,7 @@
     "lint": "eslint . --ext js,jsx",
     "preview": "vite preview",
     "test:limits": "node test-upload-limits.js",
+    "test:acceptance": "node e2e-tests/acceptance-audit.cjs",
     "migrate:trigger": "node apply-migration.js",
     "verify:razorpay": "node verify-razorpay-config.js",
     "verify:storage": "node verify-single-bucket.js"

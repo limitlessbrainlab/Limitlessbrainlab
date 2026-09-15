@@ -47,6 +47,19 @@ async function claimNotificationOnce(key) {
   }
 }
 
+// A notification claim must not permanently suppress a payment email when the
+// relay/provider fails after the claim is inserted. The webhook or the landing
+// page verification can then retry the same session safely.
+async function releaseNotificationClaim(key) {
+  if (!key || !supabase) return;
+  try {
+    const { error } = await supabase.from('sent_notifications').delete().eq('dedupe_key', key);
+    if (error) console.warn('releaseNotificationClaim error:', error.message);
+  } catch (e) {
+    console.warn('releaseNotificationClaim exception:', e.message);
+  }
+}
+
 // Initialize Stripe (conditionally)
 let stripe = null;
 if (process.env.STRIPE_SECRET_KEY) {
@@ -2829,10 +2842,6 @@ app.get('/api/stripe/verify-session/:sessionId', async (req, res) => {
           attachments: getFullAttachments()
         };
 
-        emailTransporter.sendMail(confirmationMail)
-          .then(() => console.log(`SUCCESS: ${paymentType === 'assessment' ? 'Assessment' : 'Payment confirmation'} email sent to ${customerEmail} (verify-session)`))
-          .catch(err => console.error('Payment confirmation email failed:', err.message));
-
         // Also notify admin
         const adminMail = {
           from: EMAIL_FROM,
@@ -2849,8 +2858,16 @@ app.get('/api/stripe/verify-session/:sessionId', async (req, res) => {
           attachments: getLogoAttachment()
         };
 
-        emailTransporter.sendMail(adminMail)
-          .catch(err => console.error('Admin payment email failed:', err.message));
+        try {
+          await Promise.all([
+            emailTransporter.sendMail(confirmationMail),
+            emailTransporter.sendMail(adminMail)
+          ]);
+          console.log(`SUCCESS: ${paymentType === 'assessment' ? 'Assessment' : 'Payment confirmation'} emails sent for ${sessionId} (verify-session)`);
+        } catch (err) {
+          await releaseNotificationClaim(emailClaimKey);
+          console.error('Payment confirmation emails failed; claim released for retry:', err.message);
+        }
       }
 
     } else {
@@ -3249,6 +3266,45 @@ async function applySubscriptionPurchase(session) {
     created_at: new Date().toISOString()
   }, { onConflict: 'stripe_session_id', ignoreDuplicates: true })
     .then(({ error: e }) => { if (e) console.warn('applySubscriptionPurchase payments insert skipped:', e.message); });
+
+  // Keep the patient wallet's subscription tab in sync with the authoritative
+  // Stripe fulfillment. The wallet UI reads this table first, so recording the
+  // purchase here prevents a successful plan/credit purchase from appearing
+  // only in payment history while the subscription tab remains empty.
+  try {
+    const walletPlanName = `${tier} Plan`;
+    const { data: walletRows, error: walletReadError } = await supabase
+      .from('wallet_subscriptions')
+      .select('id, name, plan, status')
+      .eq('patient_email', email);
+    if (!walletReadError) {
+      const existingWalletRow = (walletRows || []).find((row) =>
+        String(row.name || '').toLowerCase() === walletPlanName.toLowerCase() ||
+        String(row.plan || '').toLowerCase() === tier.toLowerCase()
+      );
+      const walletSubscription = {
+        patient_email: email,
+        name: walletPlanName,
+        plan: tier,
+        status: 'Active',
+        amount,
+        period: 'mo',
+        icon: 'star',
+        updated_at: new Date().toISOString()
+      };
+      if (existingWalletRow?.id) {
+        await supabase.from('wallet_subscriptions').update(walletSubscription).eq('id', existingWalletRow.id);
+      } else {
+        await supabase.from('wallet_subscriptions').insert(walletSubscription);
+      }
+    } else {
+      console.warn('applySubscriptionPurchase wallet subscription lookup skipped:', walletReadError.message);
+    }
+  } catch (walletError) {
+    // Do not turn a paid Stripe checkout into a failure if this legacy wallet
+    // table is unavailable; payment_history remains the source of truth.
+    console.warn('applySubscriptionPurchase wallet subscription sync skipped:', walletError.message);
+  }
 
   // 3. One-shot side effects: only the first caller for this session runs them.
   const firstTime = await claimNotificationOnce(`subscription:${session.id}:granted`);
@@ -4582,22 +4638,30 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
             }
           }
 
-          // Save to payments table for SuperAdmin dashboard (both sources)
-          await supabase.from('payments').insert({
-            clinic_id: metaClinicId || null,
-            patient_email: session.customer_email.toLowerCase(),
-            amount: session.amount_total / 100,
-            currency: session.currency?.toUpperCase() || 'USD',
-            status: 'completed',
-            type: 'assessment',
-            package_name: assessmentName || 'Brain Assessment',
-            payment_method: 'stripe',
-            payment_id: session.payment_intent || session.id,
-            stripe_payment_id: session.payment_intent || session.id,
-            stripe_session_id: session.id,
-            source: purchaseSource,
-            created_at: new Date().toISOString()
-          }).catch(err => console.warn('payments table insert skipped:', err.message));
+          // Save to payments table for SuperAdmin dashboard (both sources).
+          // The routed Supabase client is thenable but does not expose a
+          // Promise.catch method; keep this audit write from stopping the
+          // payment email path when the insert fails.
+          try {
+            const { error: paymentInsertError } = await supabase.from('payments').insert({
+              clinic_id: metaClinicId || null,
+              patient_email: session.customer_email.toLowerCase(),
+              amount: session.amount_total / 100,
+              currency: session.currency?.toUpperCase() || 'USD',
+              status: 'completed',
+              type: 'assessment',
+              package_name: assessmentName || 'Brain Assessment',
+              payment_method: 'stripe',
+              payment_id: session.payment_intent || session.id,
+              stripe_payment_id: session.payment_intent || session.id,
+              stripe_session_id: session.id,
+              source: purchaseSource,
+              created_at: new Date().toISOString()
+            });
+            if (paymentInsertError) console.warn('payments table insert skipped:', paymentInsertError.message);
+          } catch (paymentInsertException) {
+            console.warn('payments table insert skipped:', paymentInsertException.message);
+          }
 
           // One-time gate URL replaces the raw JotForm link in the email
           let assessmentTakeUrl = null;
@@ -4625,8 +4689,9 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
             : false;
 
           // Send assessment link email to customer
+          let assessmentMailOptions = null;
           if (assessmentEmailsClaimed && assessmentEmailLink) {
-            const assessmentMailOptions = {
+            assessmentMailOptions = {
               from: EMAIL_FROM,
               to: session.customer_email,
               subject: `Your ${assessmentName} is ready - Limitless Brain Lab`,
@@ -4640,13 +4705,10 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
               })
             };
 
-            emailTransporter.sendMail(assessmentMailOptions)
-              .then(() => console.log(`SUCCESS: Assessment email sent to ${session.customer_email} (webhook)`))
-              .catch(err => console.error('Assessment email sending failed:', err.message));
           }
 
           // Also notify admin about the purchase
-          if (assessmentEmailsClaimed) {
+          if (assessmentEmailsClaimed && assessmentMailOptions) {
             const adminMailOptions = {
               from: EMAIL_FROM,
               to: process.env.EMAIL_TO || process.env.EMAIL_USER,
@@ -4666,8 +4728,16 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
               `
             };
 
-            emailTransporter.sendMail(adminMailOptions)
-              .catch(err => console.error('Admin email failed:', err.message));
+            try {
+              await Promise.all([
+                emailTransporter.sendMail(assessmentMailOptions),
+                emailTransporter.sendMail(adminMailOptions)
+              ]);
+              console.log(`SUCCESS: Assessment emails sent to ${session.customer_email} (webhook)`);
+            } catch (err) {
+              await releaseNotificationClaim(`assessment:${session.id}:emails`);
+              console.error('Assessment emails failed; claim released for retry:', err.message);
+            }
           }
 
         } else if (paymentType === 'clinic_report') {

@@ -261,6 +261,16 @@ const Wallet = () => {
         })));
       }
 
+      // Existing accounts may have a successfully granted patient tier even
+      // when an older payment callback failed to write payment_history.
+      const { data: patientSubscriptionRows } = await supabase
+        .from('patients')
+        .select('subscription_tier, subscription_status')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const currentPatientSubscription = patientSubscriptionRows?.[0];
+
       // 6. patient_payments — the unified table EVERY patient purchase writes to
       // (coaching, frequency, meditation, assessment). Coaching is written ONLY
       // here, so without this read it never appears in the Wallet. Pushed last so
@@ -301,8 +311,8 @@ const Wallet = () => {
       allPurchases.sort((a, b) => new Date(b.date) - new Date(a.date));
       setPurchases(allPurchases);
 
-      // Fetch subscriptions — prefer admin-managed wallet_subscriptions,
-      // otherwise derive from the patient's real subscription payments.
+      // Fetch subscriptions from both sources. Stripe purchases are recorded in
+      // payment_history, while wallet_subscriptions contains managed entries.
       const { data: subs } = await supabase
         .from('wallet_subscriptions')
         .select('*')
@@ -310,9 +320,7 @@ const Wallet = () => {
         .order('created_at', { ascending: false });
 
       const iconMap = { 'star': Star, 'music': Music, 'video': Video, 'users': Users };
-      let subscriptionsForUi;
-      if (subs && subs.length > 0) {
-        subscriptionsForUi = subs.map(s => ({
+      const managedSubscriptions = (subs || []).map(s => ({
           id: s.id,
           name: s.name || s.plan_name || 'Subscription',
           plan: s.plan || s.plan_name || 'Plan',
@@ -320,29 +328,46 @@ const Wallet = () => {
           status: normalizeSubscriptionStatus(s.status),
           amount: Number(s.amount) || 0,
           period: s.period || 'mo',
-          icon: iconMap[s.icon] || Star
+          icon: iconMap[s.icon] || Star,
+          source: 'wallet'
         }));
-      } else {
-        // Derive one entry per distinct subscription tier (latest payment wins)
-        const subPayments = (payHist || []).filter(p => p.payment_type === 'subscription' || p.tier);
-        const byTier = {};
-        subPayments.forEach(p => {
-          const key = p.tier || 'Subscription';
-          if (!byTier[key] || new Date(p.created_at) > new Date(byTier[key].created_at)) {
-            byTier[key] = p;
-          }
-        });
-        subscriptionsForUi = Object.entries(byTier).map(([tier, p]) => ({
-          id: p.id,
-          name: `${tier} Plan`,
-          plan: 'Subscription',
-          renewal: '-',
-          status: normalizeSubscriptionStatus(p.status),
-          amount: Number(p.amount) || 0,
-          period: 'mo',
-          icon: Star
-        }));
+      // Derive one entry per tier from payment history (latest payment wins),
+      // then add plans not already represented by a managed row.
+      const subPayments = (payHist || []).filter(p => p.payment_type === 'subscription' || p.tier);
+      const byTier = {};
+      subPayments.forEach(p => {
+        const key = String(p.tier || 'Subscription').toLowerCase();
+        if (!byTier[key] || new Date(p.created_at) > new Date(byTier[key].created_at)) byTier[key] = p;
+      });
+      const patientTier = String(currentPatientSubscription?.subscription_tier || '').trim();
+      if (patientTier && patientTier.toLowerCase() !== 'free') {
+        const patientTierKey = patientTier.toLowerCase();
+        if (!byTier[patientTierKey]) {
+          byTier[patientTierKey] = {
+            id: `patient-${email}-${patientTierKey}`,
+            tier: patientTier,
+            status: currentPatientSubscription.subscription_status || 'active',
+            amount: 0,
+            created_at: new Date().toISOString()
+          };
+        }
       }
+      const paymentSubscriptions = Object.entries(byTier).map(([tierKey, p]) => ({
+        id: `payment-${p.id}`,
+        name: `${p.tier || tierKey} Plan`,
+        plan: 'Subscription',
+        renewal: '-',
+        status: normalizeSubscriptionStatus(p.status),
+        amount: Number(p.amount) || 0,
+        period: 'mo',
+        icon: Star,
+        source: 'payment'
+      }));
+      const managedPlanKeys = new Set(managedSubscriptions.map(s => String(s.name || '').replace(/\s+Plan$/i, '').toLowerCase()));
+      const subscriptionsForUi = [
+        ...managedSubscriptions,
+        ...paymentSubscriptions.filter(s => !managedPlanKeys.has(String(s.name).replace(/\s+Plan$/i, '').toLowerCase()))
+      ];
       setSubscriptions(subscriptionsForUi);
 
       // Fetch current active subscription tier from patients table
@@ -1261,7 +1286,7 @@ const Wallet = () => {
                       >
                         Change Plan
                       </button>
-                      {sub.status === 'Active' ? (
+                      {sub.source === 'wallet' && sub.status === 'Active' ? (
                         <button
                           onClick={() => handleToggleSubscription(sub.id, sub.status)}
                           className="px-2.5 sm:px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-xs sm:text-sm hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors flex items-center"
@@ -1269,7 +1294,7 @@ const Wallet = () => {
                           <Pause className="h-3 w-3 mr-1" />
                           Pause
                         </button>
-                      ) : sub.status === 'Paused' ? (
+                      ) : sub.source === 'wallet' && sub.status === 'Paused' ? (
                         <button
                           onClick={() => handleToggleSubscription(sub.id, sub.status)}
                           className="px-2.5 sm:px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs sm:text-sm hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center"
@@ -1278,12 +1303,14 @@ const Wallet = () => {
                           Resume
                         </button>
                       ) : null}
-                      <button
-                        onClick={() => handleCancelSubscription(sub.id)}
-                        className="px-2.5 sm:px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-xs sm:text-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                      >
-                        Cancel
-                      </button>
+                      {sub.source === 'wallet' && (
+                        <button
+                          onClick={() => handleCancelSubscription(sub.id)}
+                          className="px-2.5 sm:px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-xs sm:text-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
