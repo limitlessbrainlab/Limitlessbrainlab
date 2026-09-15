@@ -271,6 +271,33 @@ ${pdfText}`;
 }
 
 /**
+ * Self-heal: the build step (`npx puppeteer browsers install chrome`) is
+ * supposed to leave Chrome in place for runtime, but PaaS filesystems (Render
+ * free tier included) don't always preserve that reliably between build and
+ * run. Rather than fail every report until someone redeploys, install it on
+ * the spot the first time it's missing — one-time ~30-60s cost, then every
+ * later render on this running instance finds it immediately.
+ */
+function ensureChromeInstalled() {
+  const fs = require('fs');
+  const puppeteer = require('puppeteer');
+  const execPath = puppeteer.executablePath();
+  if (fs.existsSync(execPath)) return;
+  console.warn(`[Puppeteer] Chrome not found at ${execPath} — installing now...`);
+  const { execSync } = require('child_process');
+  const path = require('path');
+  try {
+    execSync('npx puppeteer browsers install chrome', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+  } catch (err) {
+    throw new Error(`Chrome is missing and the on-demand install failed: ${err.message}`);
+  }
+  if (!fs.existsSync(execPath)) {
+    throw new Error(`Chrome install ran but the binary still isn't at the expected path: ${execPath}`);
+  }
+  console.log('[Puppeteer] Chrome installed successfully.');
+}
+
+/**
  * Render an HTML string to a PDF Buffer using the Puppeteer Chrome installed on
  * THIS backend at build time (`npx puppeteer browsers install chrome`, cached in
  * PUPPETEER_CACHE_DIR). The 12-page report template is authored for A4 portrait,
@@ -280,6 +307,7 @@ ${pdfText}`;
  */
 async function renderPdfWithPuppeteer(html) {
   const puppeteer = require('puppeteer');
+  ensureChromeInstalled();
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
