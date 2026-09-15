@@ -1,21 +1,11 @@
-const axios = require('axios');
 const GeminiService = require('./geminiService');
 
 /**
  * Performance Report AI + rendering support.
  *
- * Gemini transcribes the qEEG PDF values and writes the narrative. The Nexaproc
- * gateway remains responsible for learned-example storage and primary HTML-to-PDF
- * rendering, with local Puppeteer as the existing render fallback.
- *
- * Neuro's backend is the "sidecar": the browser never talks to the VPS
- * directly — it calls our route, which forwards to the gateway here.
+ * Gemini transcribes the qEEG PDF values and writes the narrative. HTML-to-PDF
+ * rendering runs locally on this backend via Puppeteer.
  */
-
-const GATEWAY_URL = process.env.NEXAPROC_GATEWAY_URL || 'http://187.127.176.1/neuro-sidecar';
-const MASTER_KEY = process.env.NEXAPROC_MASTER_KEY || '';
-// Gateway caps the JSON body at 1MB; keep the extracted text well under it.
-const MAX_TEXT_CHARS = 200000;
 
 /**
  * Build the doctor-readable narrative prompt from the deterministic report data.
@@ -163,55 +153,14 @@ function parseGatewayJson(responseData) {
 }
 
 /**
- * Fetch the last N saved report examples from the VPS for few-shot prompting.
- * Returns [] on any error — never blocks report generation.
+ * Learned-example few-shot storage was backed by the now-decommissioned VPS
+ * gateway. Kept as no-ops so callers don't need to change.
  */
-// Reports generated while the scoring bug was live described stress/burnout as
-// "0% / zero regulation / critically low recovery". Those narratives were saved
-// to the VPS example store and would otherwise be fed back as "match this style"
-// few-shot examples, propagating the broken framing even after the numbers are
-// fixed. Drop any such poisoned example before it reaches the prompt.
-function isPoisonedExample(ex) {
-  const s = typeof ex === 'string' ? ex : JSON.stringify(ex || '');
-  return /zero stress regulation|stress regulation at 0|burnout resistance at 0|0%\s*means|critically low recovery/i.test(s);
-}
-
 async function fetchReportExamples() {
-  if (!MASTER_KEY || !GATEWAY_URL) return [];
-  try {
-    const response = await axios.get(`${GATEWAY_URL}/api/report-examples`, {
-      headers: { 'X-Nexaproc-Key': MASTER_KEY },
-      timeout: 10000,
-    });
-    const examples = Array.isArray(response.data?.examples) ? response.data.examples : [];
-    const clean = examples.filter((ex) => !isPoisonedExample(ex));
-    if (clean.length !== examples.length) {
-      console.warn(`[fetchReportExamples] dropped ${examples.length - clean.length} poisoned (0%-stress) example(s) from few-shot set`);
-    }
-    return clean;
-  } catch (e) {
-    console.warn('[fetchReportExamples] could not fetch examples:', e.message);
-    return [];
-  }
+  return [];
 }
 
-/**
- * Fire-and-forget: save a generated narrative as a learned example on the VPS.
- * Never throws — never blocks the caller.
- */
-function saveReportExample(narrative, patient) {
-  if (!MASTER_KEY || !GATEWAY_URL) return;
-  // Never feed a broken 0%-stress narrative back into the learned-example store.
-  if (isPoisonedExample(narrative)) {
-    console.warn('[saveReportExample] skipped saving a poisoned (0%-stress) narrative as a learned example');
-    return;
-  }
-  axios.post(
-    `${GATEWAY_URL}/api/save-example`,
-    { narrative, patient },
-    { headers: { 'X-Nexaproc-Key': MASTER_KEY, 'Content-Type': 'application/json' }, timeout: 10000 }
-  ).catch((e) => console.warn('[saveReportExample] failed to save example:', e.message));
-}
+function saveReportExample() {}
 
 /**
  * Ask Gemini for the report narrative blocks.
@@ -324,13 +273,12 @@ ${pdfText}`;
 /**
  * Render an HTML string to a PDF Buffer using the Puppeteer Chrome installed on
  * THIS backend at build time (`npx puppeteer browsers install chrome`, cached in
- * PUPPETEER_CACHE_DIR). Used as the fallback when the VPS render endpoint is
- * down. The 12-page report template is authored for A4 portrait, margin 0, with
- * printBackground (see templates/brainReport12Page.js).
+ * PUPPETEER_CACHE_DIR). The 12-page report template is authored for A4 portrait,
+ * margin 0, with printBackground (see templates/brainReport12Page.js).
  * @param {string} html  Complete HTML document string.
  * @returns {Promise<Buffer>}  PDF bytes.
  */
-async function renderHtmlLocally(html) {
+async function renderPdfWithPuppeteer(html) {
   const puppeteer = require('puppeteer');
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -349,57 +297,79 @@ async function renderHtmlLocally(html) {
   }
 }
 
+// Each render launches a full headless Chromium instance, which is the main
+// memory cost of this backend (esp. on Render's free 512MB plan). Cap how many
+// run at once — extra requests wait their turn instead of piling up Chromium
+// instances and risking an OOM kill. Bump via env once on a bigger plan.
+const MAX_CONCURRENT_PDF_RENDERS = Math.max(1, parseInt(process.env.MAX_CONCURRENT_PDF_RENDERS || '1', 10));
+let activeRenders = 0;
+const renderWaitQueue = []; // FIFO of { resolve, onQueued }
+
+function notifyQueuePositions() {
+  renderWaitQueue.forEach((waiter, idx) => {
+    const position = idx + 1;
+    if (waiter.lastPos === position) return; // avoid redundant identical updates
+    waiter.lastPos = position;
+    if (typeof waiter.onQueued === 'function') waiter.onQueued(position);
+  });
+}
+
 /**
- * Render a fully-built HTML string to a PDF, VPS-first with a local fallback.
- * Primary: the VPS gateway's headless Chromium (keeps this free-tier backend
- * light). Fallback: if the VPS render is unavailable (e.g. its Chromium worker
- * is down → nginx 502), render locally with this backend's bundled Puppeteer so
- * a VPS outage doesn't break report generation.
+ * Resolves once a render slot is free. Calls `onQueued(position)` (1-based)
+ * every time this caller's place in line changes, and `onQueued(0)` the
+ * moment it's granted a slot — but only if it was ever queued in the first
+ * place, so the common (no contention) case fires no callback at all.
+ */
+function acquireRenderSlot(onQueued) {
+  return new Promise((resolve) => {
+    if (activeRenders < MAX_CONCURRENT_PDF_RENDERS) {
+      activeRenders++;
+      resolve();
+      return;
+    }
+    renderWaitQueue.push({ resolve, onQueued });
+    notifyQueuePositions();
+  });
+}
+
+function releaseRenderSlot() {
+  activeRenders--;
+  const next = renderWaitQueue.shift();
+  if (next) {
+    activeRenders++;
+    if (typeof next.onQueued === 'function') next.onQueued(0);
+    next.resolve();
+  }
+  notifyQueuePositions();
+}
+
+/**
+ * Queued wrapper around renderPdfWithPuppeteer — see MAX_CONCURRENT_PDF_RENDERS.
  * @param {string} html  Complete HTML document string.
+ * @param {function} [onQueued]  Called with the 1-based queue position while
+ *   waiting, and with 0 once rendering actually starts (only if it had to wait).
  * @returns {Promise<Buffer>}  PDF bytes.
  */
-async function renderHtmlOnVps(html) {
-  if (MASTER_KEY) {
-    const opts = {
-      headers: { 'X-Nexaproc-Key': MASTER_KEY, 'Content-Type': 'application/json' },
-      timeout: 60000,
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      responseType: 'arraybuffer',
-    };
-    try {
-      const response = await axios.post(`${GATEWAY_URL}/api/html-to-pdf`, { html }, opts);
-      return Buffer.from(response.data);
-    } catch (err) {
-      console.warn(`[renderHtmlOnVps] VPS render failed (${err.response?.status || ''} ${err.message}); falling back to local Puppeteer render.`);
-    }
-  }
+async function renderReportHtmlToPdf(html, onQueued) {
+  await acquireRenderSlot(onQueued);
   try {
-    return await renderHtmlLocally(html);
-  } catch (localErr) {
-    throw new Error(`PDF render failed (VPS unavailable and local Puppeteer render failed: ${localErr.message}).`);
+    return await renderPdfWithPuppeteer(html);
+  } finally {
+    releaseRenderSlot();
   }
 }
 
 /**
- * Fire-and-forget: post an error lesson to the VPS gateway so Claude CLI
- * learns from it via CLAUDE.md on the next invocation. Never throws.
+ * Error-lesson logging was backed by the now-decommissioned VPS gateway. Kept
+ * as a no-op so callers don't need to change.
  */
-function postLesson(stage, error, lesson) {
-  if (!MASTER_KEY || !GATEWAY_URL) return;
-  axios.post(
-    `${GATEWAY_URL}/api/report-lesson`,
-    { stage, error: String(error).slice(0, 300), lesson },
-    { headers: { 'X-Nexaproc-Key': MASTER_KEY, 'Content-Type': 'application/json' }, timeout: 5000 }
-  ).catch((e) => console.warn('[postLesson] failed to save lesson:', e.message));
-}
+function postLesson() {}
 
 module.exports = {
   generateReportNarrative,
   extractReportSource,
-  renderHtmlOnVps,
+  renderReportHtmlToPdf,
   postLesson,
   fetchReportExamples,
   saveReportExample,
-  GATEWAY_URL,
 };

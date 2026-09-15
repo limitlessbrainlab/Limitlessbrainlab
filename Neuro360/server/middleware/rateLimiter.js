@@ -12,7 +12,6 @@ const rateLimit = require('express-rate-limit');
 const POLLED_PATHS = new Set([
   '/api/health',
   '/api/app-version',
-  '/api/qeeg/claude-report/health',
 ]);
 
 const apiLimiter = rateLimit({

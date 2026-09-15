@@ -24,10 +24,10 @@ services:
         value: "2000"
       - key: GEMINI_DAILY_LIMIT
         value: "50"
-      - key: NEXAPROC_GATEWAY_URL
-        value: http://187.127.176.1/neuro-sidecar
-      - key: NEXAPROC_MASTER_KEY
-        sync: false
+      # Max simultaneous Puppeteer/Chromium renders for the Performance Report.
+      # Keep at 1 on the free 512MB plan; raise only after upgrading the plan.
+      - key: MAX_CONCURRENT_PDF_RENDERS
+        value: "1"
       - key: CLAUDE_REPORT_TOKEN
         sync: false
       # Gates the /api/patient-documents endpoints (private patients_documents

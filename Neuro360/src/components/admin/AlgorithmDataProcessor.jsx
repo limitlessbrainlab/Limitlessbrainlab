@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Play, Download, FileText, CheckCircle, Activity, User, Building2, Calendar, History, X, ArrowLeft, Search, Filter, Send, Loader2, RefreshCw } from 'lucide-react';
+import { Upload, Play, Download, FileText, CheckCircle, Activity, User, Building2, Calendar, History, X, ArrowLeft, Search, Filter, Send, Loader2, RefreshCw, Clock } from 'lucide-react';
 import DatabaseService from '../../services/databaseService';
 import SupabaseService from '../../services/supabaseService';
 import toast from 'react-hot-toast';
@@ -123,10 +123,11 @@ const AlgorithmDataProcessor = () => {
   // Live progress for the Claude report (fed by the backend SSE stream).
   const [claudeProgress, setClaudeProgress] = useState(0);
   const [claudeStages, setClaudeStages] = useState([]); // [{ key, label, status, elapsedMs }]
+  // >0 while waiting for a free Puppeteer render slot (another report is rendering).
+  const [claudeQueuePosition, setClaudeQueuePosition] = useState(0);
   // Selected patient's clinic credit status (for the exhausted alert + gating).
   const [creditStatus, setCreditStatus] = useState({ exhausted: false, remaining: Infinity, clinic: null });
   const claudeCreepRef = useRef(null); // interval id for intra-stage bar "creep"
-  const sidecarAbortReasonRef = useRef(null); // 'SIDECAR_DOWN' | null — set before aborting controller
 
   // Debug function to check database contents
   useEffect(() => {
@@ -1331,44 +1332,6 @@ const AlgorithmDataProcessor = () => {
     // Hard block performance-report generation when the clinic has no credits left.
     if (await blockIfNoCredits(selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id)) return;
 
-    // Pre-flight: check sidecar is alive before starting the long upload.
-    // A single transient failure (429 from the API rate limiter, brief network blip) must not
-    // hard-block report generation, so we time-box each attempt and retry once before giving up.
-    const preflightApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-    setConsoleLog(prev => [...prev, '🔍 Checking sidecar health...']);
-    const checkSidecarHealth = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      try {
-        const hRes = await fetch(`${preflightApiUrl}/qeeg/claude-report/health`, { signal: controller.signal });
-        const hData = await hRes.json().catch(() => ({}));
-        if (hRes.status === 429) throw new Error('The report service is busy. Retrying…');
-        if (!hRes.ok || !hData.ok) throw new Error(hData.error || 'Sidecar offline');
-        return hData;
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    try {
-      let hData;
-      try {
-        hData = await checkSidecarHealth();
-      } catch (firstErr) {
-        setConsoleLog(prev => [...prev, `⏳ Health check failed (${firstErr.message}); retrying once…`]);
-        await new Promise(r => setTimeout(r, 1500));
-        hData = await checkSidecarHealth();
-      }
-      setConsoleLog(prev => [...prev,
-        `✅ Sidecar online | busy: ${hData.busy} | uptime: ${Math.round((hData.uptimeSec || 0) / 3600 * 10) / 10}h`
-      ]);
-      console.log('[Sidecar Pre-flight] ✅ online', hData);
-    } catch (preflightErr) {
-      setConsoleLog(prev => [...prev, `❌ Sidecar offline: ${preflightErr.message}`]);
-      toast.error(getFriendlyErrorMessage(preflightErr, 'The report service is unavailable right now, so the report cannot be generated. Please try again in a few minutes.'), { id: 'claude-report' });
-      setClaudeReportError(getFriendlyErrorMessage(preflightErr, 'The report service is unavailable right now. Please try again in a few minutes.'));
-      return;
-    }
-
     console.log('[Claude Report] ▶ Starting upload & compilation process…');
     const t0 = performance.now();
     const stageStartRef = { current: performance.now() };
@@ -1376,13 +1339,11 @@ const AlgorithmDataProcessor = () => {
     setClaudeReportUrl(null);
     setClaudeReportId(null);
     setClaudeReportError(null);
+    setClaudeQueuePosition(0);
     setClaudeProgress(5);
     setClaudeStages(CLAUDE_STAGE_ORDER.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending', elapsedMs: null })));
     startClaudeCreep(10);
     toast.loading('Building your 12-page Neurosense Performance Report (≈3–6 min, please keep this tab open)…', { id: 'claude-report' });
-    // Function-scoped so the finally can always clear it (avoids the /health poll leaking if the
-    // stream throws before the inline clearInterval runs).
-    let sidecarMonitor = null;
     try {
       const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
       const token = import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
@@ -1431,9 +1392,6 @@ const AlgorithmDataProcessor = () => {
         });
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
-          if (sidecarAbortReasonRef.current === 'SIDECAR_DOWN') {
-            throw new Error('Sidecar went offline during report generation. Please try again when the VPS is back up.');
-          }
           throw new Error('Timed out after 20 min. The report did not finish — the gateway may be stuck or overloaded. Please try again.');
         }
         throw fetchError;
@@ -1446,26 +1404,6 @@ const AlgorithmDataProcessor = () => {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.message || `Server error (${response.status})`);
       }
-
-      // Start 2-minute sidecar health monitor — logs to console panel and aborts fast if VPS goes down.
-      sidecarAbortReasonRef.current = null;
-      const sidecarPollUrl = `${apiUrl}/qeeg/claude-report/health`;
-      sidecarMonitor = setInterval(async () => {
-        try {
-          const hRes = await fetch(sidecarPollUrl);
-          const hData = await hRes.json();
-          if (!hRes.ok || !hData.ok) throw new Error(hData.error || 'offline');
-          const uptimeH = Math.round((hData.uptimeSec || 0) / 3600 * 10) / 10;
-          console.log(`[Sidecar Monitor] ✅ alive | busy:${hData.busy} | uptime:${uptimeH}h`);
-          setConsoleLog(prev => [...prev, `💓 Sidecar alive | busy: ${hData.busy} | uptime: ${uptimeH}h`]);
-        } catch (err) {
-          console.error('[Sidecar Monitor] ❌ sidecar went offline:', err.message);
-          setConsoleLog(prev => [...prev, `❌ Sidecar went offline: ${err.message} — aborting`]);
-          sidecarAbortReasonRef.current = 'SIDECAR_DOWN';
-          controller.abort();
-          clearInterval(sidecarMonitor);
-        }
-      }, 2 * 60 * 1000);
 
       // Read the SSE stream: parse `event:`/`data:` frames as they arrive.
       const reader = response.body.getReader();
@@ -1507,6 +1445,17 @@ const AlgorithmDataProcessor = () => {
             advanceClaudeStage(payload.stage, payload.label, stageStartRef);
             setClaudeProgress(payload.pct || pctFor(payload.stage));
             startClaudeCreep(nextPctAfter(payload.stage));
+          } else if (event === 'queue') {
+            // Fires only when another report is already rendering — 0 means our turn started.
+            const position = payload.position || 0;
+            setClaudeQueuePosition(position);
+            if (position > 0) {
+              console.log(`[Claude Report] ⏳ waiting for a render slot — position ${position}`);
+              setConsoleLog(prev => [...prev, `⏳ Another report is rendering — you're #${position} in queue…`]);
+            } else {
+              console.log('[Claude Report] ▶ render slot acquired, rendering now');
+              setConsoleLog(prev => [...prev, `▶️ Your turn — rendering started`]);
+            }
           } else if (event === 'done') {
             gotDone = true;
             pdfUrlResult = payload.pdfUrl;
@@ -1517,7 +1466,6 @@ const AlgorithmDataProcessor = () => {
         }
       }
       clearTimeout(timeoutId);
-      clearInterval(sidecarMonitor);
       stopClaudeCreep();
 
       if (streamError) throw new Error(streamError);
@@ -1584,9 +1532,9 @@ const AlgorithmDataProcessor = () => {
       setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
       toast.error(getFriendlyErrorMessage(error, 'The Neurosense Performance Report could not be generated. Please try again.'), { id: 'claude-report' });
     } finally {
-      if (sidecarMonitor) clearInterval(sidecarMonitor);
       stopClaudeCreep();
       setIsGeneratingClaudeReport(false);
+      setClaudeQueuePosition(0);
     }
   };
 
@@ -3391,6 +3339,19 @@ const AlgorithmDataProcessor = () => {
                   {/* Live, stage-by-stage progress (fed by the backend SSE stream) */}
                   {isGeneratingClaudeReport && (
                     <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-lg p-4 shadow-lg">
+                      {claudeQueuePosition > 0 && (
+                        <div className="mb-3 flex items-center gap-2 bg-amber-400/20 border border-amber-300/40 rounded-lg px-3 py-2 animate-pulse">
+                          <Clock className="h-4 w-4 text-amber-200 flex-shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
+                          <span className="text-amber-100 text-sm font-medium">
+                            Another report is rendering — you're #{claudeQueuePosition} in queue…
+                          </span>
+                          <span className="ml-auto flex gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-200 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-200 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-200 animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-white font-medium text-sm">Building your 12-page report…</p>
                         <p className="text-indigo-200 text-sm font-mono">{Math.round(claudeProgress)}%</p>

@@ -1,17 +1,16 @@
 /**
- * Claude Report orchestrator — turns the deterministic qEEG report data into the
+ * Report orchestrator — turns the deterministic qEEG report data into the
  * polished 12-page "Brain Type & Performance Report" PDF.
  *
  *   reportData (numbers, from algorithmCalculator + buildReportData)
- *      → Claude narrative (VPS gateway, prose only)
+ *      → Gemini narrative (prose only)
  *      → 12-page HTML template (numbers filled deterministically)
- *      → VPS gateway renders HTML to PDF via headless Chromium (no Puppeteer on Render)
+ *      → local Puppeteer renders HTML to PDF via headless Chromium
  *
- * Claude never computes or alters numbers — see nexaprocService.generateReportNarrative.
- * PDF rendering is offloaded to the VPS (/api/html-to-pdf) to avoid OOM on Render free tier.
+ * Gemini never computes or alters numbers — see nexaprocService.generateReportNarrative.
  */
 
-const { generateReportNarrative, renderHtmlOnVps, postLesson } = require('./nexaprocService');
+const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./nexaprocService');
 const { renderReportHtml } = require('../templates/brainReport12Page');
 const { inlineEmojis } = require('../utils/inlineEmojis');
 
@@ -23,9 +22,12 @@ const { inlineEmojis } = require('../utils/inlineEmojis');
  * @param {function} [onProgress] Optional callback fired with a stage key
  *   ('narrative' | 'render') just before that step starts, so callers can stream
  *   live progress. No-op if omitted.
+ * @param {function} [onQueueUpdate] Optional callback fired with the 1-based
+ *   render-queue position while waiting for a free Puppeteer slot, and 0 once
+ *   rendering starts. Only fires if the render actually had to wait.
  * @returns {Promise<{ pdf: Buffer, narrative: object }>}
  */
-async function generateBrainReportPdf(reportData, narrative, onProgress) {
+async function generateBrainReportPdf(reportData, narrative, onProgress, onQueueUpdate) {
   if (!reportData || !reportData.brainType || !reportData.patient) {
     throw new Error('Invalid reportData: expected the structured object from buildReportData().');
   }
@@ -49,7 +51,7 @@ async function generateBrainReportPdf(reportData, narrative, onProgress) {
   // Inline emojis as SVG images so they render on the fontless headless-Chromium
   // renderer (otherwise they appear as empty "tofu" boxes).
   const html = inlineEmojis(renderReportHtml(reportData, prose));
-  const pdf = await renderHtmlOnVps(html);
+  const pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
   return { pdf, narrative: prose };
 }
 

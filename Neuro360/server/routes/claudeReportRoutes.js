@@ -3,25 +3,14 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
-const axios = require('axios');
 const { sidecarAuth } = require('../middleware/sidecarAuth');
-const { extractReportSource, postLesson, GATEWAY_URL } = require('../services/nexaprocService');
+const { extractReportSource, postLesson } = require('../services/nexaprocService');
 const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('../services/claudeReportData');
 const { buildNeuroSenseMarkdown } = require('../services/neurosenseMarkdown');
 const { generateBrainReportPdf } = require('../services/claudeReportGenerator');
 const SupabaseStorage = require('../services/supabaseStorage');
 
 const router = express.Router();
-
-// GET /api/qeeg/claude-report/health — proxy VPS sidecar health (no auth, read-only)
-router.get('/health', async (req, res) => {
-  try {
-    const response = await axios.get(`${GATEWAY_URL}/health`, { timeout: 6000 });
-    res.json({ ok: true, ...response.data });
-  } catch (error) {
-    res.status(503).json({ ok: false, error: error.message });
-  }
-});
 
 // Gateway caps the JSON body ~1MB; keep extracted text well under it.
 const MAX_TEXT_CHARS = 200000;
@@ -93,6 +82,9 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
     } catch (_) { /* client gone — ignore */ }
   };
   const progress = (stage) => send('progress', { stage, label: STAGE_LABELS[stage], pct: STAGE_PCT[stage] });
+  // Fires only when another report is already rendering — lets the frontend show
+  // a "waiting in queue" state instead of looking stuck at the render stage.
+  const onQueueUpdate = (position) => send('queue', { position });
 
   // Keep the connection alive through the long (30-60s) Gemini calls so the
   // proxy doesn't drop an idle stream.
@@ -176,7 +168,7 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
 
     // Call 2 (inside): fetch the doctor-readable narrative, then render to PDF.
     // onProgress fires 'narrative' then 'render' from inside the generator.
-    let { pdf } = await generateBrainReportPdf(reportData, undefined, progress);
+    let { pdf } = await generateBrainReportPdf(reportData, undefined, progress, onQueueUpdate);
 
     // Storage key + download name use the report id (e.g. NS-1773769 -> 1773769)
     // so files are short and unique per patient+assessment: NPR-<id>-<ts>.pdf.
