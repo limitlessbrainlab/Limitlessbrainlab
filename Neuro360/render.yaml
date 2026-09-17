@@ -18,6 +18,13 @@ services:
       # Used by both the build `npx puppeteer browsers install chrome` and launch.
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/project/src/.cache/puppeteer
+      # Chrome startup and HTML rendering can be slow after a free-tier cold
+      # start. Keep these limits high enough for automatic recovery, while
+      # still allowing a stuck browser to fail and release the render slot.
+      - key: PUPPETEER_LAUNCH_TIMEOUT_MS
+        value: "600000"
+      - key: PUPPETEER_PAGE_TIMEOUT_MS
+        value: "180000"
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_REQUEST_DELAY_MS

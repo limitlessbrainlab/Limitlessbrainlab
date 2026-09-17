@@ -308,12 +308,20 @@ function ensureChromeInstalled() {
 async function renderPdfWithPuppeteer(html) {
   const puppeteer = require('puppeteer');
   ensureChromeInstalled();
+  // Chrome can take longer than Puppeteer's 30s default on a cold Render
+  // instance, especially after the on-demand browser install. This timeout is
+  // only for starting Chrome; page rendering has its own timeout below.
+  // Keep this generous enough for a cold PaaS instance, while still allowing
+  // a genuinely stuck Chrome process to fail and release the render slot.
+  const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
+  const pageTimeout = Number(process.env.PUPPETEER_PAGE_TIMEOUT_MS) || 180000;
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    timeout: launchTimeout,
   });
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'load', timeout: 60000 });
+    await page.setContent(html, { waitUntil: 'load', timeout: pageTimeout });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
