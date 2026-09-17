@@ -1391,9 +1391,12 @@ const AlgorithmDataProcessor = () => {
       const preflightRes = await requestWithTimeout(`${apiUrl}/qeeg/claude-report`, { method: 'OPTIONS' }, 10000);
       if (!preflightRes.ok) throw new Error(`Report endpoint preflight failed (HTTP ${preflightRes.status}).`);
 
-      console.log('[Claude Report] Step 1: prefetching the generated NeuroSense PDF…', pdfUrl);
+      const sourcePdfUrl = pdfUrl.startsWith('http')
+        ? pdfUrl
+        : `${backendBaseUrl}${pdfUrl.startsWith('/') ? pdfUrl : `/${pdfUrl}`}`;
+      console.log('[Claude Report] Step 1: prefetching the generated NeuroSense PDF…', sourcePdfUrl);
       // Prefetch the just-generated NeuroSense PDF and forward it to the Claude endpoint.
-      const srcRes = await requestWithTimeout(pdfUrl, {}, 60000);
+      const srcRes = await requestWithTimeout(sourcePdfUrl, {}, 60000);
       if (!srcRes.ok) throw new Error('Could not load the generated NeuroSense PDF.');
       const blob = await srcRes.blob();
       console.log(`[Claude Report] Step 2: NeuroSense PDF prefetched (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
