@@ -1356,14 +1356,47 @@ const AlgorithmDataProcessor = () => {
     startClaudeCreep(10);
     toast.loading('Building your 12-page Neurosense Performance Report (≈3–6 min, please keep this tab open)…', { id: 'claude-report' });
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
+      const proxyApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
+      const directBackendUrl = import.meta.env.VITE_DIRECT_BACKEND_URL;
+      if (import.meta.env.PROD && !directBackendUrl) {
+        throw new Error('VITE_DIRECT_BACKEND_URL is not configured for the long-running report request.');
+      }
+      const apiUrl = directBackendUrl
+        ? `${directBackendUrl.replace(/\/$/, '')}/api`
+        : proxyApiUrl;
       const token = import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
-      console.log('[Claude Report] Step 1: fetching the generated NeuroSense PDF…', pdfUrl);
-      // Fetch the just-generated NeuroSense PDF and forward it to the Claude endpoint.
-      const srcRes = await fetch(pdfUrl);
+      const backendBaseUrl = apiUrl.replace(/\/api\/?$/, '');
+      const requestWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+        } catch (error) {
+          if (error.name === 'AbortError') throw new Error(`Request timed out after ${timeoutMs / 1000}s: ${url}`);
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      // Preflight Render before uploading the PDF. This wakes a sleeping free
+      // instance and fails early with a useful error instead of waiting for the
+      // long SSE request to discover that the backend is unavailable.
+      console.log('[Claude Report] Step 0: preflighting backend…', `${backendBaseUrl}/api/health`);
+      const healthRes = await requestWithTimeout(`${backendBaseUrl}/api/health`, {}, 60000);
+      if (!healthRes.ok) throw new Error(`Backend preflight failed (HTTP ${healthRes.status}).`);
+
+      // Explicitly exercise the CORS OPTIONS path. The browser will also issue
+      // its own OPTIONS request for the Authorization header on the POST.
+      const preflightRes = await requestWithTimeout(`${apiUrl}/qeeg/claude-report`, { method: 'OPTIONS' }, 10000);
+      if (!preflightRes.ok) throw new Error(`Report endpoint preflight failed (HTTP ${preflightRes.status}).`);
+
+      console.log('[Claude Report] Step 1: prefetching the generated NeuroSense PDF…', pdfUrl);
+      // Prefetch the just-generated NeuroSense PDF and forward it to the Claude endpoint.
+      const srcRes = await requestWithTimeout(pdfUrl, {}, 60000);
       if (!srcRes.ok) throw new Error('Could not load the generated NeuroSense PDF.');
       const blob = await srcRes.blob();
-      console.log(`[Claude Report] Step 2: NeuroSense PDF loaded (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
+      console.log(`[Claude Report] Step 2: NeuroSense PDF prefetched (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
       const formData = new FormData();
       formData.append('pdf', new File([blob], 'neurosense-report.pdf', { type: 'application/pdf' }));
       // Forward patient identity + the report's upload/creation date so the
