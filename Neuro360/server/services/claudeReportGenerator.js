@@ -4,13 +4,15 @@
  *
  *   reportData (numbers, from algorithmCalculator + buildReportData)
  *      → Gemini narrative (prose only)
- *      → deterministic PDFKit renderer (numbers filled deterministically)
+ *      → 12-page HTML template (numbers filled deterministically)
+ *      → Puppeteer renders the reference HTML/CSS layout to PDF
  *
  * Gemini never computes or alters numbers — see nexaprocService.generateReportNarrative.
  */
 
-const { generateReportNarrative, postLesson } = require('./nexaprocService');
-const { renderReportDataToPdf } = require('./claudeReportPdfKit');
+const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./nexaprocService');
+const { renderReportHtml } = require('../templates/brainReport12Page');
+const { inlineEmojis } = require('../utils/inlineEmojis');
 
 /**
  * @param {object} reportData  Output of buildReportData() (numbers + brain type).
@@ -20,8 +22,8 @@ const { renderReportDataToPdf } = require('./claudeReportPdfKit');
  * @param {function} [onProgress] Optional callback fired with a stage key
  *   ('narrative' | 'render') just before that step starts, so callers can stream
  *   live progress. No-op if omitted.
- * @param {function} [onQueueUpdate] Retained for caller compatibility; the
- *   PDFKit renderer does not need a browser queue.
+ * @param {function} [onQueueUpdate] Optional callback fired with the render
+ * queue position while waiting for a Puppeteer slot.
  * @returns {Promise<{ pdf: Buffer, narrative: object }>}
  */
 async function generateBrainReportPdf(reportData, narrative, onProgress, onQueueUpdate) {
@@ -45,10 +47,11 @@ async function generateBrainReportPdf(reportData, narrative, onProgress, onQueue
   }
 
   if (typeof onProgress === 'function') onProgress('render');
-  // PDFKit is deterministic and does not require a Chromium process. This is
-  // important on Render's Free instance, where repeated Chromium launches can
-  // exhaust memory and terminate the SSE request.
-  const pdf = await renderReportDataToPdf(reportData, prose, onProgress);
+  // Use the original HTML/CSS template so the generated report matches the
+  // approved 12-page reference PDF. The renderer has its own PDF timeout and
+  // Chrome cleanup safeguards in nexaprocService.
+  const html = inlineEmojis(renderReportHtml(reportData, prose));
+  const pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
   return { pdf, narrative: prose };
 }
 
