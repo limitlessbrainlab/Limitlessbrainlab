@@ -762,7 +762,9 @@ const AlgorithmDataProcessor = () => {
       // VITE_DIRECT_BACKEND_URL = https://limitlessbrainlab-backend.onrender.com  (set on Vercel)
       const proxyApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
       const directBackendUrl = import.meta.env.VITE_DIRECT_BACKEND_URL;
-      const apiUrl = directBackendUrl ? `${directBackendUrl}/api` : proxyApiUrl;
+      const apiUrl = directBackendUrl
+        ? `${directBackendUrl.replace(/\/$/, '')}/api`
+        : proxyApiUrl;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
 

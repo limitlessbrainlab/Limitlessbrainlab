@@ -315,6 +315,8 @@ async function renderPdfWithPuppeteer(html) {
   // a genuinely stuck Chrome process to fail and release the render slot.
   const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
   const pageTimeout = Number(process.env.PUPPETEER_PAGE_TIMEOUT_MS) || 180000;
+  const pdfRenderTimeout = Number(process.env.PDF_RENDER_TIMEOUT_MS) || 120000;
+  const browserCloseTimeout = 5000;
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     timeout: launchTimeout,
@@ -322,14 +324,45 @@ async function renderPdfWithPuppeteer(html) {
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load', timeout: pageTimeout });
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
-    return Buffer.from(pdf);
+    let timeoutId;
+    try {
+      const pdfPromise = page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      });
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`PDF render timed out after ${pdfRenderTimeout}ms`));
+        }, pdfRenderTimeout);
+      });
+      const pdf = await Promise.race([pdfPromise, timeoutPromise]);
+      return Buffer.from(pdf);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   } finally {
-    await browser.close();
+    // A stalled Chrome process can prevent browser.close() from resolving and
+    // otherwise keep the SSE request alive indefinitely. Give it a short,
+    // graceful window, then terminate the underlying process.
+    try {
+      await Promise.race([
+        browser.close(),
+        new Promise(resolve => setTimeout(resolve, browserCloseTimeout)),
+      ]);
+    } catch (closeError) {
+      console.warn('[Puppeteer] Graceful browser close failed:', closeError.message);
+    }
+
+    const browserProcess = typeof browser.process === 'function' ? browser.process() : null;
+    if (browserProcess && !browserProcess.killed) {
+      try {
+        browserProcess.kill('SIGKILL');
+        console.warn('[Puppeteer] Force-terminated Chrome after render cleanup timeout.');
+      } catch (killError) {
+        console.warn('[Puppeteer] Could not force-terminate Chrome:', killError.message);
+      }
+    }
   }
 }
 
