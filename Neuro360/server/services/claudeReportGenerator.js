@@ -4,15 +4,13 @@
  *
  *   reportData (numbers, from algorithmCalculator + buildReportData)
  *      → Gemini narrative (prose only)
- *      → 12-page HTML template (numbers filled deterministically)
- *      → local Puppeteer renders HTML to PDF via headless Chromium
+ *      → deterministic PDFKit renderer (numbers filled deterministically)
  *
  * Gemini never computes or alters numbers — see nexaprocService.generateReportNarrative.
  */
 
-const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./nexaprocService');
-const { renderReportHtml } = require('../templates/brainReport12Page');
-const { inlineEmojis } = require('../utils/inlineEmojis');
+const { generateReportNarrative, postLesson } = require('./nexaprocService');
+const { renderReportDataToPdf } = require('./claudeReportPdfKit');
 
 /**
  * @param {object} reportData  Output of buildReportData() (numbers + brain type).
@@ -22,9 +20,8 @@ const { inlineEmojis } = require('../utils/inlineEmojis');
  * @param {function} [onProgress] Optional callback fired with a stage key
  *   ('narrative' | 'render') just before that step starts, so callers can stream
  *   live progress. No-op if omitted.
- * @param {function} [onQueueUpdate] Optional callback fired with the 1-based
- *   render-queue position while waiting for a free Puppeteer slot, and 0 once
- *   rendering starts. Only fires if the render actually had to wait.
+ * @param {function} [onQueueUpdate] Retained for caller compatibility; the
+ *   PDFKit renderer does not need a browser queue.
  * @returns {Promise<{ pdf: Buffer, narrative: object }>}
  */
 async function generateBrainReportPdf(reportData, narrative, onProgress, onQueueUpdate) {
@@ -48,10 +45,10 @@ async function generateBrainReportPdf(reportData, narrative, onProgress, onQueue
   }
 
   if (typeof onProgress === 'function') onProgress('render');
-  // Inline emojis as SVG images so they render on the fontless headless-Chromium
-  // renderer (otherwise they appear as empty "tofu" boxes).
-  const html = inlineEmojis(renderReportHtml(reportData, prose));
-  const pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
+  // PDFKit is deterministic and does not require a Chromium process. This is
+  // important on Render's Free instance, where repeated Chromium launches can
+  // exhaust memory and terminate the SSE request.
+  const pdf = await renderReportDataToPdf(reportData, prose, onProgress);
   return { pdf, narrative: prose };
 }
 

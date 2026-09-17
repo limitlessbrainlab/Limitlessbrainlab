@@ -64,10 +64,13 @@ class GeminiService {
 
     // Prefer Gemini 3 Pro Preview (latest model, best reasoning)
     // Fallback to Flash models for speed if 3 Pro unavailable
-    const preferences = ['3-pro-preview', 'flash', 'pro'];
+    // gemini-2.5-flash-lite is advertised by some API keys but returns 404 for
+    // new users. Do not select it for the extraction/narrative path.
+    const usable = models.filter((m) => !m.name.toLowerCase().includes('gemini-2.5-flash-lite'));
+    const preferences = ['gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-3-flash', 'flash', 'pro'];
 
     for (const preference of preferences) {
-      const found = models.find(m =>
+      const found = usable.find(m =>
         m.name.toLowerCase().includes(preference)
       );
       if (found) {
@@ -79,8 +82,8 @@ class GeminiService {
       }
     }
 
-    console.log(`✅ Using first available model: ${models[0].name}`);
-    return models[0].name;
+    console.log(`✅ Using first available model: ${usable[0]?.name || models[0].name}`);
+    return usable[0]?.name || models[0].name;
   }
 
   /**
