@@ -1461,6 +1461,13 @@ const AlgorithmDataProcessor = () => {
       let streamError = null;
       let gotDone = false;
 
+      // Watchdog: the backend sends an SSE heartbeat every 15s, so a ~90s gap
+      // with no frame at all means the server is stalled or dead (historically:
+      // Chromium cold-start/OOM mid-render) — abort with a clear error instead
+      // of silently hanging at ~94% until the 20-minute cap below.
+      let lastFrameAt = Date.now();
+      const WATCHDOG_MS = 90 * 1000;
+
       const pctFor = (key) => (CLAUDE_STAGE_ORDER.find((s) => s.key === key)?.pct ?? 0);
       const nextPctAfter = (key) => {
         const idx = CLAUDE_STAGE_ORDER.findIndex((s) => s.key === key);
@@ -1468,7 +1475,27 @@ const AlgorithmDataProcessor = () => {
       };
 
       while (true) {
-        const { value, done } = await reader.read();
+        let watchdogFired = false;
+        const watchdogTimer = setTimeout(() => {
+          watchdogFired = true;
+          try { controller.abort(); } catch (_) { /* already aborted */ }
+        }, Math.max(5000, WATCHDOG_MS - (Date.now() - lastFrameAt)));
+        let chunk;
+        try {
+          chunk = await reader.read();
+        } catch (readErr) {
+          clearTimeout(watchdogTimer);
+          if (watchdogFired) {
+            throw new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.');
+          }
+          throw readErr;
+        }
+        clearTimeout(watchdogTimer);
+        if (watchdogFired) {
+          throw new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.');
+        }
+        lastFrameAt = Date.now();
+        const { value, done } = chunk;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 

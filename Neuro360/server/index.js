@@ -9055,6 +9055,22 @@ app.listen(PORT, () => {
   } catch (e) {
     console.error('jotformEmailIngest failed to start:', e.message);
   }
+
+  // Pre-warm Puppeteer Chrome at boot (async install if missing + one throwaway
+  // launch and tiny PDF render). Without this, the FIRST performance report
+  // after a deploy pays the full Chromium cold-start cost on the free 512MB
+  // instance — historically minutes of a stalled server that looked like the
+  // report hanging at ~94% while /api/app-version polls returned 502.
+  // Fire-and-forget: any failure is logged, never fatal; the render path
+  // self-heals on demand (see services/nexaprocService.js).
+  (async () => {
+    try {
+      const { prewarmChrome } = require('./services/nexaprocService');
+      await prewarmChrome();
+    } catch (e) {
+      console.warn('[Puppeteer] Boot pre-warm failed (render path will self-heal):', e.message);
+    }
+  })();
 });
 
 module.exports = app;

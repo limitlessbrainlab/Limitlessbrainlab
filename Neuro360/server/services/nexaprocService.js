@@ -279,22 +279,75 @@ ${pdfText}`;
  * later render on this running instance finds it immediately.
  */
 function ensureChromeInstalled() {
-  const fs = require('fs');
-  const puppeteer = require('puppeteer');
-  const execPath = puppeteer.executablePath();
-  if (fs.existsSync(execPath)) return;
-  console.warn(`[Puppeteer] Chrome not found at ${execPath} — installing now...`);
-  const { execSync } = require('child_process');
-  const path = require('path');
+  return new Promise((resolve, reject) => {
+    const fs = require('fs');
+    const puppeteer = require('puppeteer');
+    const execPath = puppeteer.executablePath();
+    if (fs.existsSync(execPath)) { resolve(); return; }
+    console.warn(`[Puppeteer] Chrome not found at ${execPath} — installing now (async, server stays responsive)...`);
+    const { spawn } = require('child_process');
+    const path = require('path');
+    // ASYNC install on purpose: the previous execSync version blocked the whole
+    // Node event loop for minutes, freezing every endpoint (health checks and
+    // /api/app-version polls returned 502 through Vercel) and stalling live SSE
+    // progress streams. spawn keeps the loop free; the render path simply
+    // awaits completion before launching Chrome.
+    const child = spawn('npx', ['puppeteer', 'browsers', 'install', 'chrome'], {
+      stdio: 'inherit',
+      cwd: path.join(__dirname, '..'),
+      shell: process.platform === 'win32', // npx needs a shell on Windows
+    });
+    let settled = false;
+    const settle = (ok, message) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (ok) { console.log('[Puppeteer] Chrome installed successfully.'); resolve(); }
+      else reject(new Error(message));
+    };
+    // Safety cap so a wedged download can't wait forever (matches the scale of
+    // PUPPETEER_LAUNCH_TIMEOUT_MS); the render path surfaces the error cleanly.
+    const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch (_) { /* ignore */ }
+      settle(false, `Chrome install timed out after ${INSTALL_TIMEOUT_MS / 60000} min`);
+    }, INSTALL_TIMEOUT_MS);
+    child.on('error', (err) => settle(false, `Chrome is missing and the on-demand install failed to start: ${err.message}`));
+    child.on('exit', (code) => {
+      if (code === 0 && fs.existsSync(puppeteer.executablePath())) settle(true);
+      else settle(false, code === 0
+        ? `Chrome install ran but the binary still isn't at the expected path: ${puppeteer.executablePath()}`
+        : `Chrome is missing and the on-demand install failed (exit code ${code})`);
+    });
+  });
+}
+
+/**
+ * Close a Puppeteer browser without ever hanging. A stalled Chrome process can
+ * prevent browser.close() from resolving and otherwise keep the SSE request
+ * alive indefinitely: give it a short graceful window, then terminate the
+ * underlying process. Shared by the render path and the boot pre-warm.
+ */
+async function closeBrowserGracefully(browser) {
+  const browserCloseTimeout = 5000;
   try {
-    execSync('npx puppeteer browsers install chrome', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
-  } catch (err) {
-    throw new Error(`Chrome is missing and the on-demand install failed: ${err.message}`);
+    await Promise.race([
+      browser.close(),
+      new Promise(resolve => setTimeout(resolve, browserCloseTimeout)),
+    ]);
+  } catch (closeError) {
+    console.warn('[Puppeteer] Graceful browser close failed:', closeError.message);
   }
-  if (!fs.existsSync(execPath)) {
-    throw new Error(`Chrome install ran but the binary still isn't at the expected path: ${execPath}`);
+
+  const browserProcess = typeof browser.process === 'function' ? browser.process() : null;
+  if (browserProcess && !browserProcess.killed) {
+    try {
+      browserProcess.kill('SIGKILL');
+      console.warn('[Puppeteer] Force-terminated Chrome after cleanup timeout.');
+    } catch (killError) {
+      console.warn('[Puppeteer] Could not force-terminate Chrome:', killError.message);
+    }
   }
-  console.log('[Puppeteer] Chrome installed successfully.');
 }
 
 /**
@@ -307,7 +360,7 @@ function ensureChromeInstalled() {
  */
 async function renderPdfWithPuppeteer(html) {
   const puppeteer = require('puppeteer');
-  ensureChromeInstalled();
+  await ensureChromeInstalled();
   // Chrome can take longer than Puppeteer's 30s default on a cold Render
   // instance, especially after the on-demand browser install. This timeout is
   // only for starting Chrome; page rendering has its own timeout below.
@@ -316,7 +369,6 @@ async function renderPdfWithPuppeteer(html) {
   const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
   const pageTimeout = Number(process.env.PUPPETEER_PAGE_TIMEOUT_MS) || 180000;
   const pdfRenderTimeout = Number(process.env.PDF_RENDER_TIMEOUT_MS) || 120000;
-  const browserCloseTimeout = 5000;
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     timeout: launchTimeout,
@@ -342,27 +394,9 @@ async function renderPdfWithPuppeteer(html) {
       if (timeoutId) clearTimeout(timeoutId);
     }
   } finally {
-    // A stalled Chrome process can prevent browser.close() from resolving and
-    // otherwise keep the SSE request alive indefinitely. Give it a short,
-    // graceful window, then terminate the underlying process.
-    try {
-      await Promise.race([
-        browser.close(),
-        new Promise(resolve => setTimeout(resolve, browserCloseTimeout)),
-      ]);
-    } catch (closeError) {
-      console.warn('[Puppeteer] Graceful browser close failed:', closeError.message);
-    }
-
-    const browserProcess = typeof browser.process === 'function' ? browser.process() : null;
-    if (browserProcess && !browserProcess.killed) {
-      try {
-        browserProcess.kill('SIGKILL');
-        console.warn('[Puppeteer] Force-terminated Chrome after render cleanup timeout.');
-      } catch (killError) {
-        console.warn('[Puppeteer] Could not force-terminate Chrome:', killError.message);
-      }
-    }
+    // Never let a stalled Chrome keep the SSE request alive indefinitely —
+    // graceful close with a short window, then SIGKILL the underlying process.
+    await closeBrowserGracefully(browser);
   }
 }
 
@@ -429,6 +463,34 @@ async function renderReportHtmlToPdf(html, onQueued) {
 }
 
 /**
+ * Boot-time warm-up: make sure Chrome is present (async install if missing),
+ * then run one throwaway launch + tiny PDF render. Without this, the FIRST
+ * performance report after a deploy pays the full cold-start tax — a multi-
+ * minute Chrome download/launch on a cold free-tier instance that historically
+ * looked like the report hanging at ~94% while /api/app-version polled 502.
+ * Fire-and-forget from server startup: failures are logged, never fatal — the
+ * render path still self-heals on demand.
+ */
+async function prewarmChrome() {
+  const puppeteer = require('puppeteer');
+  await ensureChromeInstalled();
+  const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
+  console.log('[Puppeteer] Pre-warming Chrome (launch + test render)…');
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    timeout: launchTimeout,
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<html><body style="margin:0">warmup</body></html>', { waitUntil: 'load', timeout: 60000 });
+    await page.pdf({ format: 'A4', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+    console.log('[Puppeteer] Chrome pre-warm complete — first report render will be fast.');
+  } finally {
+    await closeBrowserGracefully(browser);
+  }
+}
+
+/**
  * Error-lesson logging was backed by the now-decommissioned VPS gateway. Kept
  * as a no-op so callers don't need to change.
  */
@@ -438,6 +500,7 @@ module.exports = {
   generateReportNarrative,
   extractReportSource,
   renderReportHtmlToPdf,
+  prewarmChrome,
   postLesson,
   fetchReportExamples,
   saveReportExample,
