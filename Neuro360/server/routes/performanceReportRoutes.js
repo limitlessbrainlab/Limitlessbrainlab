@@ -4,10 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
 const { sidecarAuth } = require('../middleware/sidecarAuth');
-const { extractReportSource, postLesson } = require('../services/nexaprocService');
-const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('../services/claudeReportData');
+const { extractReportSource, postLesson, ensureRenderEngineReady } = require('../services/performanceReportService');
+const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('../services/performanceReportData');
 const { buildNeuroSenseMarkdown } = require('../services/neurosenseMarkdown');
-const { generateBrainReportPdf } = require('../services/claudeReportGenerator');
+const { generateBrainReportPdf } = require('../services/performanceReportBuilder');
 const SupabaseStorage = require('../services/supabaseStorage');
 
 const router = express.Router();
@@ -39,14 +39,16 @@ const upload = multer({
 });
 
 /**
- * POST /api/qeeg/claude-report
- * Upload an ALREADY-GENERATED brain/qEEG report PDF (field "pdf"). We read its
- * text, have Gemini transcribe the numbers + write the narrative, build the
- * report data deterministically, and return the polished 12-page "Brain Type &
- * Performance Report" PDF. Auth: static long-lived CLAUDE_REPORT_TOKEN.
+ * POST /api/qeeg/performance-report
+ * Upload an ALREADY-GENERATED brain/qEEG report PDF (field "pdf"). We warm the
+ * render engine first, read the PDF's text, have Gemini transcribe the numbers
+ * + write the narrative, build the report data deterministically, and return
+ * the polished 12-page "Brain Type & Performance Report" PDF. Auth: static
+ * long-lived PERFORMANCE_REPORT_TOKEN (falls back to legacy CLAUDE_REPORT_TOKEN).
  */
 // Human-readable label for each streamed stage (frontend shows these verbatim).
 const STAGE_LABELS = {
+  engine: 'Warming the render engine…',
   reading: 'Reading the document…',
   extract: 'Gemini is reading your numbers…',
   build: 'Building your report…',
@@ -54,7 +56,23 @@ const STAGE_LABELS = {
   render: 'Rendering the 12-page PDF…',
   saving: 'Saving your report…',
 };
-const STAGE_PCT = { reading: 10, extract: 25, build: 55, narrative: 60, render: 88, saving: 95 };
+const STAGE_PCT = { engine: 5, reading: 10, extract: 25, build: 55, narrative: 60, render: 88, saving: 95 };
+
+// The SSE `error` frame's message is shown to the user as-is by the frontend,
+// so map low-level renderer/Chrome failures to plain language here.
+function friendlyPipelineError(message) {
+  const t = String(message || '');
+  if (/browser process|libnss|libatk|libgbm|executable path|Failed to launch|Protocol error/i.test(t)) {
+    return 'The report renderer failed to start on the server. Please try again — the next attempt usually succeeds.';
+  }
+  if (/out of memory|OOM|heap out|Killed/i.test(t)) {
+    return 'The server ran low on memory while building the report. Please wait a minute and try again.';
+  }
+  if (/timed out|timeout/i.test(t)) {
+    return 'The report took too long to build this time. Please try again — the next attempt usually succeeds.';
+  }
+  return t;
+}
 
 router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
   const tempPath = req.file?.path;
@@ -95,6 +113,18 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
   req.on('close', () => { clientGone = true; clearInterval(heartbeat); });
 
   try {
+    // Warm the render engine FIRST — before spending minutes of Gemini work —
+    // so the PDF render never starts from a cold install/launch. Single-flight:
+    // instant once the boot pre-warm has already succeeded; on a cold instance
+    // this pays the one-time cost up front with live progress. A warm-up
+    // failure aborts here, before any Gemini tokens are spent.
+    progress('engine');
+    try {
+      await ensureRenderEngineReady();
+    } catch (warmErr) {
+      throw new Error(`The report renderer failed to start on the server. Please try again — the next attempt usually succeeds. (${warmErr.message})`);
+    }
+
     // Extract the uploaded report's text (fast; the values are textual).
     progress('reading');
     let text;
@@ -142,10 +172,10 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
     let reportData;
     try {
       const neurosenseMd = buildNeuroSenseMarkdown(source, algorithmResults, patientMeta);
-      console.log('[Claude Report] NeuroSense values Markdown:\n' + neurosenseMd);
+      console.log('[Performance Report] NeuroSense values Markdown:\n' + neurosenseMd);
       reportData = buildReportDataFromNeuroSenseMd(neurosenseMd, patientMeta, algorithmResults);
     } catch (mdErr) {
-      console.warn('[Claude Report] NeuroSense MD path failed, falling back to source build:', mdErr.message);
+      console.warn('[Performance Report] NeuroSense MD path failed, falling back to source build:', mdErr.message);
       reportData = buildReportDataFromSource(source, patientMeta, algorithmResults);
     }
 
@@ -158,10 +188,10 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
         const fs = require('fs');
         reportData.patient.clinicLogoDataUri = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
         try { fs.unlinkSync(logoPath); } catch (_) { /* best effort cleanup */ }
-        console.log('[Claude Report] 🎨 Using latest clinic logo');
+        console.log('[Performance Report] 🎨 Using latest clinic logo');
       }
     } catch (logoErr) {
-      console.warn('[Claude Report] Clinic logo resolution failed (using default):', logoErr.message);
+      console.warn('[Performance Report] Clinic logo resolution failed (using default):', logoErr.message);
     }
 
     // Call 2 (inside): fetch the doctor-readable narrative, then render to PDF.
@@ -192,7 +222,7 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
       pdfDoc.setCreator('Limitless Brain Lab');
       pdf = Buffer.from(await pdfDoc.save());
     } catch (metaErr) {
-      console.warn('[Claude Report] PDF title stamping failed (using unstamped PDF):', metaErr.message);
+      console.warn('[Performance Report] PDF title stamping failed (using unstamped PDF):', metaErr.message);
     }
 
     // Upload the generated PDF to the same 'neurosense-reports' bucket the QEEG
@@ -213,10 +243,10 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
       fs.unlink(outPath, () => {});
     }
   } catch (error) {
-    console.error('[Claude Report] Error:', error.message);
+    console.error('[Performance Report] Error:', error.message);
     postLesson('report-generation', error.message,
       `Report generation failed: "${error.message}". Investigate root cause and prevent recurrence.`);
-    if (!clientGone) send('error', { success: false, message: error.message });
+    if (!clientGone) send('error', { success: false, message: friendlyPipelineError(error.message) });
   } finally {
     clearInterval(heartbeat);
     if (tempPath) fs.unlink(tempPath, () => {});

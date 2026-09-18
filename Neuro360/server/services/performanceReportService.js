@@ -278,8 +278,16 @@ ${pdfText}`;
  * the spot the first time it's missing — one-time ~30-60s cost, then every
  * later render on this running instance finds it immediately.
  */
+// Single-flight lock: the boot pre-warm, the route's warm-on-click stage, and
+// any concurrent report requests share ONE install. Two simultaneous
+// `puppeteer browsers install chrome` processes corrupt each other's download
+// and break the first render — the historical "first attempt fails, second
+// works" bug. The slot is released on settle so later calls re-check cheaply
+// (and can retry after a failure).
+let chromeInstallPromise = null;
 function ensureChromeInstalled() {
-  return new Promise((resolve, reject) => {
+  if (chromeInstallPromise) return chromeInstallPromise;
+  chromeInstallPromise = new Promise((resolve, reject) => {
     const fs = require('fs');
     const puppeteer = require('puppeteer');
     const execPath = puppeteer.executablePath();
@@ -319,7 +327,11 @@ function ensureChromeInstalled() {
         ? `Chrome install ran but the binary still isn't at the expected path: ${puppeteer.executablePath()}`
         : `Chrome is missing and the on-demand install failed (exit code ${code})`);
     });
-  });
+  }).then(
+    (v) => { chromeInstallPromise = null; return v; },
+    (e) => { chromeInstallPromise = null; throw e; }
+  );
+  return chromeInstallPromise;
 }
 
 /**
@@ -350,6 +362,63 @@ async function closeBrowserGracefully(browser) {
   }
 }
 
+// Low-memory Chrome flags for the 512MB free tier. --no-zygote drops the
+// zygote process pool; --disable-gpu avoids GPU-process overhead in headless.
+const CHROME_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--no-zygote',
+];
+// Optional deeper cut (~100MB): single-process mode trades some page stability
+// for memory. Opt-in via env only after a deploy proves it stable.
+if (process.env.CHROME_SINGLE_PROCESS === '1') CHROME_ARGS.push('--single-process');
+
+// True once this process completed one successful install+launch+test-render
+// warm-up. Every later ensureRenderEngineReady() call resolves instantly.
+let engineReady = false;
+// In-flight warm-up shared by the boot pre-warm, the route's warm stage, and
+// the render path — so a render never launches a second Chrome alongside it.
+let engineWarmPromise = null;
+
+/**
+ * Make sure the render engine (Puppeteer Chrome) is installed, launchable, and
+ * actually able to produce a PDF — BEFORE the pipeline spends minutes of Gemini
+ * work. This is the route's "Warming the render engine…" stage: on a cold
+ * instance it pays the one-time install/launch cost up front (with live SSE
+ * progress), and every subsequent call is instant. Chrome is CLOSED after the
+ * test render so it never sits in memory during the minutes-long Gemini stages
+ * on the 512MB free tier — the real render's re-launch is fast because the
+ * binary and font caches are already hot.
+ */
+function ensureRenderEngineReady() {
+  if (engineReady) return Promise.resolve();
+  if (engineWarmPromise) return engineWarmPromise;
+  const attempt = (async () => {
+    const puppeteer = require('puppeteer');
+    await ensureChromeInstalled();
+    const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
+    console.log('[Performance Report] Warming render engine (launch + test render)…');
+    const t0 = Date.now();
+    const browser = await puppeteer.launch({ args: CHROME_ARGS, timeout: launchTimeout });
+    try {
+      const page = await browser.newPage();
+      await page.setContent('<html><body style="margin:0">warmup</body></html>', { waitUntil: 'load', timeout: 60000 });
+      await page.pdf({ format: 'A4', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+      engineReady = true;
+      console.log(`[Performance Report] Render engine warm in ${((Date.now() - t0) / 1000).toFixed(1)}s — first render will be fast.`);
+    } finally {
+      await closeBrowserGracefully(browser);
+    }
+  })();
+  engineWarmPromise = attempt.then(
+    () => { engineWarmPromise = null; },
+    (e) => { engineWarmPromise = null; throw e; }
+  );
+  return engineWarmPromise;
+}
+
 /**
  * Render an HTML string to a PDF Buffer using the Puppeteer Chrome installed on
  * THIS backend at build time (`npx puppeteer browsers install chrome`, cached in
@@ -360,6 +429,12 @@ async function closeBrowserGracefully(browser) {
  */
 async function renderPdfWithPuppeteer(html) {
   const puppeteer = require('puppeteer');
+  // Never launch alongside an in-flight warm-up — two Chromes on the 512MB
+  // free tier is an instant OOM. Await (and tolerate failure of) any pending
+  // warm-up; ensureChromeInstalled() below re-checks and self-heals.
+  if (engineWarmPromise) {
+    try { await engineWarmPromise; } catch (_) { /* self-heal below */ }
+  }
   await ensureChromeInstalled();
   // Chrome can take longer than Puppeteer's 30s default on a cold Render
   // instance, especially after the on-demand browser install. This timeout is
@@ -369,8 +444,9 @@ async function renderPdfWithPuppeteer(html) {
   const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
   const pageTimeout = Number(process.env.PUPPETEER_PAGE_TIMEOUT_MS) || 180000;
   const pdfRenderTimeout = Number(process.env.PDF_RENDER_TIMEOUT_MS) || 120000;
+  console.log(`[Performance Report] Launching Chrome for PDF render (RSS ${(process.memoryUsage().rss / 1048576).toFixed(0)} MB)…`);
   const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: CHROME_ARGS,
     timeout: launchTimeout,
   });
   try {
@@ -389,6 +465,7 @@ async function renderPdfWithPuppeteer(html) {
         }, pdfRenderTimeout);
       });
       const pdf = await Promise.race([pdfPromise, timeoutPromise]);
+      console.log(`[Performance Report] PDF rendered (${(pdf.length / 1024).toFixed(0)} KB, RSS ${(process.memoryUsage().rss / 1048576).toFixed(0)} MB).`);
       return Buffer.from(pdf);
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
@@ -463,31 +540,15 @@ async function renderReportHtmlToPdf(html, onQueued) {
 }
 
 /**
- * Boot-time warm-up: make sure Chrome is present (async install if missing),
- * then run one throwaway launch + tiny PDF render. Without this, the FIRST
- * performance report after a deploy pays the full cold-start tax — a multi-
- * minute Chrome download/launch on a cold free-tier instance that historically
- * looked like the report hanging at ~94% while /api/app-version polled 502.
+ * Boot-time warm-up — the SAME single-flight warm-up the report route calls
+ * on click (the "Warming the render engine…" stage). Running it at boot means
+ * the first report after a deploy finds an already-warm engine; the route's
+ * on-demand call covers restarts/idle periods and is instant afterwards.
  * Fire-and-forget from server startup: failures are logged, never fatal — the
- * render path still self-heals on demand.
+ * route re-warms on demand (self-healing).
  */
-async function prewarmChrome() {
-  const puppeteer = require('puppeteer');
-  await ensureChromeInstalled();
-  const launchTimeout = Number(process.env.PUPPETEER_LAUNCH_TIMEOUT_MS) || 600000;
-  console.log('[Puppeteer] Pre-warming Chrome (launch + test render)…');
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    timeout: launchTimeout,
-  });
-  try {
-    const page = await browser.newPage();
-    await page.setContent('<html><body style="margin:0">warmup</body></html>', { waitUntil: 'load', timeout: 60000 });
-    await page.pdf({ format: 'A4', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
-    console.log('[Puppeteer] Chrome pre-warm complete — first report render will be fast.');
-  } finally {
-    await closeBrowserGracefully(browser);
-  }
+function prewarmChrome() {
+  return ensureRenderEngineReady();
 }
 
 /**
@@ -500,6 +561,7 @@ module.exports = {
   generateReportNarrative,
   extractReportSource,
   renderReportHtmlToPdf,
+  ensureRenderEngineReady,
   prewarmChrome,
   postLesson,
   fetchReportExamples,

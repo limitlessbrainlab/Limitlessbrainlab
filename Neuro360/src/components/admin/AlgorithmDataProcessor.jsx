@@ -1297,14 +1297,16 @@ const AlgorithmDataProcessor = () => {
     }
   };
 
-  // Claude Report: forward the already-generated NeuroSense PDF (at pdfUrl) to the
-  // server, which reads its numbers and regenerates the polished 12-page
-  // doctor-readable "Brain Type & Performance Report". Auth is a static long-lived
-  // token (VITE_CLAUDE_REPORT_TOKEN); the backend uses its own master key for the VPS.
+  // Performance Report: forward the already-generated NeuroSense PDF (at pdfUrl) to the
+  // server, which WARMS THE RENDER ENGINE FIRST, then reads its numbers and
+  // regenerates the polished 12-page doctor-readable "Brain Type & Performance
+  // Report". Auth is a static long-lived token (VITE_PERFORMANCE_REPORT_TOKEN,
+  // with legacy VITE_CLAUDE_REPORT_TOKEN as fallback).
   // Ordered stages shown in the progress panel. `upload` is the browser->server
   // fetch (before the first SSE event); the rest are streamed by the backend.
-  const CLAUDE_STAGE_ORDER = [
-    { key: 'upload', label: 'Uploading your report…', pct: 5 },
+  const PERFORMANCE_STAGE_ORDER = [
+    { key: 'upload', label: 'Uploading your report…', pct: 4 },
+    { key: 'engine', label: 'Warming the render engine…', pct: 6 },
     { key: 'reading', label: 'Reading the document…', pct: 10 },
     { key: 'extract', label: 'Gemini is reading your numbers…', pct: 25 },
     { key: 'build', label: 'Building your report…', pct: 55 },
@@ -1343,7 +1345,7 @@ const AlgorithmDataProcessor = () => {
     // Hard block performance-report generation when the clinic has no credits left.
     if (await blockIfNoCredits(selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id)) return;
 
-    console.log('[Claude Report] ▶ Starting upload & compilation process…');
+    console.log('[Performance Report] ▶ Starting upload & compilation process…');
     const t0 = performance.now();
     const stageStartRef = { current: performance.now() };
     setIsGeneratingClaudeReport(true);
@@ -1351,8 +1353,8 @@ const AlgorithmDataProcessor = () => {
     setClaudeReportId(null);
     setClaudeReportError(null);
     setClaudeQueuePosition(0);
-    setClaudeProgress(5);
-    setClaudeStages(CLAUDE_STAGE_ORDER.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending', elapsedMs: null })));
+    setClaudeProgress(4);
+    setClaudeStages(PERFORMANCE_STAGE_ORDER.map((s, i) => ({ ...s, status: i === 0 ? 'active' : 'pending', elapsedMs: null })));
     startClaudeCreep(10);
     toast.loading('Building your 12-page Neurosense Performance Report (≈3–6 min, please keep this tab open)…', { id: 'claude-report' });
     try {
@@ -1364,7 +1366,7 @@ const AlgorithmDataProcessor = () => {
       const apiUrl = directBackendUrl
         ? `${directBackendUrl.replace(/\/$/, '')}/api`
         : proxyApiUrl;
-      const token = import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
+      const token = import.meta.env.VITE_PERFORMANCE_REPORT_TOKEN || import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
       const backendBaseUrl = apiUrl.replace(/\/api\/?$/, '');
       const requestWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
         const controller = new AbortController();
@@ -1382,24 +1384,24 @@ const AlgorithmDataProcessor = () => {
       // Preflight Render before uploading the PDF. This wakes a sleeping free
       // instance and fails early with a useful error instead of waiting for the
       // long SSE request to discover that the backend is unavailable.
-      console.log('[Claude Report] Step 0: preflighting backend…', `${backendBaseUrl}/api/health`);
+      console.log('[Performance Report] Step 0: preflighting backend…', `${backendBaseUrl}/api/health`);
       const healthRes = await requestWithTimeout(`${backendBaseUrl}/api/health`, {}, 60000);
       if (!healthRes.ok) throw new Error(`Backend preflight failed (HTTP ${healthRes.status}).`);
 
       // Explicitly exercise the CORS OPTIONS path. The browser will also issue
       // its own OPTIONS request for the Authorization header on the POST.
-      const preflightRes = await requestWithTimeout(`${apiUrl}/qeeg/claude-report`, { method: 'OPTIONS' }, 10000);
+      const preflightRes = await requestWithTimeout(`${apiUrl}/qeeg/performance-report`, { method: 'OPTIONS' }, 10000);
       if (!preflightRes.ok) throw new Error(`Report endpoint preflight failed (HTTP ${preflightRes.status}).`);
 
       const sourcePdfUrl = pdfUrl.startsWith('http')
         ? pdfUrl
         : `${backendBaseUrl}${pdfUrl.startsWith('/') ? pdfUrl : `/${pdfUrl}`}`;
-      console.log('[Claude Report] Step 1: prefetching the generated NeuroSense PDF…', sourcePdfUrl);
+      console.log('[Performance Report] Step 1: prefetching the generated NeuroSense PDF…', sourcePdfUrl);
       // Prefetch the just-generated NeuroSense PDF and forward it to the Claude endpoint.
       const srcRes = await requestWithTimeout(sourcePdfUrl, {}, 60000);
       if (!srcRes.ok) throw new Error('Could not load the generated NeuroSense PDF.');
       const blob = await srcRes.blob();
-      console.log(`[Claude Report] Step 2: NeuroSense PDF prefetched (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
+      console.log(`[Performance Report] Step 2: NeuroSense PDF prefetched (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
       const formData = new FormData();
       formData.append('pdf', new File([blob], 'neurosense-report.pdf', { type: 'application/pdf' }));
       // Forward patient identity + the report's upload/creation date so the
@@ -1421,7 +1423,7 @@ const AlgorithmDataProcessor = () => {
       } catch (dpErr) {
         console.warn('Could not compute display percents:', dpErr?.message);
       }
-      console.log(`[Claude Report] Step 3: POST ${apiUrl}/qeeg/claude-report (streaming progress)…`);
+      console.log(`[Performance Report] Step 3: POST ${apiUrl}/qeeg/claude-report (streaming progress)…`);
       // Cap the request at 20 min. The full pipeline (extract → narrative → render)
       // legitimately takes several minutes on the shared single-flight gateway, so a
       // tight cap aborted the SSE stream mid-render (~94%). 20 min only bites a true
@@ -1431,7 +1433,7 @@ const AlgorithmDataProcessor = () => {
       const timeoutId = setTimeout(() => controller.abort(), 20 * 60 * 1000);
       let response;
       try {
-        response = await fetch(`${apiUrl}/qeeg/claude-report`, {
+        response = await fetch(`${apiUrl}/qeeg/performance-report`, {
           method: 'POST',
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
           body: formData,
@@ -1439,7 +1441,7 @@ const AlgorithmDataProcessor = () => {
         });
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
-          throw new Error('Timed out after 20 min. The report did not finish — the gateway may be stuck or overloaded. Please try again.');
+          throw Object.assign(new Error('The report did not finish within 20 minutes. Please try again — the next attempt usually succeeds.'), { friendly: true });
         }
         throw fetchError;
       }
@@ -1468,10 +1470,10 @@ const AlgorithmDataProcessor = () => {
       let lastFrameAt = Date.now();
       const WATCHDOG_MS = 90 * 1000;
 
-      const pctFor = (key) => (CLAUDE_STAGE_ORDER.find((s) => s.key === key)?.pct ?? 0);
+      const pctFor = (key) => (PERFORMANCE_STAGE_ORDER.find((s) => s.key === key)?.pct ?? 0);
       const nextPctAfter = (key) => {
-        const idx = CLAUDE_STAGE_ORDER.findIndex((s) => s.key === key);
-        return CLAUDE_STAGE_ORDER[idx + 1]?.pct ?? 100;
+        const idx = PERFORMANCE_STAGE_ORDER.findIndex((s) => s.key === key);
+        return PERFORMANCE_STAGE_ORDER[idx + 1]?.pct ?? 100;
       };
 
       while (true) {
@@ -1486,13 +1488,13 @@ const AlgorithmDataProcessor = () => {
         } catch (readErr) {
           clearTimeout(watchdogTimer);
           if (watchdogFired) {
-            throw new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.');
+            throw Object.assign(new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.'), { friendly: true });
           }
           throw readErr;
         }
         clearTimeout(watchdogTimer);
         if (watchdogFired) {
-          throw new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.');
+          throw Object.assign(new Error('The report server stopped responding mid-generation (no progress for 90s). Please try again — the next attempt usually succeeds.'), { friendly: true });
         }
         lastFrameAt = Date.now();
         const { value, done } = chunk;
@@ -1515,7 +1517,7 @@ const AlgorithmDataProcessor = () => {
           try { payload = dataStr ? JSON.parse(dataStr) : {}; } catch (_) { /* ignore */ }
 
           if (event === 'progress') {
-            console.log(`[Claude Report] stage: ${payload.stage} (${payload.pct}%)`);
+            console.log(`[Performance Report] stage: ${payload.stage} (${payload.pct}%)`);
             advanceClaudeStage(payload.stage, payload.label, stageStartRef);
             setClaudeProgress(payload.pct || pctFor(payload.stage));
             startClaudeCreep(nextPctAfter(payload.stage));
@@ -1524,10 +1526,10 @@ const AlgorithmDataProcessor = () => {
             const position = payload.position || 0;
             setClaudeQueuePosition(position);
             if (position > 0) {
-              console.log(`[Claude Report] ⏳ waiting for a render slot — position ${position}`);
+              console.log(`[Performance Report] ⏳ waiting for a render slot — position ${position}`);
               setConsoleLog(prev => [...prev, `⏳ Another report is rendering — you're #${position} in queue…`]);
             } else {
-              console.log('[Claude Report] ▶ render slot acquired, rendering now');
+              console.log('[Performance Report] ▶ render slot acquired, rendering now');
               setConsoleLog(prev => [...prev, `▶️ Your turn — rendering started`]);
             }
           } else if (event === 'done') {
@@ -1542,10 +1544,10 @@ const AlgorithmDataProcessor = () => {
       clearTimeout(timeoutId);
       stopClaudeCreep();
 
-      if (streamError) throw new Error(streamError);
-      if (!gotDone || !pdfUrlResult) throw new Error('The report stream ended before a report was produced.');
+      if (streamError) throw Object.assign(new Error(streamError), { friendly: true });
+      if (!gotDone || !pdfUrlResult) throw Object.assign(new Error('The report stream ended before a report was produced — the server may have restarted mid-render. Please try again.'), { friendly: true });
 
-      console.log('[Claude Report] report compiled. Public URL:', pdfUrlResult);
+      console.log('[Performance Report] report compiled. Public URL:', pdfUrlResult);
       setClaudeProgress(100);
       setClaudeStages((prev) => prev.map((s) => (s.status === 'active' ? { ...s, status: 'done', elapsedMs: performance.now() - (stageStartRef.current || performance.now()) } : s)));
       setClaudeReportUrl(pdfUrlResult);
@@ -1567,7 +1569,7 @@ const AlgorithmDataProcessor = () => {
       // flaky network. (Download/Send only need claudeReportUrl, already set above.)
       stopClaudeCreep();
       setIsGeneratingClaudeReport(false);
-      console.log(`[Claude Report] ✓ Done in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+      console.log(`[Performance Report] ✓ Done in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
       toast.success('Neurosense Performance Report ready!', { id: 'claude-report' });
 
       // Best-effort, time-boxed, fire-and-forget: persisting the report URL/id and unlocking care
@@ -1601,10 +1603,15 @@ const AlgorithmDataProcessor = () => {
         })
         .catch((e) => console.warn('Care program grant skipped:', e?.message || e));
     } catch (error) {
-      console.error(`[Claude Report] ✗ Failed after ${((performance.now() - t0) / 1000).toFixed(1)}s:`, error);
+      console.error(`[Performance Report] ✗ Failed after ${((performance.now() - t0) / 1000).toFixed(1)}s:`, error);
       stopClaudeCreep();
-      setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
-      toast.error(getFriendlyErrorMessage(error, 'The Neurosense Performance Report could not be generated. Please try again.'), { id: 'claude-report' });
+      // Our own thrown errors are already user-friendly — pass them through
+      // verbatim instead of letting the generic mapper flatten them.
+      const friendlyMsg = error?.friendly
+        ? error.message
+        : getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.');
+      setClaudeReportError(friendlyMsg);
+      toast.error(friendlyMsg, { id: 'claude-report' });
     } finally {
       stopClaudeCreep();
       setIsGeneratingClaudeReport(false);

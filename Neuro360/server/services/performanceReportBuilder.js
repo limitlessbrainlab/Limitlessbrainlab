@@ -7,10 +7,10 @@
  *      → 12-page HTML template (numbers filled deterministically)
  *      → Puppeteer renders the reference HTML/CSS layout to PDF
  *
- * Gemini never computes or alters numbers — see nexaprocService.generateReportNarrative.
+ * Gemini never computes or alters numbers — see performanceReportService.generateReportNarrative.
  */
 
-const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./nexaprocService');
+const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./performanceReportService');
 const { renderReportHtml } = require('../templates/brainReport12Page');
 const { inlineEmojis } = require('../utils/inlineEmojis');
 
@@ -39,7 +39,7 @@ async function generateBrainReportPdf(reportData, narrative, onProgress, onQueue
       if (typeof onProgress === 'function') onProgress('narrative');
       prose = await generateReportNarrative(reportData);
     } catch (e) {
-      console.warn('[Claude Report] Narrative generation failed, using framework defaults:', e.message);
+      console.warn('[Performance Report] Narrative generation failed, using framework defaults:', e.message);
       postLesson('narrative', e.message,
         `Narrative generation failed: "${e.message}". Ensure the JSON schema is followed exactly and output has no markdown fences.`);
       prose = {};
@@ -49,7 +49,7 @@ async function generateBrainReportPdf(reportData, narrative, onProgress, onQueue
   if (typeof onProgress === 'function') onProgress('render');
   // Use the original HTML/CSS template so the generated report matches the
   // approved 12-page reference PDF. The renderer has its own PDF timeout and
-  // Chrome cleanup safeguards in nexaprocService.
+  // Chrome cleanup safeguards in performanceReportService.
   const html = inlineEmojis(renderReportHtml(reportData, prose));
   const pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
   return { pdf, narrative: prose };

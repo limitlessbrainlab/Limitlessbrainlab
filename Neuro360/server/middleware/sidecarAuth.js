@@ -1,11 +1,12 @@
 const crypto = require('crypto');
 
-// Static long-lived token for the Claude Report feature.
+// Static long-lived token for the Performance Report feature.
 //
-// No Supabase, no expiry. The frontend sends CLAUDE_REPORT_TOKEN as a Bearer
-// token; the backend compares it (timing-safe) against the same value in env,
-// then forwards the PDF to the VPS gateway using the server-side master key.
-const EXPECTED = (process.env.CLAUDE_REPORT_TOKEN || '').trim();
+// No Supabase, no expiry. The frontend sends the token as a Bearer value; the
+// backend compares it (timing-safe) against the same value in env.
+// Reads PERFORMANCE_REPORT_TOKEN, falling back to the legacy CLAUDE_REPORT_TOKEN
+// so existing Render dashboard values keep working during the rename.
+const EXPECTED = (process.env.PERFORMANCE_REPORT_TOKEN || process.env.CLAUDE_REPORT_TOKEN || '').trim();
 
 function timingSafeEqualStr(a, b) {
   const ab = Buffer.from(String(a));
@@ -18,7 +19,7 @@ const sidecarAuth = (req, res, next) => {
   if (!EXPECTED || EXPECTED.length < 16) {
     return res.status(500).json({
       success: false,
-      error: 'CLAUDE_REPORT_TOKEN is not configured on the server (min 16 chars).',
+      error: 'PERFORMANCE_REPORT_TOKEN is not configured on the server (min 16 chars).',
       code: 'NO_SERVER_TOKEN',
     });
   }

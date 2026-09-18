@@ -2,7 +2,7 @@
  * NeuroSense Report -> Markdown bridge.
  *
  * Converts the values transcribed from an ALREADY-GENERATED NeuroSense report
- * (the `source` object produced by nexaprocService.extractReportSource, which
+ * (the `source` object produced by performanceReportService.extractReportSource, which
  * holds the exact numbers printed on the NeuroSense PDF) into a structured
  * Markdown document, and parses that document back into a plain object.
  *

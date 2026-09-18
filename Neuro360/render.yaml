@@ -40,7 +40,10 @@ services:
       # output fails the score/bucket validation gate.
       - key: GEMINI_REPORT_MODEL
         value: "gemini-2.5-flash-lite"
-      - key: CLAUDE_REPORT_TOKEN
+      # Auth token for the Performance Report endpoint. The backend falls back
+      # to the legacy CLAUDE_REPORT_TOKEN, so existing dashboard values keep
+      # working during the rename transition.
+      - key: PERFORMANCE_REPORT_TOKEN
         sync: false
       # Gates the /api/patient-documents endpoints (private patients_documents
       # bucket). Min 16 chars; must equal the frontend's VITE_PATIENT_DOCS_TOKEN.
@@ -130,7 +133,9 @@ services:
         sync: false
       - key: VITE_API_URL
         sync: false
-      - key: VITE_CLAUDE_REPORT_TOKEN
+      # Frontend reads VITE_PERFORMANCE_REPORT_TOKEN, falling back to the
+      # legacy VITE_CLAUDE_REPORT_TOKEN.
+      - key: VITE_PERFORMANCE_REPORT_TOKEN
         sync: false
       # Must equal the backend's PATIENT_DOCS_TOKEN (patient-document uploads).
       - key: VITE_PATIENT_DOCS_TOKEN

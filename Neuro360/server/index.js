@@ -6,10 +6,9 @@ const fs = require('fs');
 const nodemailer = require('nodemailer');
 const compression = require('compression');
 const qeegRoutes = require('./routes/qeegRoutes');
-const claudeReportRoutes = require('./routes/claudeReportRoutes');
+const performanceReportRoutes = require('./routes/performanceReportRoutes');
 const patientDocumentRoutes = require('./routes/patientDocumentRoutes');
 const ssoRoutes = require('./routes/ssoRoutes');
-const claudeRoutes = require('./routes/claudeRoutes');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const { getReportEmailHtml, getNeuroSenseReportEmailHtml } = require('../shared/reportEmailTemplate.cjs');
@@ -1286,10 +1285,14 @@ app.get('/api/app-version', (req, res) => {
 
 // ===== PROTECTED ROUTES (Auth Required) =====
 
-// Claude Report (AIaaS sidecar) - has its own auth (long-lived sidecar token OR
-// Supabase token). Mounted BEFORE /api/qeeg so this specific path wins and is
-// not gated by the hourly Supabase-only authRequired middleware.
-app.use('/api/qeeg/claude-report', claudeReportRoutes);
+// Performance Report pipeline (Gemini transcription + narrative + PDF render).
+// Has its own auth (long-lived token). Mounted BEFORE /api/qeeg so this
+// specific path wins and is not gated by the hourly Supabase-only authRequired
+// middleware.
+app.use('/api/qeeg/performance-report', performanceReportRoutes);
+// Deprecated alias — older deployed frontend bundles may still POST the
+// previous path; keep until no traffic hits it, then remove.
+app.use('/api/qeeg/claude-report', performanceReportRoutes);
 
 // Patient documents (private patients_documents bucket) - has its own static
 // token auth (PATIENT_DOCS_TOKEN); uploads/reads/deletes via service-role key.
@@ -1300,9 +1303,6 @@ app.use('/api/qeeg', protectedRoutes.authRequired, qeegRoutes);
 
 // SSO routes - Optional auth
 app.use('/api/sso', protectedRoutes.optionalAuth, ssoRoutes);
-
-// (claudeRoutes is mounted once under /api below — the old duplicate
-// /api/test mount exposed the same handlers at a second path for no reason)
 
 // Contact Form API endpoint - PUBLIC (no auth required)
 app.post('/api/contact', async (req, res) => {
@@ -1467,9 +1467,6 @@ app.post('/api/clinic-enquiry', async (req, res) => {
     }
   }
 });
-
-// Claude API routes - auth handled per-route inside claudeRoutes
-app.use('/api', claudeRoutes);
 
 // EDF Upload Notification Email - triggered after QEEG processing
 app.post('/api/edf-upload-notification', async (req, res) => {
@@ -9061,14 +9058,14 @@ app.listen(PORT, () => {
   // after a deploy pays the full Chromium cold-start cost on the free 512MB
   // instance — historically minutes of a stalled server that looked like the
   // report hanging at ~94% while /api/app-version polls returned 502.
-  // Fire-and-forget: any failure is logged, never fatal; the render path
-  // self-heals on demand (see services/nexaprocService.js).
+  // Fire-and-forget: any failure is logged, never fatal; the report route
+  // re-warms on demand (single-flight — see services/performanceReportService.js).
   (async () => {
     try {
-      const { prewarmChrome } = require('./services/nexaprocService');
+      const { prewarmChrome } = require('./services/performanceReportService');
       await prewarmChrome();
     } catch (e) {
-      console.warn('[Puppeteer] Boot pre-warm failed (render path will self-heal):', e.message);
+      console.warn('[Performance Report] Boot engine warm-up failed (render path will self-heal):', e.message);
     }
   })();
 });

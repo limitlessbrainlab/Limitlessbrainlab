@@ -187,7 +187,7 @@ Set these in **Render Dashboard → neuro360-backend → Environment**:
 | `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | From Supabase (secret) |
 | `NEXAPROC_GATEWAY_URL` | `http://<vps-ip>:8787` | Your VPS IP |
 | `NEXAPROC_MASTER_KEY` | `<your_vps_master_key>` | Must match VPS .env |
-| `CLAUDE_REPORT_TOKEN` | `<generate_random_32+_chars>` | Static auth token |
+| `PERFORMANCE_REPORT_TOKEN` | `<generate_random_32+_chars>` | Static auth token |
 | `GEMINI_API_KEY` | `AIza...` | From Google AI Studio |
 | `GEMINI_REQUEST_DELAY_MS` | `2000` | |
 | `GEMINI_DAILY_LIMIT` | `50` | |
@@ -241,7 +241,7 @@ Set these in **Vercel → Project Settings → Environment Variables**:
 | `VITE_SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | `eyJ...` (anon key from Supabase) |
 | `VITE_API_URL` | `https://neuro360-backend.onrender.com/api` |
-| `VITE_CLAUDE_REPORT_TOKEN` | Same value as `CLAUDE_REPORT_TOKEN` on Render |
+| `VITE_PERFORMANCE_REPORT_TOKEN` | Same value as `PERFORMANCE_REPORT_TOKEN` on Render |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | `pk_live_...` from Stripe |
 | `VITE_APP_NAME` | `Neuro360` |
 | `VITE_SUPABASE_STORAGE_BUCKET` | `patient-reports` |
@@ -320,7 +320,7 @@ Run through this after every deployment:
 
 ```
 NEXAPROC_MASTER_KEY        ← Must match VPS .env exactly
-CLAUDE_REPORT_TOKEN        ← Must match VITE_CLAUDE_REPORT_TOKEN in Vercel
+PERFORMANCE_REPORT_TOKEN        ← Must match VITE_PERFORMANCE_REPORT_TOKEN in Vercel
 SUPABASE_SERVICE_ROLE_KEY  ← Never expose to frontend
 STRIPE_SECRET_KEY          ← Use sk_live_ for production
 ```
@@ -328,7 +328,7 @@ STRIPE_SECRET_KEY          ← Use sk_live_ for production
 ### Critical — Must Set Manually in Vercel Dashboard
 
 ```
-VITE_CLAUDE_REPORT_TOKEN   ← Must match CLAUDE_REPORT_TOKEN on Render
+VITE_PERFORMANCE_REPORT_TOKEN   ← Must match PERFORMANCE_REPORT_TOKEN on Render
 VITE_SUPABASE_ANON_KEY     ← Public key (safe for frontend)
 VITE_API_URL               ← Must point to Render backend URL
 ```

@@ -339,7 +339,7 @@ function buildReportData(qeegData, algoResults, patient = {}) {
 
 /**
  * Build reportData from numbers TRANSCRIBED out of an already-generated report
- * (the `source` object from nexaprocService.extractReportSource: displayed
+ * (the `source` object from performanceReportService.extractReportSource: displayed
  * percentages + deep-dive values + brainwave). All inversion/derivation happens
  * here (deterministic) — Claude only copied the printed numbers. We then reuse
  * `buildReportData` for the rest (bars, overall, statuses, 5-type, profile).
@@ -660,7 +660,7 @@ if (require.main === module) {
   assert.equal(bar('burnout'), 90);   // 3 red -> Severe (matches NeuroSense level)
   // Overall inverts Stress (20->80) & Burnout (90->10): avg(80,55,55,55,10,55,55)=365/7
   assert.equal(report.overall, 52);
-  console.log('claudeReportData self-check ok');
+  console.log('performanceReportData self-check ok');
 }
 
 module.exports = { buildReportData, buildReportDataFromSource, buildReportDataFromNeuroSenseMd };

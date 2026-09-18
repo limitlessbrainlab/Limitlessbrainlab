@@ -745,7 +745,7 @@ class GeminiPdfGenerator {
 
     // Append numeric relative-power values as extractable text so the
     // "Upload to Claude" pipeline (pdf-parse → Claude extraction) can read
-    // the real values instead of defaulting to 0. Same channels as claudeReportData.js.
+    // the real values instead of defaulting to 0. Same channels as performanceReportData.js.
     try {
       const ecRel = this.qeegData?.EC?.relative || {};
       const POSTERIOR_CHS = ['Pz', 'P3', 'P4', 'O1', 'O2', 'Oz'];
