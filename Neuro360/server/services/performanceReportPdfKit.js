@@ -4,47 +4,138 @@ const PDFDocument = require('pdfkit');
 // or 'pdfkit'). Deliberately browser-free: rendering a Chromium PDF needs
 // ~300-400MB on top of Node, which froze/killed the 512MB Render free-tier
 // instance outright (health checks, app-version polls and SSE all went dark
-// mid-render). PDFKit draws the same content directly and peaks at a fraction
-// of that. Set PDF_RENDERER=puppeteer (after a plan upgrade) for the reference
+// mid-render). This renderer is a faithful vector port of the reference HTML
+// design in templates/brainReport12Page.js — same gradients, cards, progress
+// bars, badges and page furniture — drawn directly with PDFKit at a fraction
+// of the memory. Set PDF_RENDERER=puppeteer (after a plan upgrade) for the
 // HTML/Chromium layout instead — see performanceReportBuilder.js.
+
 const COLORS = {
   navy: '#15315f',
   blue: '#1e63b4',
+  badgeBlue: '#2f7ff0',
   cyan: '#1f93c4',
   text: '#1f2a44',
+  body: '#41506c',
   muted: '#5b6b86',
-  pale: '#eef3f9',
+  faint: '#8aa0c0',
+  ghost: '#9aa8c0',
   line: '#e5e9f0',
+  track: '#eef1f6',
+  darkA: '#123a76',
+  darkB: '#1e63b4',
   green: '#16a34a',
-  orange: '#d97706',
+  blueMid: '#2563eb',
+  orange: '#ea580c',
   red: '#dc2626',
 };
 
+// Status-kind palettes (badges, tone cards) — mirrors statusKind()/KIND_* in
+// the HTML template.
+const KIND = {
+  good: { color: '#16a34a', bg: '#dcfce7', fg: '#15803d' },
+  warn: { color: '#d97706', bg: '#fef3c7', fg: '#b45309' },
+  bad: { color: '#ea580c', bg: '#ffedd5', fg: '#c2410c' },
+};
+
+// Tinted signal/strengths/watch-zone/callout card palettes (TONE in template).
+const TONE = {
+  good: { bg: '#f0fdf4', bd: '#bbf7d0', dot: '#16a34a', h: '#15803d' },
+  warn: { bg: '#fffbeb', bd: '#fde68a', dot: '#d97706', h: '#b45309' },
+  info: { bg: '#eff6ff', bd: '#bfdbfe', dot: '#2563eb', h: '#1e40af' },
+  plain: { bg: '#f8fafc', bd: '#e5e9f0', dot: '#64748b', h: '#334155' },
+};
+
+// Fixed band palette for the brainwave profile rows (profileRows in template).
+const WAVE_COLORS = {
+  Delta: '#2b6cb0',
+  Theta: '#3b82f6',
+  Alpha: '#14b8c4',
+  Beta: '#94a3c8',
+  'Hi-Beta': '#94a3c8',
+};
+
+// The five NeuroSense types, in classifier id order (brainType5Classifier).
+const FIVE_TYPES = [
+  { id: 1, name: 'Steady', desc: 'The well-regulated, balanced brain - calm under load and consistent day to day.' },
+  { id: 2, name: 'Explorer', desc: 'The creative, novelty-seeking brain - idea-rich but easily pulled off track.' },
+  { id: 3, name: 'Driver', desc: 'The driven, goal-focused brain - high output that can run past its recovery.' },
+  { id: 4, name: 'Empath', desc: 'The deeply feeling, relationship-driven brain - reads everything, absorbs much.' },
+  { id: 5, name: 'Sentinel', desc: 'The vigilant, prepared brain - always scanning, rarely fully off duty.' },
+];
+
+// Stress & Burnout are inverted parameters: the displayed number is the LEVEL
+// (low stress = good), so their colour is driven by the inverted value —
+// matching the template's INVERTED_KEYS/colorPct.
+function invertedKey(b) {
+  const k = String((b && b.key) || '').toLowerCase();
+  const lbl = String((b && b.label) || '').toLowerCase();
+  return k === 'stress' || k === 'burnout' || lbl.startsWith('stress') || lbl.startsWith('burnout');
+}
+function colorPct(b) {
+  const p = Number(b && b.percent) || 0;
+  return invertedKey(b) ? 100 - p : p;
+}
+function statusKind(status) {
+  const s = String(status || '').toLowerCase();
+  if (/(excellent|strong|healthy|good|balanced|normal|optimal)/.test(s)) return 'good';
+  if (/(moderate|mild|borderline|right-shifted|left-shifted|average|fair)/.test(s)) return 'warn';
+  return 'bad';
+}
+function pctColor(p) {
+  const n = Math.max(0, Math.min(100, Number(p) || 0));
+  if (n >= 75) return COLORS.green;
+  if (n >= 40) return COLORS.blueMid;
+  if (n >= 15) return COLORS.orange;
+  return COLORS.red;
+}
+function pctTint(p) {
+  const n = Math.max(0, Math.min(100, Number(p) || 0));
+  if (n >= 75) return '#dcfce7';
+  if (n >= 40) return '#dbeafe';
+  if (n >= 15) return '#ffedd5';
+  return '#fee2e2';
+}
+function pctFg(p) {
+  const n = Math.max(0, Math.min(100, Number(p) || 0));
+  if (n >= 75) return '#15803d';
+  if (n >= 40) return '#1e40af';
+  if (n >= 15) return '#c2410c';
+  return '#b91c1c';
+}
+
+// Standard PDF fonts use WinAnsi encoding: en/em dashes, curly quotes and the
+// bullet/middle-dot glyphs are all covered, so they are kept for visual
+// fidelity with the HTML reference. True emoji and symbols outside WinAnsi
+// (checkmark, arrow, etc.) are mapped to safe ASCII equivalents or dropped.
 function ascii(value) {
   return String(value == null ? '' : value)
-    .replace(/[–—]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/·/g, ' - ')
-    .replace(/[^\x00-\x7F]/g, '');
+    .replace(/\u2713/g, '+')
+    .replace(/\u2192/g, '->')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[^\x00-\xFF]/g, '');
 }
 
 function fmt(value, unit = '') {
   if (value == null || value === '') return '-';
   if (typeof value === 'object') {
+    const label = { fz: 'Fz', cz: 'Cz', pz: 'Pz' };
     return ['fz', 'cz', 'pz'].filter((k) => value[k] != null)
-      .map((k) => `${k.toUpperCase()}: ${value[k]}`).join(', ') || '-';
+      .map((k) => `${label[k] || k.toUpperCase()}: ${typeof value[k] === 'number' ? Math.round(value[k] * 100) / 100 : value[k]}`)
+      .join(', ') || '-';
   }
-  return `${value}${unit === '%' ? '%' : unit ? ` ${unit}` : ''}`;
+  const n = typeof value === 'number' ? Math.round(value * 100) / 100 : value;
+  if (!unit) return `${n}`;
+  return unit === '%' ? `${n}%` : `${n} ${unit}`;
 }
 
-function pct(value) {
-  return Math.max(0, Math.min(100, Number(value) || 0));
-}
-
-function colorFor(value) {
-  const n = pct(value);
-  return n >= 75 ? COLORS.green : n >= 40 ? COLORS.blue : n >= 15 ? COLORS.orange : COLORS.red;
+function splitDash(line) {
+  const s = ascii(line);
+  const i = s.indexOf(' - ');
+  if (i > 0) return { title: s.slice(0, i).trim(), body: s.slice(i + 3).trim() };
+  return { title: s.trim(), body: '' };
 }
 
 function makeRenderer(reportData, narrative = {}, onProgress) {
@@ -68,149 +159,665 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   });
   const W = 595.28;
   const H = 841.89;
-  const M = 43;
+  const M = 43; // ~15mm side padding (template: 15mm)
 
-  function page(dark = false) {
+  // ---------- page furniture ----------
+  function addPage() {
     doc.addPage();
-    if (dark) doc.rect(0, 0, W, H).fill(COLORS.navy);
-    else doc.rect(0, 0, W, H).fill('#ffffff');
+    doc.rect(0, 0, W, H).fill('#ffffff');
   }
+  // .dark: linear-gradient(135deg,#123a76,#1e63b4)
+  function darkPage(withGlow = false) {
+    doc.addPage();
+    const grad = doc.linearGradient(0, 0, W, H);
+    grad.stop(0, COLORS.darkA).stop(1, COLORS.darkB);
+    doc.rect(0, 0, W, H).fill(grad);
+    // .glow: radial highlight, top-right corner
+    if (withGlow) {
+      const cx = W - 20;
+      const cy = 40;
+      const rg = doc.radialGradient(cx, cy, 10, cx, cy, 260);
+      rg.stop(0, '#78afff', 0.40).stop(1, '#78afff', 0);
+      doc.rect(cx - 260, cy - 260, 520, 520).fill(rg);
+    }
+  }
+
+  // White brain glyph drawn as a cloud of overlapping circles — reads as the
+  // lucide brain mark at badge sizes (no SVG engine available in PDFKit).
+  function brainGlyph(cx, cy, size, color = '#ffffff', opacity = 1) {
+    const s = size / 24; // design space is 24x24
+    doc.save();
+    doc.fillColor(color);
+    if (opacity < 1) doc.fillOpacity(opacity);
+    const lobe = (mx) => {
+      doc.circle(cx + mx * 1.6 * s, cy - 4.4 * s, 3.4 * s).fill();
+      doc.circle(cx + mx * 4.6 * s, cy - 5.8 * s, 2.9 * s).fill();
+      doc.circle(cx + mx * 6.6 * s, cy - 2.2 * s, 3.1 * s).fill();
+      doc.circle(cx + mx * 5.6 * s, cy + 2.6 * s, 3.0 * s).fill();
+      doc.circle(cx + mx * 2.6 * s, cy + 4.6 * s, 2.7 * s).fill();
+    };
+    lobe(-1);
+    lobe(1);
+    doc.circle(cx, cy + 5.4 * s, 2.2 * s).fill();
+    if (opacity < 1) doc.fillOpacity(1);
+    doc.restore();
+  }
+
+  // Blue rounded-square logo badge with the white brain mark (.lmark).
+  function brandBadge(x, y, box) {
+    doc.roundedRect(x, y, box, box, box * 0.3).fill(COLORS.badgeBlue);
+    brainGlyph(x + box / 2, y + box / 2 - box * 0.04, box * 0.62);
+  }
+
+  function fit(value, x, y, width, size, color, opts = {}, minSize = 6.2) {
+    // Shrink-to-fit paragraph: keeps narrative text inside its card.
+    let s = size;
+    const str = ascii(value);
+    while (s > minSize) {
+      doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(s);
+      if (doc.heightOfString(str, { width, lineGap: opts.lineGap ?? 1.6 }) <= opts.maxHeight) break;
+      s -= 0.4;
+    }
+    doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(s).fillColor(color)
+      .text(str, x, y, { width, lineGap: opts.lineGap ?? 1.6, align: opts.align || 'left' });
+  }
+
   function text(value, x, y, width, size = 10, color = COLORS.text, opts = {}) {
     doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
-      .text(ascii(value), x, y, { width, lineGap: opts.lineGap ?? 2, align: opts.align || 'left' });
+      .text(ascii(value), x, y, { width, lineGap: opts.lineGap ?? 2, align: opts.align || 'left', characterSpacing: opts.ls || 0 });
   }
+
+  // .phead — brand lockup + "NN / SECTION" + hairline
   function header(section, label) {
-    text('NEUROSENSE', M, 34, 180, 10, COLORS.blue, { bold: true });
-    text(`${section}  /  ${label}`, 350, 35, W - M - 350, 8, '#8aa0c0', { bold: true, align: 'right' });
-    doc.moveTo(M, 58).lineTo(W - M, 58).strokeColor(COLORS.line).lineWidth(0.7).stroke();
+    brandBadge(M, 44, 22.5);
+    text('NeuroSense Brain Health', M + 31, 46, 200, 9.8, COLORS.navy, { bold: true });
+    text('SMART EEG INTELLIGENCE', M + 31, 59, 200, 6, COLORS.faint, { bold: true, ls: 1.5 });
+    text(`${section} / ${label}`, W - M - 220, 50, 220, 8.3, COLORS.faint, { bold: true, align: 'right', ls: 2.2 });
+    doc.moveTo(M, 82).lineTo(W - M, 82).strokeColor(COLORS.line).lineWidth(0.8).stroke();
   }
-  function footer(number) {
-    doc.moveTo(M, H - 48).lineTo(W - M, H - 48).strokeColor(COLORS.line).lineWidth(0.7).stroke();
-    text(`Limitless Brain Lab  |  Page ${number}`, M, H - 37, 250, 8, '#9aa8c0');
-    text(ascii(p.name || ''), W - M - 180, H - 37, 180, 8, '#9aa8c0', { align: 'right' });
+
+  // .pfoot — "NeuroSense • Limitless Brain Lab • site" + "Page N • Label"
+  function footer(number, label) {
+    doc.moveTo(M, H - 45).lineTo(W - M, H - 45).strokeColor(COLORS.track).lineWidth(0.8).stroke();
+    text('NeuroSense \u2022 Limitless Brain Lab \u2022 limitlessbrainlab-eight.vercel.app', M, H - 37, 360, 7.5, COLORS.ghost);
+    text(`Page ${number} \u2022 ${label}`, W - M - 180, H - 37, 180, 7.5, COLORS.ghost, { align: 'right' });
   }
-  function title(kicker, heading, y = 84) {
-    text(kicker.toUpperCase(), M, y, W - 2 * M, 8, '#8aa0c0', { bold: true });
-    text(heading, M, y + 18, W - 2 * M, 25, COLORS.navy, { bold: true, lineGap: 0 });
+
+  // ---------- typography kit ----------
+  function eyebrow(str, x = M, y = 102, color = COLORS.faint) {
+    text(String(str).toUpperCase(), x, y, W - 2 * M, 8.3, color, { bold: true, ls: 2.2 });
   }
-  function paragraph(value, x = M, y = 145, width = W - 2 * M, size = 10.5, color = COLORS.muted) {
-    text(value, x, y, width, size, color, { lineGap: 3 });
+  // h2 with a cyan-highlighted middle segment: h2('Your brain at a', 'glance')
+  function h2(pre, hl, post = '', x = M, y = 116, size = 22) {
+    doc.font('Helvetica-Bold').fontSize(size);
+    const wPre = hl ? doc.widthOfString(ascii(`${pre} `)) : 0;
+    const wHl = hl ? doc.widthOfString(ascii(hl)) : 0;
+    if (pre) text(pre, x, y, W - 2 * M, size, COLORS.navy, { bold: true, lineGap: 0 });
+    if (hl) text(hl, x + wPre, y, W - 2 * M - wPre, size, COLORS.cyan, { bold: true, lineGap: 0 });
+    if (post) text(post, x + wPre + wHl, y, W - 2 * M - wPre - wHl, size, COLORS.navy, { bold: true, lineGap: 0 });
   }
-  function card(x, y, w, h, fill = '#ffffff', stroke = COLORS.line) {
-    doc.roundedRect(x, y, w, h, 8).fillAndStroke(fill, stroke);
+  // .lead
+  function lead(str, x = M, y = 148, width = W - 2 * M, size = 10.2, color = COLORS.muted) {
+    fit(str, x, y, width, size, color, { maxHeight: 90 });
   }
-  function badge(value, x, y, color = COLORS.blue) {
-    doc.roundedRect(x, y, Math.max(60, String(value).length * 5.8 + 18), 18, 9).fill(color);
-    text(String(value).toUpperCase(), x + 8, y + 5, 140, 7, '#ffffff', { bold: true });
+  function h3(str, x = M, y) {
+    text(str, x, y, W - 2 * M, 12.8, COLORS.navy, { bold: true });
   }
-  function bar(label, value, x, y, width = 210) {
-    text(label, x, y, width - 50, 9.5, COLORS.text, { bold: true });
-    text(`${value}%`, x + width - 44, y, 44, 9.5, colorFor(value), { bold: true, align: 'right' });
-    doc.roundedRect(x, y + 16, width, 7, 3).fill('#eef1f6');
-    doc.roundedRect(x, y + 16, width * pct(value) / 100, 7, 3).fill(colorFor(value));
+
+  // ---------- component kit ----------
+  function card(x, y, w, h, fill = '#ffffff', stroke = '#e8edf5', radius = 10.5, strokeWidth = 0.9) {
+    doc.roundedRect(x, y, w, h, radius).lineWidth(strokeWidth).fillAndStroke(fill, stroke);
   }
-  function list(items, x, y, width, color = COLORS.muted, gap = 24) {
-    (Array.isArray(items) ? items : []).slice(0, 6).forEach((item, i) => {
-      doc.circle(x + 3, y + i * gap + 6, 2.5).fill(COLORS.blue);
-      text(item, x + 12, y + i * gap, width - 12, 9, color, { lineGap: 2 });
+  // Measured pill (badges, tags, traits).
+  function pill(str, x, y, bg, fg, size = 7.1, padX = 7.5, h = 13.5) {
+    const label = ascii(String(str).toUpperCase());
+    doc.font('Helvetica-Bold').fontSize(size);
+    const w = doc.widthOfString(label) + padX * 2;
+    doc.roundedRect(x, y, w, h, h / 2).fill(bg);
+    text(label, x + padX, y + h / 2 - size / 2 - 0.5, w - padX, size, fg, { bold: true });
+    return w;
+  }
+  // .ptrack/.pfill — rounded progress bar.
+  function track(x, y, w, h, percent, color) {
+    const pr = Math.max(0, Math.min(100, Number(percent) || 0));
+    doc.roundedRect(x, y, w, h, h / 2).fill(COLORS.track);
+    if (pr > 0.5) doc.roundedRect(x, y, Math.max(h, w * pr / 100), h, h / 2).fill(color);
+  }
+  // Bulleted list with wrapping dots (tcard/tone-card bullets).
+  function bullets(items, x, y, width, tone, useMark = false, size = 7.9, gap = 4.5, maxItems = 6) {
+    const t = TONE[tone] || TONE.plain;
+    let cy = y;
+    (Array.isArray(items) ? items : []).slice(0, maxItems).forEach((raw) => {
+      const item = ascii(raw);
+      if (!item) return;
+      doc.font('Helvetica').fontSize(size);
+      const h = doc.heightOfString(item, { width: width - 14, lineGap: 1.4 });
+      if (useMark) {
+        text('+', x, cy - 0.5, 8, size + 0.7, t.dot, { bold: true });
+      } else {
+        doc.circle(x + 2.6, cy + size * 0.42, 2.2).fill(t.dot);
+      }
+      doc.font('Helvetica').fontSize(size).fillColor(COLORS.body)
+        .text(item, x + 12, cy, { width: width - 14, lineGap: 1.4 });
+      cy += h + gap;
+    });
+    return cy;
+  }
+  // .tcard — tinted card with coloured heading + dot bullets.
+  function toneCard(x, y, w, h, tone, title, items, useMark = false) {
+    const t = TONE[tone] || TONE.plain;
+    card(x, y, w, h, t.bg, t.bd, 9);
+    text(ascii(title), x + 11, y + 10, w - 22, 9.4, t.h, { bold: true });
+    bullets(items, x + 11, y + 27, w - 22, tone, useMark);
+  }
+  // .callout — full-width tinted box (title + paragraph).
+  function callout(x, y, w, h, tone, title, body) {
+    const t = TONE[tone] || TONE.plain;
+    card(x, y, w, h, t.bg, t.bd, 9);
+    let cy = y + 10;
+    if (title) {
+      text(ascii(title), x + 12, cy, w - 24, 9.4, t.h, { bold: true });
+      cy += 16;
+    }
+    fit(body, x + 12, cy, w - 24, 8.6, COLORS.body, { maxHeight: y + h - cy - 8 });
+  }
+  // .card with .mini-title/.mini-body (plain white card, small heading + body).
+  function miniCard(x, y, w, h, title, body) {
+    card(x, y, w, h);
+    text(ascii(title), x + 12, y + 10, w - 24, 9.8, COLORS.navy, { bold: true });
+    fit(body, x + 12, y + 25, w - 24, 8.3, COLORS.muted, { maxHeight: y + h - (y + 25) - 8 });
+  }
+
+  // ================= PAGE 1 — COVER =================
+  darkPage(true);
+  brandBadge(M, 44, 30);
+  text('NeuroSense', M + 40, 46, 220, 15, '#ffffff', { bold: true });
+  doc.fillOpacity(0.7); // sub uses .7 opacity per template
+  text('SMART EEG INTELLIGENCE', M + 40, 63, 220, 6.8, '#ffffff', { ls: 2.2 });
+  doc.fillOpacity(1);
+
+  eyebrow('Personalized Neuro-Profile', M, 208, '#9ec2f0');
+  text('Your Brain', M, 228, 500, 39, '#ffffff', { bold: true, lineGap: 0 });
+  text('Type & Performance', M, 270, 500, 39, '#ffffff', { bold: true, lineGap: 0 });
+  text('Report', M, 312, 500, 39, '#ffffff', { bold: true, lineGap: 0 });
+  fit('A complete map of your brainwave activity, cognitive performance, and dominant brain type - built from 19-channel qEEG analysis and the NeuroSense five-type framework.', M, 372, 430, 10.2, '#cfe0f7', { maxHeight: 70 });
+
+  // .info-cards — 4 frosted glass cards
+  const infoCards = [
+    ['NAME', p.name], ['ASSESSMENT', p.assessmentDate], ['BRAIN TYPE', bt.name], ['REPORT ID', p.reportId],
+  ];
+  {
+    const gap = 9;
+    const cw = (W - 2 * M - gap * 3) / 4;
+    infoCards.forEach(([k, v], i) => {
+      const x = M + i * (cw + gap);
+      const y = 676;
+      const h = 62;
+      doc.save();
+      doc.roundedRect(x, y, cw, h, 9).fillColor('#ffffff').fillOpacity(0.10).fill();
+      doc.roundedRect(x, y, cw, h, 9).lineWidth(0.9).strokeColor('#ffffff').strokeOpacity(0.20).stroke();
+      doc.restore();
+      text(k, x + 10, y + 10, cw - 20, 6.8, '#ffffff', { ls: 1.5 });
+      text(v || '-', x + 10, y + 24, cw - 20, 9.4, '#ffffff', { bold: true });
     });
   }
-  function sectionCard(label, value, x, y, w, h = 105) {
-    card(x, y, w, h, '#ffffff');
-    text(label, x + 13, y + 13, w - 26, 11, COLORS.navy, { bold: true });
-    text(value, x + 13, y + 34, w - 26, 9.2, COLORS.muted, { lineGap: 3 });
-  }
-  function metric(label, m, x, y, w = 247) {
-    const value = m || {};
-    const h = 100;
-    card(x, y, w, h);
-    text(label, x + 13, y + 13, w - 110, 10.5, COLORS.navy, { bold: true });
-    text(fmt(value.value, value.unit), x + w - 100, y + 12, 87, 15, colorFor(value.percent), { bold: true, align: 'right' });
-    text(`Optimal: ${value.optimal || '-'}`, x + 13, y + 32, w - 26, 8, '#9aa8c0');
-    text(value.description || n.deepDive?.descriptions?.[label] || '', x + 13, y + 50, w - 26, 8.5, COLORS.muted, { lineGap: 2 });
+  {
+    let foot = '';
+    if (p.generatedOn) foot += `Report generated on: ${ascii(p.generatedOn)} by Limitless Brain Lab\n`;
+    foot += `${p.clinicName || 'Limitless Brain Lab'} \u2022 This AI-generated report is for informational and wellness purposes only and is not a medical diagnosis.\nlimitlessbrainlab-eight.vercel.app`;
+    text(foot, M, 762, W - 2 * M, 7.1, '#ffffff', { align: 'center' });
+    doc.fillOpacity(0.6);
+    text(foot, M, 762, W - 2 * M, 7.1, '#ffffff', { align: 'center' });
+    doc.fillOpacity(1);
   }
 
-  // Page 1: cover
-  page(true);
-  text('NEUROSENSE', M, 48, 250, 18, '#ffffff', { bold: true });
-  text('SMART EEG INTELLIGENCE', M, 72, 250, 7, '#b9d1f2', { bold: true });
-  text('PERSONALIZED NEURO-PROFILE', M, 205, 300, 9, '#9ec2f0', { bold: true });
-  text('Your Brain\nType & Performance\nReport', M, 232, 500, 34, '#ffffff', { bold: true, lineGap: 0 });
-  paragraph('A complete map of your brainwave activity, cognitive performance, and dominant brain type - built from 19-channel qEEG analysis.', M, 370, 430, 11, '#cfe0f7');
-  const info = [['NAME', p.name], ['ASSESSMENT', p.assessmentDate], ['BRAIN TYPE', bt.name], ['REPORT ID', p.reportId]];
-  info.forEach(([k, v], i) => { const x = M + i * 128; doc.roundedRect(x, 650, 117, 58, 7).fill('#28568e'); text(k, x + 10, 662, 100, 7, '#b9d1f2', { bold: true }); text(v || '-', x + 10, 679, 100, 9, '#ffffff', { bold: true }); });
-  text(`${p.clinicName || 'Limitless Brain Lab'} - Wellness report only, not a medical diagnosis.`, M, 780, W - 2 * M, 8, '#b9d1f2', { align: 'center' });
+  // ================= PAGE 2 — WELCOME / CONTENTS =================
+  addPage();
+  header('01', 'WELCOME');
+  eyebrow(`Welcome, ${p.firstName || p.name || 'there'}`);
+  h2("What's inside this", 'report');
+  lead("This is a complete walkthrough of how your brain works - from the dominant brainwave patterns recorded across 19 EEG channels, to your unique brain type, to a personalized 30-day plan. Every section translates raw neuroscience into something you can actually use.");
 
-  // Page 2: contents
-  page(); header('01', 'WELCOME'); title('Welcome', `What's inside this report`);
-  paragraph(`This is a complete walkthrough of how ${p.firstName || p.name || 'your'} brain works - from brainwave patterns to your unique brain type and a personalized 30-day plan.`);
-  const contents = ['Your Snapshot - score and key signals', 'Brainwave Profile - five EEG bands', 'Your Brain Type - the five-type framework', 'Type-Specific Strategy Guide', 'Performance Markers', 'Inner Bandwidth - emotion, learning and creativity', 'Deep-Dive Neuro-Metrics', 'Your 30-Day Brain Optimization Plan'];
-  contents.forEach((item, i) => { const y = 210 + i * 48; doc.moveTo(M, y + 25).lineTo(W - M, y + 25).strokeColor(COLORS.line).stroke(); text(String(i + 1), M, y, 25, 12, COLORS.blue, { bold: true }); text(item, M + 38, y, 420, 10.5, COLORS.text, { bold: true }); text(`PAGE ${i + 3}`, W - M - 55, y + 2, 55, 8, '#9aa8c0', { align: 'right' }); });
-  card(M, 610, W - 2 * M, 95, '#f8fafc'); text('HOW TO READ THIS REPORT', M + 16, 626, 300, 10, COLORS.navy, { bold: true }); paragraph('Higher is not always better. Look for the colored status markers and read the numbers alongside the explanation on each page.', M + 16, 650, W - 2 * M - 32, 9.5);
-  footer(2);
+  const toc = [
+    ['Your Snapshot - at-a-glance score & key signals', 'PAGE 3'],
+    ['Brainwave Profile - Delta, Theta, Alpha, Beta, hi-Beta', 'PAGE 4'],
+    ['Your Brain Type - the NeuroSense five-type framework', 'PAGE 5-6'],
+    ['Type-Specific Strategy Guide', 'PAGE 7'],
+    ['Performance Markers - Cognition, Focus, Stress, Burnout', 'PAGE 8'],
+    ['Emotional Regulation, Learning & Creativity', 'PAGE 9'],
+    ['Deep-Dive Neuro-Metrics', 'PAGE 10'],
+    ['Your 30-Day Brain Optimization Plan', 'PAGE 11'],
+  ];
+  toc.forEach(([t, pg], i) => {
+    const y = 196 + i * 32;
+    text(String(i + 1), M, y + 4, 20, 11.3, COLORS.blue, { bold: true, align: 'center' });
+    text(t, M + 32, y + 5, 360, 9.8, COLORS.text, { bold: true });
+    text(pg, W - M - 70, y + 6, 70, 7.9, COLORS.ghost, { bold: true, align: 'right', ls: 1 });
+    doc.moveTo(M, y + 26).lineTo(W - M, y + 26).strokeColor(COLORS.track).lineWidth(0.7).stroke();
+  });
 
-  // Page 3: snapshot
-  page(); header('02', 'SNAPSHOT'); title('Section 1 - Quick Read', 'Your brain at a glance'); paragraph(n.snapshotSummary || 'A quick view of where you stand right now, including your standout strength and main growth zone.');
-  card(M, 205, 185, 210, COLORS.blue, COLORS.blue); text('OVERALL BRAIN PERFORMANCE', M + 18, 228, 150, 8, '#cfe0f7', { bold: true }); text(`${d.overall || '-'} / 100`, M + 18, 260, 150, 31, '#ffffff', { bold: true }); paragraph(n.overallSummary || 'A composite of your seven performance markers.', M + 18, 320, 150, 9, '#e2efff');
-  bars.slice(0, 7).forEach((b, i) => bar(b.label || b.key, b.percent, 250, 214 + i * 29, 300));
-  text('YOUR THREE BIGGEST SIGNALS', M, 460, 300, 12, COLORS.navy, { bold: true });
-  sectionCard(`TOP STRENGTH: ${n.topStrength?.title || 'Strength'}`, (n.topStrength?.points || bt.strengths || []).join(' '), M, 490, 160, 150);
-  sectionCard(`WATCH ZONE: ${n.watchZone?.title || 'Growth area'}`, (n.watchZone?.points || bt.watchZones || []).join(' '), 217, 490, 160, 150);
-  sectionCard(`BRAIN TYPE: ${bt.name || '-'}`, bt.tagline || '', 391, 490, 160, 150); footer(3);
+  miniCard(M, 470, W - 2 * M, 78, 'How to read this report',
+    "Each metric is shown as a percentile or raw EEG value. Higher isn't always better - for stress regulation, higher means calmer. Look for the colored status badges (Excellent -> Needs Attention) on every metric card. Your Brain Type on page 5 is the lens through which every score should be interpreted.");
+  footer(2, 'Welcome');
 
-  // Page 4: brainwaves
-  page(); header('03', 'BRAINWAVES'); title('Section 2 - The Five Bands', 'Your brainwave profile'); paragraph(n.brainwaveIntro || 'Your brain produces five distinct rhythms simultaneously. The mix tells us how your brain operates.');
-  const waves = [['Delta', profile.delta, '0.5-4 Hz - Deep rest'], ['Theta', profile.theta, '4-7 Hz - Creativity'], ['Alpha', profile.alpha, `8-12 Hz - Peak ${fmt(profile.alphaPeakHz, 'Hz')}`], ['Beta', profile.beta, '13-30 Hz - Active thinking'], ['Hi-Beta', profile.hiBeta, '20-30 Hz - Vigilance']];
-  waves.forEach((w, i) => { const y = 205 + i * 48; text(w[0], M, y, 90, 11, COLORS.navy, { bold: true }); text(w[2], M, y + 16, 140, 8, '#9aa8c0'); doc.roundedRect(185, y + 5, 260, 9, 4).fill('#eef1f6'); doc.roundedRect(185, y + 5, 260 * pct(w[1]) / 100, 9, 4).fill(COLORS.blue); text(fmt(w[1], '%'), 460, y + 1, 90, 11, COLORS.text, { bold: true, align: 'right' }); });
-  text('WHAT THIS MEANS FOR YOU', M, 470, 300, 12, COLORS.navy, { bold: true });
-  const bw = n.brainwaveCards || []; for (let i = 0; i < 4; i++) sectionCard(bw[i]?.title || waves[i][0], bw[i]?.body || '', M + (i % 2) * 267, 500 + Math.floor(i / 2) * 120, 250, 100);
-  footer(4);
+  // ================= PAGE 3 — SNAPSHOT =================
+  addPage();
+  header('02', 'SNAPSHOT');
+  eyebrow('Section 1 - Quick Read');
+  h2('Your brain at a', 'glance');
+  lead(n.snapshotSummary || 'A quick view of where you stand right now, including your standout strength and main growth zone.');
 
-  // Page 5: framework
-  page(); header('04', 'BRAIN TYPE'); title('Section 3 - The NeuroSense Framework', 'The five brain types'); paragraph('Knowing your type is not a label. It is a lens for understanding which strategies are most likely to work for your nervous system.');
-  const types = ['Spontaneous', 'Cautious', 'Persistent', 'Sensitive', 'Balanced'];
-  types.forEach((name, i) => { const x = M + i * 103; card(x, 220, 94, 180, i + 1 === bt.id ? '#e8f0fe' : '#ffffff', i + 1 === bt.id ? COLORS.blue : COLORS.line); text(`TYPE ${i + 1}`, x + 10, 238, 74, 8, '#9aa8c0', { bold: true }); text(name, x + 10, 260, 74, 11, i + 1 === bt.id ? COLORS.blue : COLORS.navy, { bold: true }); text(i + 1 === bt.id ? 'YOUR TYPE' : 'NeuroSense profile', x + 10, 296, 74, 8, COLORS.muted); });
-  card(M, 450, W - 2 * M, 220, '#f8fafc'); text(`HOW WE DETERMINED YOUR TYPE: ${bt.name || '-'}`, M + 16, 468, W - 2 * M - 32, 11, COLORS.navy, { bold: true }); list(n.brainTypeReason || bt.strengths || [], M + 18, 505, W - 2 * M - 36, COLORS.muted, 35); footer(5);
+  // .snap — gradient score card (left) + snapshot rows (right)
+  {
+    const gap = 13.5;
+    const lw = (W - 2 * M - gap) * 0.42;
+    const rw = (W - 2 * M - gap) - lw;
+    const top = 192;
+    const gridH = 210;
 
-  // Page 6: type deep dive
-  page(); header('04', 'YOUR TYPE'); title(`${p.firstName || p.name || 'Your'}'s Brain Type`, `Type ${bt.id || '-'} - The ${bt.name || 'Unknown'} Brain`); paragraph(bt.tagline || '', M, 155, W - 2 * M, 12, COLORS.blue);
-  sectionCard('THE NEUROSCIENCE', bt.neuroscience || '', M, 220, 250, 135); sectionCard("WHY IT'S A STRENGTH", bt.whyStrength || '', 302, 220, 250, 135);
-  text('YOUR STRENGTHS & WATCH-ZONES', M, 395, 350, 12, COLORS.navy, { bold: true });
-  card(M, 425, 250, 210, '#f0fdf4', '#bbf7d0'); text(`${bt.name || ''} STRENGTHS`, M + 14, 443, 220, 11, COLORS.green, { bold: true }); list(bt.strengths, M + 16, 478, 220, COLORS.muted, 31);
-  card(302, 425, 250, 210, '#fff7ed', '#fed7aa'); text(`${bt.name || ''} WATCH-ZONES`, 316, 443, 220, 11, COLORS.orange, { bold: true }); list(bt.watchZones, 318, 478, 220, COLORS.muted, 31); footer(6);
+    // .score-card
+    doc.save();
+    const sg = doc.linearGradient(0, top, 0, top + gridH);
+    sg.stop(0, COLORS.blue).stop(1, COLORS.darkA);
+    doc.roundedRect(M, top, lw, gridH, 12).fill(sg);
+    doc.restore();
+    doc.fillOpacity(0.85);
+    text('OVERALL BRAIN PERFORMANCE', M + 16, top + 18, lw - 32, 7.5, '#ffffff', { bold: true, ls: 2 });
+    doc.fillOpacity(1);
+    text(`${d.overall != null ? d.overall : '-'}`, M + 16, top + 42, lw - 32, 44, '#ffffff', { bold: true, lineGap: 0 });
+    fit(n.overallSummary || 'A composite of your seven performance markers.', M + 16, top + 108, lw - 32, 8.4, '#e2efff', { maxHeight: gridH - 118 });
 
-  // Page 7: strategy
-  page(); header('04', 'TYPE STRATEGY'); title('What works for your type', `${bt.name || 'Your'}-brain strategy guide`); paragraph('Generic advice often fails this type. These strategies are matched to how your nervous system is wired.');
+    // .scard rows
+    const rows = bars.slice(0, 7);
+    const rh = (gridH - 6 * 7) / rows.length;
+    rows.forEach((b, i) => {
+      const y = top + i * (rh + 7);
+      const x = M + lw + gap;
+      card(x, y, rw, rh, '#ffffff', '#e8edf5', 9);
+      const c = pctColor(colorPct(b));
+      text(b.icon ? `${ascii(b.icon)} ${b.label || b.key}` : (b.label || b.key), x + 11, y + 6, rw - 90, 9.4, '#33405c', { bold: true });
+      text(`${Number(b.percent) || 0}%`, x + rw - 48, y + 5.5, 38, 10.5, c, { bold: true, align: 'right' });
+      track(x + 11, y + rh - 12, rw - 22, 6, b.percent, c);
+    });
+  }
+
+  h3('YOUR THREE BIGGEST SIGNALS', M, 432);
+  {
+    const gap = 9;
+    const cw = (W - 2 * M - gap * 2) / 3;
+    const cy = 452;
+    const ch = 128;
+    toneCard(M, cy, cw, ch, 'good', `TOP STRENGTH: ${n.topStrength?.title || 'Strength'}`,
+      n.topStrength?.points || bt.strengths || ['Consistent strengths across your profile.']);
+    toneCard(M + cw + gap, cy, cw, ch, 'warn', `WATCH ZONE: ${n.watchZone?.title || 'Growth area'}`,
+      n.watchZone?.points || bt.watchZones || ['Areas with the most room to grow.']);
+    toneCard(M + (cw + gap) * 2, cy, cw, ch, 'info', `BRAIN TYPE: Type ${bt.id || '-'} - ${bt.name || '-'}`,
+      [bt.tagline || 'Your dominant NeuroSense profile.']);
+  }
+  footer(3, 'Snapshot');
+
+  // ================= PAGE 4 — BRAINWAVES =================
+  addPage();
+  header('03', 'BRAINWAVES');
+  eyebrow('Section 2 - The Five Bands');
+  h2('Your brainwave', 'profile');
+  lead(n.brainwaveIntro || 'Your brain produces five distinct rhythms simultaneously, each tied to a different mental state. The mix tells us what kind of brain you have. Below is your relative power across the spectrum (eyes-closed, posterior average).');
+
+  const waves = [
+    ['Delta', profile.delta, '0.5-4 Hz - Deep rest', fmt(profile.delta, '%')],
+    ['Theta', profile.theta, '4-7 Hz - Creativity', fmt(profile.theta, '%')],
+    ['Alpha', profile.alpha, '8-12 Hz - Calm focus', `Peak ${fmt(profile.alphaPeakHz, 'Hz')}`],
+    ['Beta', profile.beta, '13-30 Hz - Active thinking', fmt(profile.beta, '%')],
+    ['Hi-Beta', profile.hiBeta, '20-30 Hz - Vigilance', fmt(profile.hiBeta, '%')],
+  ];
+  waves.forEach(([label, val, sub, valText], i) => {
+    const y = 200 + i * 40;
+    const lw = 122;
+    text(label, M, y + 2, lw, 9.8, COLORS.text, { bold: true });
+    text(sub, M, y + 16, lw, 7.5, COLORS.ghost);
+    const tx = M + lw + 10;
+    const tw = W - M - tx - 70;
+    track(tx, y + 4, tw, 8.3, val, WAVE_COLORS[label] || COLORS.blue);
+    text(valText, W - M - 66, y + 2, 66, 9.8, COLORS.text, { bold: true, align: 'right' });
+  });
+
+  h3('WHAT THIS MEANS FOR YOU', M, 428);
+  {
+    const bwDefaults = [
+      { title: `Strong alpha (peak ${fmt(profile.alphaPeakHz, 'Hz')})`, tone: 'good', body: `Your alpha rhythm is robust (${fmt(profile.alpha, '%')}) and peaks in the optimal range - it supports clear thinking, memory and the ability to enter relaxed focus. A genuine asset.` },
+      { title: 'Elevated delta - recovery debt', tone: 'warn', body: `Daytime delta reads ${fmt(dd.daytimeDelta && dd.daytimeDelta.value, '%')}. Combined with low regeneration, this points to accumulated recovery debt rather than a primary issue - sleep quality needs a close look.` },
+      { title: 'Moderate theta & alpha:theta', tone: 'info', body: `Theta sits at ${fmt(profile.theta, '%')} - a workable zone for memory and learning. A foundation that spaced repetition will use well.` },
+      { title: 'Beta & hi-beta profile', tone: 'warn', body: `Fast-wave activity (beta ${fmt(profile.beta, '%')}, hi-beta ${fmt(profile.hiBeta, '%')}) shapes your vigilance and active-thinking bandwidth. Watch it alongside your arousal markers.` },
+    ];
+    const cards = (Array.isArray(n.brainwaveCards) && n.brainwaveCards.length ? n.brainwaveCards : bwDefaults).slice(0, 4);
+    const gap = 13.5;
+    const cw = (W - 2 * M - gap) / 2;
+    cards.forEach((c, i) => {
+      const x = M + (i % 2) * (cw + gap);
+      const y = 448 + Math.floor(i / 2) * 118;
+      const tone = c.tone || ['good', 'warn', 'info', 'warn'][i] || 'plain';
+      const t = TONE[tone] || TONE.plain;
+      card(x, y, cw, 104, t.bg, t.bd, 9);
+      text(c.title, x + 11, y + 10, cw - 22, 9.4, t.h, { bold: true });
+      fit(c.body, x + 11, y + 26, cw - 22, 8.3, COLORS.body, { maxHeight: 70 });
+    });
+  }
+  footer(4, 'Brainwave Profile');
+
+  // ================= PAGE 5 — FIVE TYPES =================
+  addPage();
+  header('04', 'BRAIN TYPE');
+  eyebrow('Section 3 - The NeuroSense Framework');
+  h2('The five', 'brain types');
+  lead("Decades of brain imaging and qEEG research show that brains organize themselves into recognizable patterns - distinct combinations of arousal, regulation and reactivity that shape personality, behavior and how people respond to stress. Knowing your type isn't a label - it's a lens. It tells you which strategies will actually work for your brain.");
+
+  {
+    const gap = 7.5;
+    const cw = (W - 2 * M - gap * 4) / 5;
+    const top = 196;
+    const ch = 148;
+    FIVE_TYPES.forEach((t, i) => {
+      const x = M + i * (cw + gap);
+      const active = t.id === Number(bt.id);
+      if (active) {
+        // .type-card.active — 2px blue border + shadow + floating tag
+        doc.save();
+        doc.roundedRect(x - 1, top + 7, cw + 2, ch, 9).fillColor('#ffffff').fill();
+        doc.roundedRect(x - 1, top + 7, cw + 2, ch, 9).lineWidth(2).strokeColor(COLORS.blue).stroke();
+        doc.restore();
+        pill('YOUR TYPE', x + 9, top, COLORS.blue, '#ffffff', 6, 6, 11);
+      } else {
+        card(x, top + 7, cw, ch);
+      }
+      text(`TYPE ${t.id}`, x + 9, top + 18, cw - 18, 6.8, COLORS.ghost, { bold: true, ls: 1 });
+      text(t.name, x + 9, top + 32, cw - 18, 11.3, active ? COLORS.blue : COLORS.navy, { bold: true });
+      fit(t.desc, x + 9, top + 50, cw - 18, 7.1, '#6b7a94', { maxHeight: ch - 58 });
+    });
+  }
+
+  // How we determined your type (info callout with dot bullets)
+  {
+    const y = 380;
+    const h = 150;
+    card(M, y, W - 2 * M, h, TONE.info.bg, TONE.info.bd, 9);
+    text('How we determined your type', M + 12, y + 10, W - 2 * M - 24, 9.4, TONE.info.h, { bold: true });
+    const reason = (Array.isArray(n.brainTypeReason) && n.brainTypeReason.length ? n.brainTypeReason : bt.strengths) || [];
+    const intro = `Your qEEG showed signatures that map onto the ${bt.name || '-'} (Type ${bt.id || '-'}) profile${secondary ? `, with secondary ${secondary.name || ''} features` : ''}:`;
+    doc.font('Helvetica').fontSize(8.6).fillColor(COLORS.body)
+      .text(ascii(intro), M + 12, y + 27, { width: W - 2 * M - 24, lineGap: 1.4 });
+    bullets(reason, M + 12, y + 44, W - 2 * M - 24, 'info', false, 8.3, 4.5, 4);
+  }
+  miniCard(M, 546, W - 2 * M, 62, 'A word on brain types',
+    `No type is "good" or "bad." Each comes with strengths and tendencies. The goal is not to change your type - it's to work with it. The next page is a deep dive on what your ${bt.name || ''} brain looks like from the inside.`);
+  footer(5, 'Brain Types Overview');
+
+  // ================= PAGE 6 — YOUR TYPE DEEP DIVE =================
+  addPage();
+  header('04', 'YOUR TYPE');
+  {
+    // .hero — gradient panel with ghost brain glyph + trait pills
+    const top = 102;
+    const hh = 158;
+    doc.save();
+    const hg = doc.linearGradient(0, top, 0, top + hh);
+    hg.stop(0, COLORS.blue).stop(1, COLORS.darkA);
+    doc.roundedRect(M, top, W - 2 * M, hh, 12).fill(hg);
+    doc.restore();
+    brainGlyph(W - M - 55, top + hh / 2, 76, '#ffffff', 0.16);
+    eyebrow(`${p.firstName || p.name || 'Your'}'s Brain Type`, M + 18, top + 14, '#9ec2f0');
+    text(`Type ${bt.id || '-'} - The ${bt.name || ''} Brain`, M + 18, top + 32, W - 2 * M - 100, 19, '#ffffff', { bold: true });
+    fit(`${bt.tagline || ''}.`, M + 18, top + 58, W - 2 * M - 100, 9.4, '#cfe0f7', { maxHeight: 26 });
+    const traits = (bt.traits && bt.traits.length ? bt.traits : (bt.strengths || []).slice(0, 3)).slice(0, 5);
+    let px = M + 18;
+    const maxPillW = W - M - 18 - px;
+    traits.forEach((t) => {
+      doc.font('Helvetica-Bold').fontSize(7.5);
+      const pw = Math.min(doc.widthOfString(ascii(t)) + 16, maxPillW);
+      doc.save();
+      doc.roundedRect(px, top + 112, pw, 16, 8).fillColor('#ffffff').fillOpacity(0.12).fill();
+      doc.roundedRect(px, top + 112, pw, 16, 8).lineWidth(0.8).strokeColor('#ffffff').strokeOpacity(0.22).stroke();
+      doc.restore();
+      text(t, px + 8, top + 116.5, pw - 10, 7.5, '#ffffff', { bold: true });
+      px += pw + 8;
+    });
+  }
+
+  h3("What's happening in your brain", M, 282);
+  miniCard(M, 302, (W - 2 * M - 13.5) / 2, 96, 'The neuroscience', bt.neuroscience || '');
+  miniCard(M + (W - 2 * M - 13.5) / 2 + 13.5, 302, (W - 2 * M - 13.5) / 2, 96, "Why it's a strength", bt.whyStrength || '');
+
+  h3('Your strengths & watch-zones', M, 418);
+  const colW = (W - 2 * M - 13.5) / 2;
+  toneCard(M, 438, colW, 150, 'good', `${bt.name || ''}-Brain Strengths`, bt.strengths, true);
+  toneCard(M + colW + 13.5, 438, colW, 150, 'warn', `${bt.name || ''}-Brain Watch-Zones`, bt.watchZones, true);
+  footer(6, 'Your Type Deep Dive');
+
+  // ================= PAGE 7 — TYPE STRATEGY =================
+  addPage();
+  header('04', 'TYPE STRATEGY');
+  eyebrow('What Works For Your Type');
+  h2(`${bt.name || 'Your'}-brain`, 'strategy guide');
+  lead(`Generic advice often fails this type. Here's what actually moves the needle for a ${bt.name || ''} brain - the lifestyle, nutrition and mental practices matched to how your nervous system is wired.`);
+
   const strategy = bt.strategy || {};
-  sectionCard('EAT FOR YOUR TYPE', strategy.eat || '', M, 215, 160, 130); sectionCard('MOVE', strategy.move || '', 217, 215, 160, 130); sectionCard('SLEEP', strategy.sleep || '', 391, 215, 160, 130);
-  text('MIND & EMOTIONAL PRACTICES', M, 390, 300, 12, COLORS.navy, { bold: true });
-  card(M, 420, 250, 180, '#f0fdf4', '#bbf7d0'); text('DO MORE OF', M + 14, 438, 200, 11, COLORS.green, { bold: true }); list(strategy.doMore, M + 16, 472, 220, COLORS.muted, 28);
-  card(302, 420, 250, 180, '#fff7ed', '#fed7aa'); text('LESS OF', 316, 438, 200, 11, COLORS.orange, { bold: true }); list(strategy.lessOf, 318, 472, 220, COLORS.muted, 28); footer(7);
+  h3(`Lifestyle & nutrition (Type ${bt.id || '-'} protocol)`, M, 182);
+  {
+    const gap = 13.5;
+    const cw = (W - 2 * M - gap * 2) / 3;
+    miniCard(M, 202, cw, 112, 'Eat for your type', strategy.eat || '');
+    miniCard(M + cw + gap, 202, cw, 112, 'Move', strategy.move || '');
+    miniCard(M + (cw + gap) * 2, 202, cw, 112, 'Sleep', strategy.sleep || '');
+  }
 
-  // Page 8: performance
-  page(); header('05', 'PERFORMANCE'); title('Section 4 - Performance Markers', 'Cognition & stress'); paragraph('These markers show how clearly you think and how well your brain handles pressure and recovery.');
-  paragraph(n.performanceFeature || '', M, 205, W - 2 * M, 10, COLORS.muted); const perf = [['Cognition', performance.cognition, n.performance?.cognition], ['Stress Regulation', performance.stress, n.performance?.stress], ['Focus & Attention', performance.focus, n.performance?.focus], ['Burnout Resistance', performance.burnout, n.performance?.burnout]];
-  perf.forEach((item, i) => { const x = M + (i % 2) * 267; const y = 300 + Math.floor(i / 2) * 160; card(x, y, 250, 140); text(item[0], x + 14, y + 15, 170, 12, COLORS.navy, { bold: true }); text(`${item[1]?.percent || 0}%`, x + 180, y + 13, 55, 20, colorFor(item[1]?.percent), { bold: true, align: 'right' }); badge(item[1]?.status || '-', x + 14, y + 44, colorFor(item[1]?.percent)); paragraph(item[2] || '', x + 14, y + 78, 220, 8.8); }); footer(8);
+  h3('Mind & emotional practices', M, 336);
+  toneCard(M, 356, colW, 168, 'good', 'Do more of', strategy.doMore, true);
+  toneCard(M + colW + 13.5, 356, colW, 168, 'warn', 'Less of', strategy.lessOf, true);
 
-  // Page 9: inner bandwidth
-  page(); header('05', 'INNER BANDWIDTH'); title('Section 5 - Inner Bandwidth', 'Emotion, learning & creativity'); paragraph('These capacities share the same underlying state: low arousal plus alert alpha. Recovery helps all three rise together.');
-  [['Emotional Regulation', inner.emotional, n.innerBandwidth?.emotional], ['Learning Capacity', inner.learning, n.innerBandwidth?.learning], ['Creativity', inner.creativity, n.innerBandwidth?.creativity]].forEach((item, i) => { const x = M + i * 174; card(x, 220, 160, 200); text(item[0], x + 12, 238, 136, 10, COLORS.navy, { bold: true }); text(`${item[1]?.percent || 0}%`, x + 12, 270, 136, 25, colorFor(item[1]?.percent), { bold: true }); badge(item[1]?.status || '-', x + 12, 310, colorFor(item[1]?.percent)); paragraph(item[2] || '', x + 12, 350, 136, 8.5); });
-  sectionCard('THE HIDDEN LINK', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning depend on recovery.', M, 465, W - 2 * M, 125); footer(9);
+  callout(M, 538, W - 2 * M, 62, 'info', `The Type ${bt.id || '-'} superpower (when supported)`,
+    n.typeSuperpower || bt.whyStrength || 'When this brain gets the recovery it needs, its natural wiring becomes a genuine performance advantage.');
+  footer(7, 'Type-Specific Strategy');
 
-  // Page 10: deep dive
-  page(); header('06', 'DEEP DIVE'); title('Section 6 - The Numbers Behind The Story', 'Deep-dive neuro metrics'); paragraph(n.deepDive?.readingPattern || 'No single metric tells the story - look at the pattern they form together.');
-  const metrics = [['alphaPeak', 'Alpha Peak', dd.alphaPeak], ['arousal', 'Arousal', dd.arousal], ['relaxation', 'Relaxation', dd.relaxation], ['regeneration', 'Regeneration', dd.regeneration], ['frontalAsymmetry', 'Frontal Asymmetry', dd.frontalAsymmetry], ['daytimeDelta', 'Daytime Delta', dd.daytimeDelta], ['focusScore', 'Focus Score', dd.focusScore], ['alphaTheta', 'Alpha:Theta Balance', dd.alphaTheta]];
-  metrics.forEach((m, i) => metric(m[1], m[2], M + (i % 2) * 267, 220 + Math.floor(i / 2) * 115)); footer(10);
+  // ================= PAGE 8 — PERFORMANCE MARKERS =================
+  addPage();
+  header('05', 'PERFORMANCE');
+  eyebrow('Section 4 - Performance Markers');
+  h2('Cognition &', 'stress');
+  lead('These are the two engines of daily performance - how clearly you think and how well you handle pressure. Together they determine whether your brain is helping you or working against you.');
+  callout(M, 180, W - 2 * M, 76, 'warn', 'Why these markers matter',
+    n.performanceFeature || 'Cognition and focus tell you how clearly you think; stress regulation and burnout resistance tell you whether your brain is helping or working against you. When arousal runs high and recovery runs low, the same drive that fuels performance starts feeding fatigue. The good news: these are the most reversible scores of all - they tend to move first when recovery habits go in.');
 
-  // Page 11: plan
-  page(); header('07', 'ACTION PLAN'); title('Section 7 - Your Personalized Plan', 'Your 30-day brain plan'); paragraph(n.plan?.intro || 'Small daily inputs compound quickly when they are type-specific.');
-  text('DAILY NON-NEGOTIABLES', M, 210, 300, 12, COLORS.navy, { bold: true }); list(strategy.doMore, M, 245, 500, COLORS.muted, 31);
-  text('WEEK-BY-WEEK BUILD', M, 420, 300, 12, COLORS.navy, { bold: true });
-  [['WEEK 1 - CALM FIRST', 'Lock in the daily anchors'], ['WEEK 2 - CONTAIN', 'Add structure and containment'], ['WEEK 3 - RECOVER', 'Add one weekly true-rest session'], ['WEEK 4 - ACTIVATE', 'Layer in performance work']].forEach((w, i) => { const y = 455 + i * 55; card(M, y, W - 2 * M, 43, '#eff6ff', '#dbeafe'); text(w[0], M + 12, y + 8, 170, 8, COLORS.blue, { bold: true }); text(w[1], M + 190, y + 8, 330, 10, COLORS.navy, { bold: true }); });
-  sectionCard('AFTER 30 DAYS', n.plan?.after30 || 'Repeat the qEEG and review which markers shifted first.', M, 690, W - 2 * M, 70); footer(11);
+  const perfSub = {
+    cognition: 'Thinking \u00B7 Memory \u00B7 Processing',
+    stress: 'Recovery \u00B7 Resilience',
+    focus: 'Concentration \u00B7 Distraction filter',
+    burnout: 'Mental fuel \u00B7 Stamina',
+  };
+  {
+    const perfItems = [performance.cognition, performance.stress, performance.focus, performance.burnout];
+    const subs = [perfSub.cognition, perfSub.stress, perfSub.focus, perfSub.burnout];
+    const fallbackLabels = ['Cognition', 'Stress Regulation', 'Focus & Attention', 'Burnout Resistance'];
+    const bodies = [n.performance?.cognition, n.performance?.stress, n.performance?.focus, n.performance?.burnout];
+    const gap = 13.5;
+    const cw = (W - 2 * M - gap) / 2;
+    perfItems.forEach((b, i) => {
+      const x = M + (i % 2) * (cw + gap);
+      const y = 272 + Math.floor(i / 2) * 128;
+      const mark = b || {};
+      const cp = colorPct(mark);
+      const c = pctColor(cp);
+      card(x, y, cw, 114);
+      text(mark.label || fallbackLabels[i], x + 13, y + 12, cw - 90, 11.3, COLORS.navy, { bold: true });
+      text(subs[i], x + 13, y + 27, cw - 90, 7.5, COLORS.ghost);
+      text(`${Number(mark.percent) || 0}%`, x + cw - 62, y + 10, 48, 24, c, { bold: true, align: 'right', lineGap: 0 });
+      pill(mark.status || '-', x + 13, y + 42, pctTint(cp), pctFg(cp));
+      fit(bodies[i] || '', x + 13, y + 62, cw - 26, 8.3, COLORS.muted, { maxHeight: 46 });
+    });
+  }
+  footer(8, 'Cognition & Stress');
 
-  // Page 12: close
-  page(true); text('NEUROSENSE', M, 50, 250, 18, '#ffffff', { bold: true }); text('Your brain is unique.\nYour plan should be too.', M, 260, 500, 32, '#ffffff', { bold: true, lineGap: 2 }); paragraph(n.closing || 'This report is a starting point, not a finish line. Small, consistent shifts produce measurable changes over time.', M, 390, 430, 11, '#cfe0f7'); doc.roundedRect(M, 535, W - 2 * M, 95, 8).fill('#28568e'); text('GET IN TOUCH', M + 18, 552, 200, 8, '#b9d1f2', { bold: true }); text('+971 58 560 2551', M + 18, 575, 300, 18, '#ffffff', { bold: true }); text('limitlessbrainlab-eight.vercel.app', M + 18, 603, 300, 9, '#cfe0f7'); text('This AI-generated qEEG report is for informational, educational and wellness purposes only. It is not a medical diagnosis or substitute for licensed professional care.', M, 755, W - 2 * M, 8, '#b9d1f2');
+  // ================= PAGE 9 — INNER BANDWIDTH =================
+  addPage();
+  header('05', 'INNER BANDWIDTH');
+  eyebrow('Section 5 - Inner Bandwidth');
+  h2('Emotion, learning &', 'creativity');
+  lead("When the nervous system is busy scanning for threat and running on empty, it has less bandwidth left for emotional flexibility, divergent thinking and the open-mode states that drive creativity. This is exactly the pattern your data shows - and it's also the most reversible.");
+
+  {
+    const items = [
+      ['Emotional Regulation', inner.emotional, n.innerBandwidth?.emotional],
+      ['Learning Capacity', inner.learning, n.innerBandwidth?.learning],
+      ['Creativity', inner.creativity, n.innerBandwidth?.creativity],
+    ];
+    const gap = 9;
+    const cw = (W - 2 * M - gap * 2) / 3;
+    items.forEach(([label, b, body], i) => {
+      const x = M + i * (cw + gap);
+      const y = 200;
+      const mark = b || {};
+      const cp = colorPct(mark);
+      const c = pctColor(cp);
+      card(x, y, cw, 138);
+      text(label, x + 12, y + 12, cw - 24, 9.4, COLORS.navy, { bold: true });
+      text(`${Number(mark.percent) || 0}%`, x + 12, y + 28, cw - 24, 22, c, { bold: true, lineGap: 0 });
+      pill(mark.status || '-', x + 12, y + 56, pctTint(cp), pctFg(cp));
+      fit(body || '', x + 12, y + 76, cw - 24, 7.9, COLORS.muted, { maxHeight: 54 });
+    });
+  }
+
+  h3(`For your type - Type ${bt.id || '-'} specific advice`, M, 362);
+  {
+    const emotionAdvice = n.innerBandwidth?.emotionalAdvice || [
+      'Daily "name it to tame it" - label what you\'re feeling before reacting.',
+      'Slow-exhale breathing (longer out than in) calms the nervous system.',
+      'Response-gap training - pause before reacting; reframe the situation.',
+      'Limit news / social media in the first and last hour of the day.',
+    ];
+    const learningAdvice = n.innerBandwidth?.learningAdvice || [
+      'Use spaced repetition - review material across days, not in one block.',
+      'Schedule short "no-input" breaks - ideas surface when the brain is idle.',
+      'Change your environment once a week for fresh thinking.',
+      'Separate brainstorming from editing - never do both at once.',
+    ];
+    text('Emotional regulation', M, 382, colW, 9.4, COLORS.navy, { bold: true });
+    bullets(emotionAdvice, M, 398, colW, 'info', false, 8.3, 5);
+    text('Learning & creativity', M + colW + 13.5, 382, colW, 9.4, COLORS.navy, { bold: true });
+    bullets(learningAdvice, M + colW + 13.5, 398, colW, 'info', false, 8.3, 5);
+  }
+
+  callout(M, 560, W - 2 * M, 72, 'info', 'The hidden link between these three',
+    n.innerBandwidth?.link || "Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise - usually together. That's why the plan focuses on calming and recovering, not on adding more.");
+  footer(9, 'Inner Bandwidth');
+
+  // ================= PAGE 10 — DEEP-DIVE METRICS =================
+  addPage();
+  header('06', 'DEEP DIVE');
+  eyebrow('Section 6 - The Numbers Behind The Story');
+  h2('Deep-dive', 'neuro metrics');
+  lead('For those who want to see the actual EEG values behind every score above. These are the metrics your clinician will reference.');
+  callout(M, 176, W - 2 * M, 66, 'plain', 'Reading these numbers',
+    n.deepDive?.readingPattern || 'No single metric tells the story - look at the pattern they form together. High arousal + low relaxation + low regeneration + excessive delta + a shifted frontal asymmetry describe an overloaded, vigilant brain that has run past its recovery capacity.');
+
+  {
+    const metrics = [
+      ['alphaPeak', 'Alpha Peak', dd.alphaPeak], ['arousal', 'Arousal', dd.arousal],
+      ['relaxation', 'Relaxation', dd.relaxation], ['regeneration', 'Regeneration', dd.regeneration],
+      ['frontalAsymmetry', 'Frontal Asymmetry', dd.frontalAsymmetry], ['daytimeDelta', 'Daytime Delta', dd.daytimeDelta],
+      ['focusScore', 'Focus Score', dd.focusScore], ['alphaTheta', 'Alpha:Theta Balance', dd.alphaTheta],
+    ];
+    const gap = 13.5;
+    const cw = (W - 2 * M - gap) / 2;
+    metrics.forEach(([key, label, m], i) => {
+      const x = M + (i % 2) * (cw + gap);
+      const y = 260 + Math.floor(i / 2) * 106;
+      const mark = m || {};
+      const kind = statusKind(mark.status);
+      const c = KIND[kind] ? KIND[kind].color : COLORS.blue;
+      card(x, y, cw, 92);
+      text(mark.label || label, x + 13, y + 11, cw - 110, 10.1, COLORS.navy, { bold: true });
+      text(`Optimal: ${mark.optimal || '-'}`, x + 13, y + 26, cw - 110, 7.5, COLORS.ghost);
+      text(fmt(mark.value, mark.unit), x + cw - 100, y + 10, 87, 19.5, c, { bold: true, align: 'right', lineGap: 0 });
+      fit(mark.description || n.deepDive?.descriptions?.[label] || '', x + 13, y + 44, cw - 26, 7.9, COLORS.muted, { maxHeight: 42 });
+    });
+  }
+  footer(10, 'Deep-Dive Metrics');
+
+  // ================= PAGE 11 — 30-DAY PLAN =================
+  addPage();
+  header('07', 'ACTION PLAN');
+  eyebrow('Section 7 - Your Personalized Plan');
+  h2('Your 30-day', 'brain plan');
+  lead(n.plan?.intro || 'Small daily inputs compound quickly when they are type-specific. Start with the anchors below - they are chosen for how your brain is wired.');
+
+  const anchorTags = ['Anchor habit', 'Recovery', 'Calm baseline', 'Movement'];
+  h3('Daily non-negotiables (start tomorrow)', M, 178);
+  {
+    const anchors = (strategy.doMore || []).slice(0, 4);
+    const gap = 13.5;
+    const cw = (W - 2 * M - gap) / 2;
+    anchors.forEach((a, i) => {
+      const x = M + (i % 2) * (cw + gap);
+      const y = 198 + Math.floor(i / 2) * 66;
+      const { title, body } = splitDash(a);
+      card(x, y, cw, 58);
+      doc.roundedRect(x + 11, y + 11, 20, 20, 6).fill(COLORS.blue);
+      text(String(i + 1), x + 11, y + 15, 20, 10.5, '#ffffff', { bold: true, align: 'center' });
+      text(title, x + 40, y + 10, cw - 52, 9.4, COLORS.navy, { bold: true });
+      fit(body, x + 40, y + 24, cw - 52, 7.9, COLORS.muted, { maxHeight: 20 });
+      pill(anchorTags[i] || 'Daily', x + 40, y + 42, '#e8f0fe', '#1e40af', 6.8, 6, 11);
+    });
+  }
+
+  h3('Week-by-week build', M, 342);
+  {
+    const weeks = [
+      { label: 'WEEK 1 - CALM FIRST', title: 'Lock in the daily anchors', body: 'Just the anchors above, plus a short daily nervous-system reset. Prove to your brain that calm is safe and consistent.' },
+      { label: 'WEEK 2 - CONTAIN', title: 'Add structure & containment', body: 'A short evening wind-down and a 3-item morning priority list. Contain the open loops before they run in the background.' },
+      { label: 'WEEK 3 - RECOVER', title: 'Add one weekly true-rest session', body: '90 minutes of no productivity, no input, no goal. Through the week, alternate high-effort and lighter tasks so the brain is not overloaded.' },
+      { label: 'WEEK 4 - ACTIVATE', title: 'Layer in performance work', body: 'A daily goal-activation routine - one small task-start, one intention, one thing you are looking forward to. Add spaced repetition for anything you are learning.' },
+    ];
+    weeks.forEach((w, i) => {
+      const y = 362 + i * 52;
+      doc.save();
+      doc.roundedRect(M + 3, y, W - 2 * M - 3, 46, 6).fill('#eff6ff');
+      doc.restore();
+      doc.rect(M, y, 3, 46).fill('#2563eb');
+      text(w.label, M + 14, y + 7, 220, 7.5, COLORS.blue, { bold: true, ls: 1.5 });
+      text(w.title, M + 14, y + 18, 220, 9.8, COLORS.navy, { bold: true });
+      fit(w.body, M + 230, y + 7, W - M - 230 - 12, 7.5, COLORS.muted, { maxHeight: 36 });
+    });
+
+    callout(M, 584, W - 2 * M, 56, 'info', 'After 30 days',
+      n.plan?.after30 || 'Repeat the qEEG and review which markers shifted first. Most brains respond first on arousal and relaxation - then the performance scores follow.');
+  }
+  footer(11, '30-Day Plan');
+
+  // ================= PAGE 12 — CLOSING / CONTACT =================
+  darkPage(false);
+  brainGlyph(W / 2, 208, 44, '#ffffff', 0.9);
+  text('Your brain is unique.', 0, 258, W, 30, '#ffffff', { bold: true, align: 'center', lineGap: 0 });
+  text('Your plan should be too.', 0, 296, W, 30, '#ffffff', { bold: true, align: 'center', lineGap: 0 });
+  fit(n.closing || "This report is a starting point, not a finish line. Small, consistent shifts in lifestyle, sleep, and self-regulation produce measurable changes in your EEG within weeks. We're here to walk that path with you.", 60, 356, W - 120, 9.7, '#cfe0f7', { maxHeight: 60, align: 'center' });
+
+  {
+    // glass contact card (rgba white .10 fill / .18 border, like the template)
+    const cw = 255;
+    const cx = (W - cw) / 2;
+    const cy = 448;
+    const ch = 86;
+    doc.save();
+    doc.roundedRect(cx, cy, cw, ch, 10).fillColor('#ffffff').fillOpacity(0.10).fill();
+    doc.roundedRect(cx, cy, cw, ch, 10).lineWidth(0.9).strokeColor('#ffffff').strokeOpacity(0.18).stroke();
+    doc.restore();
+    doc.fillOpacity(0.75);
+    text('GET IN TOUCH', cx, cy + 12, cw, 7.5, '#ffffff', { bold: true, align: 'center', ls: 2 });
+    doc.fillOpacity(1);
+    text('+971 58 560 2551', cx, cy + 28, cw, 16.5, '#ffffff', { bold: true, align: 'center' });
+    text('limitlessbrainlab-eight.vercel.app', cx, cy + 56, cw, 9.7, '#9ec2f0', { align: 'center' });
+  }
+
+  doc.fillOpacity(0.65);
+  text('This AI-generated qEEG report is provided for informational, educational, and wellness purposes only. It is not intended to diagnose, treat, cure, mitigate, or prevent any medical condition and is not a substitute for the individualized care of a licensed healthcare professional. The five brain-type framework is the NeuroSense interpretation of common qEEG patterns and is used for educational context only.', 62, H - 96, W - 124, 6.8, '#ffffff', { align: 'left' });
+  doc.fillOpacity(1);
 
   if (typeof onProgress === 'function') onProgress('render');
   doc.end();
@@ -222,3 +829,12 @@ async function renderReportDataToPdf(reportData, narrative, onProgress) {
 }
 
 module.exports = { renderReportDataToPdf };
+
+
+
+
+
+
+
+
+
