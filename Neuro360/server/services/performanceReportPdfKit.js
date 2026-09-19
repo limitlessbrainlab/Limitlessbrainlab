@@ -469,7 +469,8 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   // .snap — gradient score card (left) + snapshot rows (right)
   {
     const gap = 13.5;
-    const lw = (W - 2 * M - gap) * 0.42;
+    // Match the reference template's 0.85fr / 1.35fr snapshot grid.
+    const lw = (W - 2 * M - gap) * (0.85 / 2.2);
     const rw = (W - 2 * M - gap) - lw;
     const top = 192;
     // Seven rows need the same vertical space as the reference HTML layout;
@@ -485,8 +486,12 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     doc.fillOpacity(0.85);
     text('OVERALL BRAIN PERFORMANCE', M + 16, top + 18, lw - 32, 7.5, '#ffffff', { bold: true, ls: 2 });
     doc.fillOpacity(1);
-    text(`${d.overall != null ? d.overall : '-'}`, M + 16, top + 42, lw - 32, 44, '#ffffff', { bold: true, lineGap: 0 });
-    fit(n.overallSummary || 'A composite of your seven performance markers.', M + 16, top + 108, lw - 32, 8.4, '#e2efff', { maxHeight: gridH - 118 });
+    const overallText = `${d.overall != null ? d.overall : '-'}`;
+    doc.font('RS-Bold').fontSize(44);
+    const overallWidth = doc.widthOfString(overallText);
+    text(overallText, M + 16, top + 42, lw - 32, 44, '#ffffff', { bold: true, lineGap: 0 });
+    text('/100', M + 18 + overallWidth, top + 68, lw - 32 - overallWidth, 14, '#cfe0f7', { bold: true, lineGap: 0 });
+    fit(n.overallSummary || 'A composite of your seven performance markers. The growth zones are where small, consistent daily practices move the numbers most — recovery-first habits shift these fastest.', M + 16, top + 108, lw - 32, 8.4, '#e2efff', { maxHeight: gridH - 118 });
 
     // .scard rows
     const rows = bars.slice(0, 7);
@@ -892,6 +897,5 @@ async function renderReportDataToPdf(reportData, narrative, onProgress) {
 }
 
 module.exports = { renderReportDataToPdf };
-
 
 
