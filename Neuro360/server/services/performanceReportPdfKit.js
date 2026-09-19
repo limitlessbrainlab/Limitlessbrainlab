@@ -791,6 +791,16 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       ['frontalAsymmetry', 'Frontal Asymmetry', dd.frontalAsymmetry], ['daytimeDelta', 'Daytime Delta', dd.daytimeDelta],
       ['focusScore', 'Focus Score', dd.focusScore], ['alphaTheta', 'Alpha:Theta Balance', dd.alphaTheta],
     ];
+    const metricDescriptions = {
+      alphaPeak: 'A healthy alpha peak sits in the optimal band and supports clear information processing and relaxed focus — genuine cognitive horsepower to build on.',
+      arousal: 'Your nervous-system baseline. Higher values mean it runs hot; lowering it is central to recovery, sleep and calmer focus.',
+      relaxation: 'How readily you drop into a relaxed state — the mirror image of arousal. Breathwork and HRV training raise it directly.',
+      regeneration: 'Brain recovery capacity — how fast you replenish what you spend. Protect sleep and add daily downtime to move this number.',
+      frontalAsymmetry: 'Right-shifted values are linked to vigilance, worry and slower emotional recovery. Goal-activation routines rebuild the left side.',
+      daytimeDelta: 'Elevated waking delta points to recovery debt and fatigue rather than a primary issue. Sleep optimisation addresses it.',
+      focusScore: 'A theta:beta focus marker — above target is consistent with attention pulled sideways by vigilance. Pomodoro intervals and reduced threat-input help anchor sustained focus.',
+      alphaTheta: 'A workable ratio for memory and learning. This is the foundation that makes spaced repetition and active recall effective for you.',
+    };
     const gap = 13.5;
     const cw = (W - 2 * M - gap) / 2;
     metrics.forEach(([key, label, m], i) => {
@@ -803,7 +813,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       text(mark.label || label, x + 13, y + 11, cw - 110, 10.1, COLORS.navy, { bold: true });
       text(`Optimal: ${mark.optimal || '-'}`, x + 13, y + 26, cw - 110, 7.5, COLORS.ghost);
       text(fmt(mark.value, mark.unit), x + cw - 100, y + 10, 87, 19.5, c, { bold: true, align: 'right', lineGap: 0 });
-      fit(mark.description || n.deepDive?.descriptions?.[label] || '', x + 13, y + 44, cw - 26, 7.9, COLORS.muted, { maxHeight: 42 });
+      fit(mark.description || n.deepDive?.[key] || n.deepDive?.descriptions?.[key] || metricDescriptions[key], x + 13, y + 44, cw - 26, 7.9, COLORS.muted, { maxHeight: 42 });
     });
   }
   footer(10, 'Deep-Dive Metrics');
@@ -897,5 +907,4 @@ async function renderReportDataToPdf(reportData, narrative, onProgress) {
 }
 
 module.exports = { renderReportDataToPdf };
-
 
