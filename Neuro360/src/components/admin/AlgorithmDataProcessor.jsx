@@ -1306,7 +1306,7 @@ const AlgorithmDataProcessor = () => {
   // fetch (before the first SSE event); the rest are streamed by the backend.
   const PERFORMANCE_STAGE_ORDER = [
     { key: 'upload', label: 'Uploading your report…', pct: 4 },
-    { key: 'engine', label: 'Warming the render engine…', pct: 6 },
+    { key: 'engine', label: 'Preparing the renderer…', pct: 6 },
     { key: 'reading', label: 'Reading the document…', pct: 10 },
     { key: 'extract', label: 'Gemini is reading your numbers…', pct: 25 },
     { key: 'build', label: 'Building your report…', pct: 55 },

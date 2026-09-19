@@ -45,6 +45,12 @@ services:
       # working during the rename transition.
       - key: PERFORMANCE_REPORT_TOKEN
         sync: false
+      # Report renderer: 'pdfkit' (default; pure JS, no Chromium — required for
+      # the 512MB free tier, which froze/killed Chromium renders) or 'puppeteer'
+      # (reference HTML/Chromium layout — ONLY after upgrading the plan; also
+      # re-enables the report-time engine warm-up stage).
+      - key: PDF_RENDERER
+        value: "pdfkit"
       # Gates the /api/patient-documents endpoints (private patients_documents
       # bucket). Min 16 chars; must equal the frontend's VITE_PATIENT_DOCS_TOKEN.
       - key: PATIENT_DOCS_TOKEN

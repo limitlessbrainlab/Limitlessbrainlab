@@ -7,7 +7,7 @@ const { sidecarAuth } = require('../middleware/sidecarAuth');
 const { extractReportSource, postLesson, ensureRenderEngineReady } = require('../services/performanceReportService');
 const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('../services/performanceReportData');
 const { buildNeuroSenseMarkdown } = require('../services/neurosenseMarkdown');
-const { generateBrainReportPdf } = require('../services/performanceReportBuilder');
+const { generateBrainReportPdf, engineWarmupRequired } = require('../services/performanceReportBuilder');
 const SupabaseStorage = require('../services/supabaseStorage');
 
 const router = express.Router();
@@ -48,7 +48,7 @@ const upload = multer({
  */
 // Human-readable label for each streamed stage (frontend shows these verbatim).
 const STAGE_LABELS = {
-  engine: 'Warming the render engine…',
+  engine: 'Preparing the renderer…',
   reading: 'Reading the document…',
   extract: 'Gemini is reading your numbers…',
   build: 'Building your report…',
@@ -113,16 +113,17 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
   req.on('close', () => { clientGone = true; clearInterval(heartbeat); });
 
   try {
-    // Warm the render engine FIRST — before spending minutes of Gemini work —
-    // so the PDF render never starts from a cold install/launch. Single-flight:
-    // instant once the boot pre-warm has already succeeded; on a cold instance
-    // this pays the one-time cost up front with live progress. A warm-up
-    // failure aborts here, before any Gemini tokens are spent.
+    // Chromium renderer only: warm the engine FIRST — before spending minutes
+    // of Gemini work — so the PDF render never starts from a cold install/
+    // launch. Single-flight: instant once the boot pre-warm has succeeded.
+    // (The default PDFKit renderer needs NO engine — this stage passes in ms.)
     progress('engine');
-    try {
-      await ensureRenderEngineReady();
-    } catch (warmErr) {
-      throw new Error(`The report renderer failed to start on the server. Please try again — the next attempt usually succeeds. (${warmErr.message})`);
+    if (engineWarmupRequired()) {
+      try {
+        await ensureRenderEngineReady();
+      } catch (warmErr) {
+        throw new Error(`The report renderer failed to start on the server. Please try again — the next attempt usually succeeds. (${warmErr.message})`);
+      }
     }
 
     // Extract the uploaded report's text (fast; the values are textual).

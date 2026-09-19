@@ -4,8 +4,16 @@
  *
  *   reportData (numbers, from algorithmCalculator + buildReportData)
  *      → Gemini narrative (prose only)
- *      → 12-page HTML template (numbers filled deterministically)
- *      → Puppeteer renders the reference HTML/CSS layout to PDF
+ *      → PDF render
+ *
+ * Renderers (PDF_RENDERER env, see render.yaml):
+ *   'pdfkit'    (default) pure-JS PDFKit — NO Chromium, tiny memory footprint.
+ *               The 512MB Render free tier cannot fit Node + Chromium: renders
+ *               froze/killed the whole instance mid-PDF. This mode is immune.
+ *   'puppeteer' the reference HTML/CSS layout rendered by Chromium — pixel-
+ *               perfect, but needs ~600MB+ total. Enable ONLY after upgrading
+ *               the Render plan; the route re-enables the engine warm-up stage
+ *               automatically in this mode.
  *
  * Gemini never computes or alters numbers — see performanceReportService.generateReportNarrative.
  */
@@ -13,6 +21,17 @@
 const { generateReportNarrative, renderReportHtmlToPdf, postLesson } = require('./performanceReportService');
 const { renderReportHtml } = require('../templates/brainReport12Page');
 const { inlineEmojis } = require('../utils/inlineEmojis');
+const { renderReportDataToPdf } = require('./performanceReportPdfKit');
+
+const RENDERER_MODE = process.env.PDF_RENDERER === 'puppeteer' ? 'puppeteer' : 'pdfkit';
+
+/**
+ * Whether the chosen renderer needs the Chromium engine warm-up stage.
+ * PDFKit needs no engine — the route skips the warm-up entirely in that mode.
+ */
+function engineWarmupRequired() {
+  return RENDERER_MODE === 'puppeteer';
+}
 
 /**
  * @param {object} reportData  Output of buildReportData() (numbers + brain type).
@@ -47,12 +66,18 @@ async function generateBrainReportPdf(reportData, narrative, onProgress, onQueue
   }
 
   if (typeof onProgress === 'function') onProgress('render');
-  // Use the original HTML/CSS template so the generated report matches the
-  // approved 12-page reference PDF. The renderer has its own PDF timeout and
-  // Chrome cleanup safeguards in performanceReportService.
-  const html = inlineEmojis(renderReportHtml(reportData, prose));
-  const pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
+  let pdf;
+  if (RENDERER_MODE === 'puppeteer') {
+    // Reference HTML/CSS layout rendered by Chromium (requires a bigger plan).
+    // The renderer has its own PDF timeout and Chrome cleanup safeguards in
+    // performanceReportService.
+    const html = inlineEmojis(renderReportHtml(reportData, prose));
+    pdf = await renderReportHtmlToPdf(html, onQueueUpdate);
+  } else {
+    // Default: pure-JS PDFKit render — no browser, no memory cliff.
+    pdf = await renderReportDataToPdf(reportData, prose);
+  }
   return { pdf, narrative: prose };
 }
 
-module.exports = { generateBrainReportPdf };
+module.exports = { generateBrainReportPdf, engineWarmupRequired };
