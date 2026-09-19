@@ -812,7 +812,9 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       card(x, y, cw, 92);
       text(mark.label || label, x + 13, y + 11, cw - 110, 10.1, COLORS.navy, { bold: true });
       text(`Optimal: ${mark.optimal || '-'}`, x + 13, y + 26, cw - 110, 7.5, COLORS.ghost);
-      text(fmt(mark.value, mark.unit), x + cw - 100, y + 10, 87, 19.5, c, { bold: true, align: 'right', lineGap: 0 });
+      // Alpha:Theta contains three channel values; shrink it into the same score column
+      // instead of letting its wrapped lines overlap the title and description.
+      fit(fmt(mark.value, mark.unit), x + cw - 100, y + 10, 87, 19.5, c, { bold: true, align: 'right', lineGap: 0, maxHeight: 42 });
       fit(mark.description || n.deepDive?.[key] || n.deepDive?.descriptions?.[key] || metricDescriptions[key], x + 13, y + 44, cw - 26, 7.9, COLORS.muted, { maxHeight: 42 });
     });
   }
@@ -907,4 +909,3 @@ async function renderReportDataToPdf(reportData, narrative, onProgress) {
 }
 
 module.exports = { renderReportDataToPdf };
-
