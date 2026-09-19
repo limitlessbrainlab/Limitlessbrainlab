@@ -1,5 +1,7 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
+const fs = require('fs');
+const { createCanvas, loadImage } = require('canvas');
 
 // Pure-JS 12-page Performance Report renderer — the DEFAULT (PDF_RENDERER unset
 // or 'pdfkit'). Deliberately browser-free: rendering a Chromium PDF needs
@@ -55,6 +57,31 @@ const WAVE_COLORS = {
   Beta: '#94a3c8',
   'Hi-Beta': '#94a3c8',
 };
+
+// PDFKit has no colour-emoji font. Reuse the installed Twemoji artwork so the
+// PDFKit report carries the same marker icons as the approved HTML template.
+const EMOJI_FILES = {
+  '⚡': '26a1', '🧠': '1f9e0', '🎯': '1f3af', '📚': '1f4da',
+  '🔋': '1f50b', '💗': '1f497', '🎨': '1f3a8', '✳️': '2733',
+  '🟠': '1f7e0', '🛡️': '1f6e1', '🥗': '1f957', '🏃': '1f3c3',
+  '😴': '1f634', '🧬': '1f9ec', '⭐': '2b50', '✨': '2728', '🔍': '1f50d',
+};
+const emojiPngs = new Map();
+
+async function prepareEmojiPngs() {
+  await Promise.all(Object.entries(EMOJI_FILES).map(async ([emoji, file]) => {
+    if (emojiPngs.has(emoji)) return;
+    try {
+      // Twemoji SVGs rely on a viewBox; node-canvas requires explicit dimensions.
+      const svg = fs.readFileSync(require.resolve(`@twemoji/svg/${file}.svg`), 'utf8')
+        .replace('<svg ', '<svg width="48" height="48" ');
+      const image = await loadImage(Buffer.from(svg));
+      const canvas = createCanvas(48, 48);
+      canvas.getContext('2d').drawImage(image, 0, 0, 48, 48);
+      emojiPngs.set(emoji, canvas.toBuffer('image/png'));
+    } catch (_) { /* keep the text-only fallback if an asset is unavailable */ }
+  }));
+}
 
 // The five NeuroSense types, in classifier id order (brainType5Classifier).
 const FIVE_TYPES = [
@@ -220,6 +247,16 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     doc.restore();
   }
 
+  function emoji(icon, x, y, size, opacity = 1) {
+    const png = emojiPngs.get(icon);
+    if (!png) return false;
+    doc.save();
+    if (opacity < 1) doc.opacity(opacity);
+    doc.image(png, x, y, { width: size, height: size });
+    doc.restore();
+    return true;
+  }
+
   // Blue rounded-square logo badge with the white brain mark (.lmark).
   function brandBadge(x, y, box) {
     doc.roundedRect(x, y, box, box, box * 0.3).fill(COLORS.badgeBlue);
@@ -311,7 +348,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       doc.font(fontFor(item)).fontSize(size);
       const h = doc.heightOfString(item, { width: width - 14, lineGap: 1.4 });
       if (useMark) {
-        text('+', x, cy - 0.5, 8, size + 0.7, t.dot, { bold: true });
+        text(tone === 'good' ? '✓' : '!', x, cy - 0.5, 8, size + 0.7, t.dot, { bold: true });
       } else {
         doc.circle(x + 2.6, cy + size * 0.42, 2.2).fill(t.dot);
       }
@@ -325,8 +362,11 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   function toneCard(x, y, w, h, tone, title, items, useMark = false) {
     const t = TONE[tone] || TONE.plain;
     card(x, y, w, h, t.bg, t.bd, 9);
-    text(ascii(title), x + 11, y + 10, w - 22, 9.4, t.h, { bold: true });
-    bullets(items, x + 11, y + 27, w - 22, tone, useMark);
+    const heading = ascii(title);
+    doc.font(fontFor(heading, true)).fontSize(9.4);
+    const headingHeight = doc.heightOfString(heading, { width: w - 22, lineGap: 2 });
+    text(heading, x + 11, y + 10, w - 22, 9.4, t.h, { bold: true });
+    bullets(items, x + 11, y + 14 + headingHeight, w - 22, tone, useMark);
   }
   // .callout — full-width tinted box (title + paragraph).
   function callout(x, y, w, h, tone, title, body) {
@@ -340,9 +380,10 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     fit(body, x + 12, cy, w - 24, 8.6, COLORS.body, { maxHeight: y + h - cy - 8 });
   }
   // .card with .mini-title/.mini-body (plain white card, small heading + body).
-  function miniCard(x, y, w, h, title, body) {
+  function miniCard(x, y, w, h, title, body, icon = '') {
     card(x, y, w, h);
-    text(ascii(title), x + 12, y + 10, w - 24, 9.8, COLORS.navy, { bold: true });
+    const hasIcon = emoji(icon, x + 12, y + 10, 10);
+    text(ascii(title), x + (hasIcon ? 26 : 12), y + 10, w - (hasIcon ? 38 : 24), 9.8, COLORS.navy, { bold: true });
     fit(body, x + 12, y + 25, w - 24, 8.3, COLORS.muted, { maxHeight: y + h - (y + 25) - 8 });
   }
 
@@ -431,7 +472,9 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     const lw = (W - 2 * M - gap) * 0.42;
     const rw = (W - 2 * M - gap) - lw;
     const top = 192;
-    const gridH = 210;
+    // Seven rows need the same vertical space as the reference HTML layout;
+    // 210pt makes each label collide with its progress bar.
+    const gridH = 360;
 
     // .score-card
     doc.save();
@@ -453,18 +496,18 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       const x = M + lw + gap;
       card(x, y, rw, rh, '#ffffff', '#e8edf5', 9);
       const c = pctColor(colorPct(b));
-      const icon = ascii(b.icon).trim();
-      text(icon ? `${icon} ${b.label || b.key}` : (b.label || b.key), x + 11, y + 6, rw - 90, 9.4, '#33405c', { bold: true });
+      const hasIcon = emoji(b.icon, x + 11, y + 7, 10);
+      text(b.label || b.key, x + (hasIcon ? 25 : 11), y + 6, rw - (hasIcon ? 104 : 90), 9.4, '#33405c', { bold: true });
       text(`${Number(b.percent) || 0}%`, x + rw - 48, y + 5.5, 38, 10.5, c, { bold: true, align: 'right' });
       track(x + 11, y + rh - 12, rw - 22, 6, b.percent, c);
     });
   }
 
-  h3('YOUR THREE BIGGEST SIGNALS', M, 432);
+  h3('YOUR THREE BIGGEST SIGNALS', M, 576);
   {
     const gap = 9;
     const cw = (W - 2 * M - gap * 2) / 3;
-    const cy = 452;
+    const cy = 598;
     const ch = 128;
     toneCard(M, cy, cw, ch, 'good', `TOP STRENGTH: ${n.topStrength?.title || 'Strength'}`,
       n.topStrength?.points || bt.strengths || ['Consistent strengths across your profile.']);
@@ -582,7 +625,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     hg.stop(0, COLORS.blue).stop(1, COLORS.darkA);
     doc.roundedRect(M, top, W - 2 * M, hh, 12).fill(hg);
     doc.restore();
-    brainGlyph(W - M - 55, top + hh / 2, 76, '#ffffff', 0.16);
+    if (!emoji(bt.icon, W - M - 92, top + 38, 62, 0.16)) brainGlyph(W - M - 55, top + hh / 2, 76, '#ffffff', 0.16);
     eyebrow(`${p.firstName || p.name || 'Your'}'s Brain Type`, M + 18, top + 14, '#9ec2f0');
     text(`Type ${bt.id || '-'} - The ${bt.name || ''} Brain`, M + 18, top + 32, W - 2 * M - 100, 19, '#ffffff', { bold: true });
     fit(`${bt.tagline || ''}.`, M + 18, top + 58, W - 2 * M - 100, 9.4, '#cfe0f7', { maxHeight: 26 });
@@ -602,8 +645,8 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   }
 
   h3("What's happening in your brain", M, 282);
-  miniCard(M, 302, (W - 2 * M - 13.5) / 2, 96, 'The neuroscience', bt.neuroscience || '');
-  miniCard(M + (W - 2 * M - 13.5) / 2 + 13.5, 302, (W - 2 * M - 13.5) / 2, 96, "Why it's a strength", bt.whyStrength || '');
+  miniCard(M, 302, (W - 2 * M - 13.5) / 2, 96, 'The neuroscience', bt.neuroscience || '', '🧬');
+  miniCard(M + (W - 2 * M - 13.5) / 2 + 13.5, 302, (W - 2 * M - 13.5) / 2, 96, "Why it's a strength", bt.whyStrength || '', '⭐');
 
   h3('Your strengths & watch-zones', M, 418);
   const colW = (W - 2 * M - 13.5) / 2;
@@ -623,9 +666,9 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   {
     const gap = 13.5;
     const cw = (W - 2 * M - gap * 2) / 3;
-    miniCard(M, 202, cw, 112, 'Eat for your type', strategy.eat || '');
-    miniCard(M + cw + gap, 202, cw, 112, 'Move', strategy.move || '');
-    miniCard(M + (cw + gap) * 2, 202, cw, 112, 'Sleep', strategy.sleep || '');
+    miniCard(M, 202, cw, 112, 'Eat for your type', strategy.eat || '', '🥗');
+    miniCard(M + cw + gap, 202, cw, 112, 'Move', strategy.move || '', '🏃');
+    miniCard(M + (cw + gap) * 2, 202, cw, 112, 'Sleep', strategy.sleep || '', '😴');
   }
 
   h3('Mind & emotional practices', M, 336);
@@ -665,9 +708,9 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       const cp = colorPct(mark);
       const c = pctColor(cp);
       card(x, y, cw, 114);
-      text(mark.label || fallbackLabels[i], x + 13, y + 12, cw - 90, 11.3, COLORS.navy, { bold: true });
-      text(subs[i], x + 13, y + 27, cw - 90, 7.5, COLORS.ghost);
-      text(`${Number(mark.percent) || 0}%`, x + cw - 62, y + 10, 48, 24, c, { bold: true, align: 'right', lineGap: 0 });
+      text(mark.label || fallbackLabels[i], x + 13, y + 12, cw - 100, 11.3, COLORS.navy, { bold: true });
+      text(subs[i], x + 13, y + 27, cw - 100, 7.5, COLORS.ghost);
+      text(`${Number(mark.percent) || 0}%`, x + cw - 76, y + 10, 62, 24, c, { bold: true, align: 'right', lineGap: 0 });
       pill(mark.status || '-', x + 13, y + 42, pctTint(cp), pctFg(cp));
       fit(bodies[i] || '', x + 13, y + 62, cw - 26, 8.3, COLORS.muted, { maxHeight: 46 });
     });
@@ -844,16 +887,11 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
 }
 
 async function renderReportDataToPdf(reportData, narrative, onProgress) {
+  await prepareEmojiPngs();
   return makeRenderer(reportData, narrative, onProgress);
 }
 
 module.exports = { renderReportDataToPdf };
-
-
-
-
-
-
 
 
 
