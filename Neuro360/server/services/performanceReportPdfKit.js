@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
 
 // Pure-JS 12-page Performance Report renderer — the DEFAULT (PDF_RENDERER unset
 // or 'pdfkit'). Deliberately browser-free: rendering a Chromium PDF needs
@@ -104,18 +105,25 @@ function pctFg(p) {
   return '#b91c1c';
 }
 
-// Standard PDF fonts use WinAnsi encoding: en/em dashes, curly quotes and the
-// bullet/middle-dot glyphs are all covered, so they are kept for visual
-// fidelity with the HTML reference. True emoji and symbols outside WinAnsi
-// (checkmark, arrow, etc.) are mapped to safe ASCII equivalents or dropped.
+// Text is drawn with embedded faces (see registerFont in makeRenderer):
+// Liberation Sans — the face the reference PDFs actually carry (the template's
+// 'Helvetica Neue',Helvetica,Arial,'Liberation Sans' stack resolves to it on
+// the Linux render box; pdffonts on both reference PDFs shows LiberationSans)
+// — plus DejaVu Sans for the symbols Liberation lacks (✓ ◉ ⚠ ⚡ ⚖ ★). Emoji
+// have no embedded face (Chromium draws them as color bitmaps, which PDFKit
+// cannot embed), so they are dropped; ✅/⭐/✨ map to DejaVu glyphs. En/em
+// dashes, curly quotes, • and · are real glyphs in both faces and are kept.
+const SYM_RE = /[\u2192\u2500\u25C9\u2605\u2696\u26A0\u26A1\u2713]/;
 function ascii(value) {
   return String(value == null ? '' : value)
-    .replace(/\u2713/g, '+')
-    .replace(/\u2192/g, '->')
-    .replace(/[\u2013\u2014]/g, '-')
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[^\x00-\xFF]/g, '');
+    .replace(/\u2705/g, '\u2713')
+    .replace(/[\u2B50\u2728]/g, '\u2605')
+    // keep ASCII, Latin letters/punctuation, and the whitelisted symbols
+    .replace(/[^\x09\x0A\x0D\x20-\u007E\u00A0-\u024F\u2010-\u2027\u2032-\u203A\u20AC\u2122\u2500\u25C9\u2605\u2696\u26A0\u26A1\u2713]/g, '');
+}
+// Pick the face for a text run: DejaVu when it carries glyphs Liberation lacks.
+function fontFor(str, bold) {
+  return SYM_RE.test(String(str)) ? (bold ? 'Sym-Bold' : 'Sym') : (bold ? 'RS-Bold' : 'RS');
 }
 
 function fmt(value, unit = '') {
@@ -133,8 +141,8 @@ function fmt(value, unit = '') {
 
 function splitDash(line) {
   const s = ascii(line);
-  const i = s.indexOf(' - ');
-  if (i > 0) return { title: s.slice(0, i).trim(), body: s.slice(i + 3).trim() };
+  const m = s.match(/^(.*?)\s[-\u2013\u2014]\s(.+)$/);
+  if (m) return { title: m[1].trim(), body: m[2].trim() };
   return { title: s.trim(), body: '' };
 }
 
@@ -151,6 +159,15 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   const inner = d.innerBandwidth || {};
 
   const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false, bufferPages: true, compress: true });
+  // Embedded faces matching the reference PDFs: Liberation Sans (Regular +
+  // Bold — the reference carries no italic/extrabold faces; Chromium renders
+  // its font-weight:800 headings with the Bold face) and DejaVu Sans as the
+  // symbol fallback. Files live in server/fonts so they ship with deploys.
+  const FONTS_DIR = path.join(__dirname, '..', 'fonts');
+  doc.registerFont('RS', path.join(FONTS_DIR, 'LiberationSans-Regular.ttf'));
+  doc.registerFont('RS-Bold', path.join(FONTS_DIR, 'LiberationSans-Bold.ttf'));
+  doc.registerFont('Sym', path.join(FONTS_DIR, 'DejaVuSans.ttf'));
+  doc.registerFont('Sym-Bold', path.join(FONTS_DIR, 'DejaVuSans-Bold.ttf'));
   const chunks = [];
   doc.on('data', (chunk) => chunks.push(chunk));
   const done = new Promise((resolve, reject) => {
@@ -214,17 +231,18 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     let s = size;
     const str = ascii(value);
     while (s > minSize) {
-      doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(s);
+      doc.font(fontFor(str, opts.bold)).fontSize(s);
       if (doc.heightOfString(str, { width, lineGap: opts.lineGap ?? 1.6 }) <= opts.maxHeight) break;
       s -= 0.4;
     }
-    doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(s).fillColor(color)
+    doc.font(fontFor(str, opts.bold)).fontSize(s).fillColor(color)
       .text(str, x, y, { width, lineGap: opts.lineGap ?? 1.6, align: opts.align || 'left' });
   }
 
   function text(value, x, y, width, size = 10, color = COLORS.text, opts = {}) {
-    doc.font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
-      .text(ascii(value), x, y, { width, lineGap: opts.lineGap ?? 2, align: opts.align || 'left', characterSpacing: opts.ls || 0 });
+    const str = ascii(value);
+    doc.font(fontFor(str, opts.bold)).fontSize(size).fillColor(color)
+      .text(str, x, y, { width, lineGap: opts.lineGap ?? 2, align: opts.align || 'left', characterSpacing: opts.ls || 0 });
   }
 
   // .phead — brand lockup + "NN / SECTION" + hairline
@@ -239,7 +257,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   // .pfoot — "NeuroSense • Limitless Brain Lab • site" + "Page N • Label"
   function footer(number, label) {
     doc.moveTo(M, H - 45).lineTo(W - M, H - 45).strokeColor(COLORS.track).lineWidth(0.8).stroke();
-    text('NeuroSense \u2022 Limitless Brain Lab \u2022 limitlessbrainlab-eight.vercel.app', M, H - 37, 360, 7.5, COLORS.ghost);
+    text('NeuroSense \u2022 Limitless Brain Lab \u2022 limitlessbrainlab.com', M, H - 37, 360, 7.5, COLORS.ghost);
     text(`Page ${number} \u2022 ${label}`, W - M - 180, H - 37, 180, 7.5, COLORS.ghost, { align: 'right' });
   }
 
@@ -249,7 +267,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   }
   // h2 with a cyan-highlighted middle segment: h2('Your brain at a', 'glance')
   function h2(pre, hl, post = '', x = M, y = 116, size = 22) {
-    doc.font('Helvetica-Bold').fontSize(size);
+    doc.font(fontFor(`${pre}${hl || ''}`, true)).fontSize(size);
     const wPre = hl ? doc.widthOfString(ascii(`${pre} `)) : 0;
     const wHl = hl ? doc.widthOfString(ascii(hl)) : 0;
     if (pre) text(pre, x, y, W - 2 * M, size, COLORS.navy, { bold: true, lineGap: 0 });
@@ -271,7 +289,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   // Measured pill (badges, tags, traits).
   function pill(str, x, y, bg, fg, size = 7.1, padX = 7.5, h = 13.5) {
     const label = ascii(String(str).toUpperCase());
-    doc.font('Helvetica-Bold').fontSize(size);
+    doc.font(fontFor(label, true)).fontSize(size);
     const w = doc.widthOfString(label) + padX * 2;
     doc.roundedRect(x, y, w, h, h / 2).fill(bg);
     text(label, x + padX, y + h / 2 - size / 2 - 0.5, w - padX, size, fg, { bold: true });
@@ -290,14 +308,14 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     (Array.isArray(items) ? items : []).slice(0, maxItems).forEach((raw) => {
       const item = ascii(raw);
       if (!item) return;
-      doc.font('Helvetica').fontSize(size);
+      doc.font(fontFor(item)).fontSize(size);
       const h = doc.heightOfString(item, { width: width - 14, lineGap: 1.4 });
       if (useMark) {
         text('+', x, cy - 0.5, 8, size + 0.7, t.dot, { bold: true });
       } else {
         doc.circle(x + 2.6, cy + size * 0.42, 2.2).fill(t.dot);
       }
-      doc.font('Helvetica').fontSize(size).fillColor(COLORS.body)
+      doc.font(fontFor(item)).fontSize(size).fillColor(COLORS.body)
         .text(item, x + 12, cy, { width: width - 14, lineGap: 1.4 });
       cy += h + gap;
     });
@@ -364,7 +382,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   {
     let foot = '';
     if (p.generatedOn) foot += `Report generated on: ${ascii(p.generatedOn)} by Limitless Brain Lab\n`;
-    foot += `${p.clinicName || 'Limitless Brain Lab'} \u2022 This AI-generated report is for informational and wellness purposes only and is not a medical diagnosis.\nlimitlessbrainlab-eight.vercel.app`;
+    foot += `${p.clinicName || 'Limitless Brain Lab'} \u2022 This AI-generated report is for informational and wellness purposes only and is not a medical diagnosis.\nlimitlessbrainlab.com`;
     text(foot, M, 762, W - 2 * M, 7.1, '#ffffff', { align: 'center' });
     doc.fillOpacity(0.6);
     text(foot, M, 762, W - 2 * M, 7.1, '#ffffff', { align: 'center' });
@@ -381,7 +399,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   const toc = [
     ['Your Snapshot - at-a-glance score & key signals', 'PAGE 3'],
     ['Brainwave Profile - Delta, Theta, Alpha, Beta, hi-Beta', 'PAGE 4'],
-    ['Your Brain Type - the NeuroSense five-type framework', 'PAGE 5-6'],
+    ['Your Brain Type - the NeuroSense five-type framework', 'PAGE 5\u20136'],
     ['Type-Specific Strategy Guide', 'PAGE 7'],
     ['Performance Markers - Cognition, Focus, Stress, Burnout', 'PAGE 8'],
     ['Emotional Regulation, Learning & Creativity', 'PAGE 9'],
@@ -435,7 +453,8 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       const x = M + lw + gap;
       card(x, y, rw, rh, '#ffffff', '#e8edf5', 9);
       const c = pctColor(colorPct(b));
-      text(b.icon ? `${ascii(b.icon)} ${b.label || b.key}` : (b.label || b.key), x + 11, y + 6, rw - 90, 9.4, '#33405c', { bold: true });
+      const icon = ascii(b.icon).trim();
+      text(icon ? `${icon} ${b.label || b.key}` : (b.label || b.key), x + 11, y + 6, rw - 90, 9.4, '#33405c', { bold: true });
       text(`${Number(b.percent) || 0}%`, x + rw - 48, y + 5.5, 38, 10.5, c, { bold: true, align: 'right' });
       track(x + 11, y + rh - 12, rw - 22, 6, b.percent, c);
     });
@@ -502,7 +521,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       fit(c.body, x + 11, y + 26, cw - 22, 8.3, COLORS.body, { maxHeight: 70 });
     });
   }
-  footer(4, 'Brainwave Profile');
+  footer(4, 'Brainwaves');
 
   // ================= PAGE 5 — FIVE TYPES =================
   addPage();
@@ -543,7 +562,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     text('How we determined your type', M + 12, y + 10, W - 2 * M - 24, 9.4, TONE.info.h, { bold: true });
     const reason = (Array.isArray(n.brainTypeReason) && n.brainTypeReason.length ? n.brainTypeReason : bt.strengths) || [];
     const intro = `Your qEEG showed signatures that map onto the ${bt.name || '-'} (Type ${bt.id || '-'}) profile${secondary ? `, with secondary ${secondary.name || ''} features` : ''}:`;
-    doc.font('Helvetica').fontSize(8.6).fillColor(COLORS.body)
+    doc.font(fontFor(ascii(intro))).fontSize(8.6).fillColor(COLORS.body)
       .text(ascii(intro), M + 12, y + 27, { width: W - 2 * M - 24, lineGap: 1.4 });
     bullets(reason, M + 12, y + 44, W - 2 * M - 24, 'info', false, 8.3, 4.5, 4);
   }
@@ -571,7 +590,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     let px = M + 18;
     const maxPillW = W - M - 18 - px;
     traits.forEach((t) => {
-      doc.font('Helvetica-Bold').fontSize(7.5);
+      doc.font(fontFor(ascii(t), true)).fontSize(7.5);
       const pw = Math.min(doc.widthOfString(ascii(t)) + 16, maxPillW);
       doc.save();
       doc.roundedRect(px, top + 112, pw, 16, 8).fillColor('#ffffff').fillOpacity(0.12).fill();
@@ -793,7 +812,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
 
   // ================= PAGE 12 — CLOSING / CONTACT =================
   darkPage(false);
-  brainGlyph(W / 2, 208, 44, '#ffffff', 0.9);
+  text('\u25C9', 0, 184, W, 24, '#ffffff', { align: 'center' });
   text('Your brain is unique.', 0, 258, W, 30, '#ffffff', { bold: true, align: 'center', lineGap: 0 });
   text('Your plan should be too.', 0, 296, W, 30, '#ffffff', { bold: true, align: 'center', lineGap: 0 });
   fit(n.closing || "This report is a starting point, not a finish line. Small, consistent shifts in lifestyle, sleep, and self-regulation produce measurable changes in your EEG within weeks. We're here to walk that path with you.", 60, 356, W - 120, 9.7, '#cfe0f7', { maxHeight: 60, align: 'center' });
@@ -812,7 +831,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     text('GET IN TOUCH', cx, cy + 12, cw, 7.5, '#ffffff', { bold: true, align: 'center', ls: 2 });
     doc.fillOpacity(1);
     text('+971 58 560 2551', cx, cy + 28, cw, 16.5, '#ffffff', { bold: true, align: 'center' });
-    text('limitlessbrainlab-eight.vercel.app', cx, cy + 56, cw, 9.7, '#9ec2f0', { align: 'center' });
+    text('www.limitlessbrainlab.com', cx, cy + 56, cw, 9.7, '#9ec2f0', { align: 'center' });
   }
 
   doc.fillOpacity(0.65);
