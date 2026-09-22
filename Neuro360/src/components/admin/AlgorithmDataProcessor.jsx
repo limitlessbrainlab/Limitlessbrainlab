@@ -5,6 +5,7 @@ import SupabaseService from '../../services/supabaseService';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import { grantCareProgramAccess } from '../../utils/careProgramEntitlements';
+import SystemHealth from './SystemHealth';
 
 // Always return a CURRENT Supabase access token. supabase.auth.getSession() refreshes
 // the token transparently if it's near expiry, so /api/qeeg/* calls no longer 401
@@ -2850,16 +2851,21 @@ const AlgorithmDataProcessor = () => {
           <ArrowLeft className="h-5 w-5 mr-2" />
           Back to Patient List
         </button>
-        <h1 className="text-2xl font-bold">Limitless Brain Lab - Algorithm Data Processor</h1>
-        <div className="flex items-center gap-3 mt-2">
-          <p className="text-primary-light">
-            Processing for: <span className="font-semibold">{getPatientName(selectedPatient)}</span> | {selectedPatient?.clinicName}
-          </p>
-          {dataType === 'zscore' && (
-            <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-200 text-xs font-medium rounded-full border border-purple-400/30">
-              🔬 Z-Score Mode
-            </span>
-          )}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Limitless Brain Lab - Algorithm Data Processor</h1>
+            <div className="flex items-center gap-3 mt-2">
+              <p className="text-primary-light">
+                Processing for: <span className="font-semibold">{getPatientName(selectedPatient)}</span> | {selectedPatient?.clinicName}
+              </p>
+              {dataType === 'zscore' && (
+                <span className="inline-flex items-center px-3 py-1 bg-purple-500/20 text-purple-200 text-xs font-medium rounded-full border border-purple-400/30">
+                  🔬 Z-Score Mode
+                </span>
+              )}
+            </div>
+          </div>
+          <SystemHealth compact />
         </div>
       </div>
 
