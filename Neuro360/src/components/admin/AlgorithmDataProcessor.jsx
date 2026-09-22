@@ -3438,11 +3438,11 @@ const AlgorithmDataProcessor = () => {
 
                   {/* Live, stage-by-stage progress (fed by the backend SSE stream) */}
                   {isGeneratingClaudeReport && (
-                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-lg p-4 shadow-lg">
+                    <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-lg" role="status" aria-live="polite">
                       {claudeQueuePosition > 0 && (
-                        <div className="mb-3 flex items-center gap-2 bg-amber-400/20 border border-amber-300/40 rounded-lg px-3 py-2 animate-pulse">
-                          <Clock className="h-4 w-4 text-amber-200 flex-shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
-                          <span className="text-amber-100 text-sm font-medium">
+                        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 motion-reduce:animate-none animate-pulse">
+                          <Clock className="h-4 w-4 flex-shrink-0 text-amber-200 motion-reduce:animate-none animate-spin" style={{ animationDuration: '3s' }} />
+                          <span className="text-sm font-medium text-amber-100">
                             Another report is rendering — you're #{claudeQueuePosition} in queue…
                           </span>
                           <span className="ml-auto flex gap-1">
@@ -3452,31 +3452,33 @@ const AlgorithmDataProcessor = () => {
                           </span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-white font-medium text-sm">Building your 12-page report…</p>
-                        <p className="text-indigo-200 text-sm font-mono">{Math.round(claudeProgress)}%</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-white">Report generation</p>
+                        <p className="text-lg font-semibold tabular-nums text-white">{Math.round(claudeProgress)}%</p>
                       </div>
-                      <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
-                        <div
-                          className="bg-green-400 h-3 rounded-full transition-all duration-700 ease-out"
-                          style={{ width: `${Math.min(claudeProgress, 100)}%` }}
-                        />
+                      <div className="mt-5 flex gap-1" aria-label={`${Math.round(claudeProgress)} percent complete`}>
+                        {Array.from({ length: 40 }, (_, index) => {
+                          const filled = index < Math.ceil(Math.min(claudeProgress, 100) / 2.5);
+                          const active = filled && index === Math.ceil(Math.min(claudeProgress, 100) / 2.5) - 1;
+                          return <span key={index} className={`h-6 flex-1 rounded-sm transition-colors duration-500 ${filled ? 'bg-emerald-400' : 'bg-slate-700'} ${active ? 'motion-reduce:animate-none animate-pulse' : ''}`} />;
+                        })}
                       </div>
-                      <div className="mt-3 space-y-1.5">
+                      <div className="mt-2 flex justify-between text-xs text-slate-400"><span>Starting report</span><span>Final PDF</span></div>
+                      <div className="mt-4 space-y-2">
                         {claudeStages.map((s) => (
                           <div key={s.key} className="flex items-center text-xs">
                             {s.status === 'done' ? (
-                              <CheckCircle className="h-4 w-4 text-green-400 mr-2 flex-shrink-0" />
+                              <CheckCircle className="mr-2 h-4 w-4 flex-shrink-0 text-emerald-400" />
                             ) : s.status === 'active' ? (
-                              <Loader2 className="h-4 w-4 text-white animate-spin mr-2 flex-shrink-0" />
+                              <Loader2 className="mr-2 h-4 w-4 flex-shrink-0 text-emerald-300 motion-reduce:animate-none animate-spin" />
                             ) : (
-                              <span className="h-4 w-4 mr-2 flex-shrink-0 rounded-full border border-white/30" />
+                              <span className="mr-2 h-4 w-4 flex-shrink-0 rounded-full border border-slate-600" />
                             )}
-                            <span className={s.status === 'pending' ? 'text-indigo-200/60' : 'text-white'}>
+                            <span className={s.status === 'pending' ? 'text-slate-500' : 'text-slate-100'}>
                               {s.label}
                             </span>
                             {s.status === 'done' && s.elapsedMs != null && (
-                              <span className="ml-auto text-indigo-200/70 font-mono">{(s.elapsedMs / 1000).toFixed(1)}s</span>
+                              <span className="ml-auto font-mono text-slate-500">{(s.elapsedMs / 1000).toFixed(1)}s</span>
                             )}
                           </div>
                         ))}
