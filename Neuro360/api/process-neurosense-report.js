@@ -27,7 +27,8 @@ function safeName(name) {
 
 async function prepareUploads(req, res, supabase, user) {
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
-  if (files.length !== 2 || files.some((file) => !file?.name || file.size > MAX_FILE_SIZE)) {
+  const allowed = new Set(['.pdf', '.csv', '.xlsx', '.xls']);
+  if (files.length !== 2 || files.some((file) => !file?.name || file.size < 1 || file.size > MAX_FILE_SIZE || !allowed.has(path.extname(file.name).toLowerCase()))) {
     return json(res, 400, { message: 'Exactly two files up to 50MB each are required' });
   }
   const uploads = [];
