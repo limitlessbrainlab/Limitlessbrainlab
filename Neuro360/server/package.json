@@ -2,6 +2,10 @@
   "name": "neuro360-backend",
   "version": "1.0.0",
   "description": "Backend server for Neuro360 QEEG Algorithm Processing",
+  "allowScripts": {
+    "canvas@3.2.0": true,
+    "puppeteer": false
+  },
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
