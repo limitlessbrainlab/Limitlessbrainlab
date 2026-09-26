@@ -1141,7 +1141,11 @@ const AlgorithmDataProcessor = () => {
 
         // Step 2: Save results to database (with or without PDF URL)
         const saved = await saveResultsToDatabase(results);
-        if (saved && saved.id) setSavedResultId(saved.id);
+        if (saved && saved.id) {
+          setSavedResultId(saved.id);
+          setCanonicalResults(saved.canonicalResults || canonicalResults);
+          setCanonicalQeegData(saved.qeegData || canonicalQeegData);
+        }
 
         // Step 3: Show success message
         if (finalPdfUrl) {
@@ -1428,23 +1432,24 @@ const AlgorithmDataProcessor = () => {
     // Hard block performance-report generation when the clinic has no credits left.
     if (await blockIfNoCredits(selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id)) return;
 
-    // New reports use the canonical server calculation directly on isolated
-    // Vercel compute. Legacy records without canonical data keep the old PDF
-    // extraction path below so historical reports remain usable.
-    if (savedResultId && canonicalResults && canonicalQeegData) {
-      setIsGeneratingClaudeReport(true);
-      setClaudeReportError(null);
-      setClaudeProgress(10);
-      toast.loading('Building the Performance Report on isolated report compute…', { id: 'claude-report' });
-      try {
-        await generatePerformanceOnVercel();
-      } catch (error) {
-        setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
-        toast.error(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'), { id: 'claude-report' });
-      } finally {
-        setIsGeneratingClaudeReport(false);
-      }
+    if (!savedResultId || !canonicalResults || !canonicalQeegData) {
+      const message = 'NeuroSense calculation data is not ready. Generate and save the NeuroSense Report again before building its Performance Report.';
+      setClaudeReportError(message);
+      toast.error(message, { id: 'claude-report' });
       return;
+    }
+
+    setIsGeneratingClaudeReport(true);
+    setClaudeReportError(null);
+    setClaudeProgress(10);
+    toast.loading('Building the Performance Report on isolated report compute…', { id: 'claude-report' });
+    try {
+      await generatePerformanceOnVercel();
+    } catch (error) {
+      setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
+      toast.error(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'), { id: 'claude-report' });
+    } finally {
+      setIsGeneratingClaudeReport(false);
     }
 
     console.log('[Performance Report] ▶ Starting upload & compilation process…');
