@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.report_jobs (
   progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
   patient_id UUID,
   clinic_id UUID,
-  algorithm_result_id UUID REFERENCES public.algorithm_results(id) ON DELETE SET NULL,
+  algorithm_result_id TEXT REFERENCES public.algorithm_results(id) ON DELETE SET NULL,
   requested_by UUID,
   input_data JSONB NOT NULL DEFAULT '{}'::jsonb,
   canonical_results JSONB,
@@ -37,4 +37,3 @@ ALTER TABLE public.report_jobs ENABLE ROW LEVEL SECURITY;
 
 -- Report jobs are coordinated only by trusted server-side service-role clients.
 REVOKE ALL ON public.report_jobs FROM anon, authenticated;
-
