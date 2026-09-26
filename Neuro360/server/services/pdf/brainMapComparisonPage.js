@@ -6,6 +6,7 @@
 
 const { COLORS, FONTS, LAYOUT, addPageFooter, drawRoundedRect } = require('./pdfStyles');
 const path = require('path');
+const { getReportUploadDir } = require('../reportRuntime');
 const fs = require('fs');
 
 // Use shared colors from pdfStyles - Using consistent deep navy blue throughout PDF
@@ -262,7 +263,7 @@ async function generateBrainMapComparisonPage(doc, inputPdfPaths = {}) {
   if (inputPdfPaths && inputPdfPaths.eyesClosed && inputPdfPaths.eyesOpen) {
     console.log('   📁 PDF paths provided, extracting page 2 images...');
 
-    const tempDir = path.join(__dirname, '../../uploads/temp');
+    const tempDir = path.join(getReportUploadDir(), 'temp');
 
     // Create temp directory if it doesn't exist
     if (!fs.existsSync(tempDir)) {

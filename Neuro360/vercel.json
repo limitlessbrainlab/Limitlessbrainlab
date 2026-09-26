@@ -1,7 +1,10 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
+  "installCommand": "npm install && npm install --prefix server",
   "rewrites": [
     {
-      "source": "/api/:path((?!send-report-email$|render-performance-pdf$|generate-performance-report$|ops/backend$).*)",
+      "source": "/api/:path((?!send-report-email$|render-performance-pdf$|generate-performance-report$|process-neurosense-report$|ops/backend$).*)",
       "destination": "https://limitlessbrainlab-backend.onrender.com/api/:path"
     },
     {
@@ -10,6 +13,10 @@
     }
   ],
   "functions": {
+    "api/process-neurosense-report.js": {
+      "maxDuration": 800,
+      "includeFiles": "{server/assets/**,public/assets/**,server/services/pdfLogo*.js}"
+    },
     "api/generate-performance-report.js": {
       "maxDuration": 800
     }

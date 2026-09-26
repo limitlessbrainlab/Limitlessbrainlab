@@ -776,11 +776,7 @@ const AlgorithmDataProcessor = () => {
         // Get auth token from localStorage
         const token = await getFreshToken();
 
-        const fetchOptions = {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal
-        };
+        const fetchOptions = { method: 'POST', body: formData, signal: controller.signal };
 
         // Add authorization header if token exists
         if (token) {
@@ -789,7 +785,34 @@ const AlgorithmDataProcessor = () => {
           };
         }
 
-        response = await fetch(`${apiUrl}/qeeg/process`, fetchOptions);
+        const processingEndpoint = import.meta.env.PROD ? '/api/process-neurosense-report' : `${apiUrl}/qeeg/process`;
+        if (import.meta.env.PROD) {
+          if (!token) throw new Error('Your session expired. Please log in again.');
+          const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+          const prepared = await fetch(processingEndpoint, {
+            method: 'POST', headers: authHeaders, signal: controller.signal,
+            body: JSON.stringify({ action: 'prepare', files: [eyesOpenFile, eyesClosedFile].map((file) => ({ name: file.name, size: file.size, type: file.type })) })
+          });
+          const preparedData = await prepared.json();
+          if (!prepared.ok) throw new Error(preparedData.message || 'Could not prepare report upload');
+          const [eyesOpenUpload, eyesClosedUpload] = preparedData.uploads;
+          const bucket = SupabaseService.supabase.storage.from('qeeg-uploads');
+          const [eoResult, ecResult] = await Promise.all([
+            bucket.uploadToSignedUrl(eyesOpenUpload.path, eyesOpenUpload.token, eyesOpenFile, { contentType: eyesOpenFile.type || 'application/pdf' }),
+            bucket.uploadToSignedUrl(eyesClosedUpload.path, eyesClosedUpload.token, eyesClosedFile, { contentType: eyesClosedFile.type || 'application/pdf' })
+          ]);
+          if (eoResult.error || ecResult.error) throw new Error(eoResult.error?.message || ecResult.error?.message || 'QEEG upload failed');
+          fetchOptions.headers = authHeaders;
+          fetchOptions.body = JSON.stringify({
+            action: 'process',
+            inputs: {
+              eyesOpen: { path: eyesOpenUpload.path, name: eyesOpenFile.name },
+              eyesClosed: { path: eyesClosedUpload.path, name: eyesClosedFile.name }
+            },
+            fields: Object.fromEntries([...formData.entries()].filter(([, value]) => typeof value === 'string'))
+          });
+        }
+        response = await fetch(processingEndpoint, fetchOptions);
         clearTimeout(timeoutId);
       } catch (fetchError) {
         clearTimeout(timeoutId);

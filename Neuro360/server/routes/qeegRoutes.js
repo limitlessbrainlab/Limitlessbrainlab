@@ -12,6 +12,8 @@ const templateManager = require('../services/pdf/templateManager');
 const AIPdfGenerator = require('../services/aiPdfGenerator');
 const SupabaseStorage = require('../services/supabaseStorage');
 const { createRoutedClient } = require('../dbRouter');
+const reportJobLock = require('../services/reportJobLock');
+const { getReportUploadDir, needsInstanceReportLock } = require('../services/reportRuntime');
 
 // NEW: Gemini AI Service for report generation
 let GeminiService = null;
@@ -51,7 +53,7 @@ const router = express.Router();
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../uploads');
+    const uploadDir = getReportUploadDir();
     // Ensure upload directory exists
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -84,10 +86,35 @@ const upload = multer({
  * POST /api/qeeg/process
  * Process QEEG files and calculate 7 brain health parameters
  */
-router.post('/process', upload.fields([
+const reportLockMiddleware = (req, res, next) => {
+  if (!needsInstanceReportLock()) return next();
+  // ponytail: one job per instance; use a distributed queue if Render is scaled horizontally.
+  if (!reportJobLock.acquire()) {
+    return res.status(503).json({
+      error: true,
+      code: 'REPORT_PROCESSING_BUSY',
+      message: 'Another NeuroSense report is being generated. Please wait and try again.'
+    });
+  }
+
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      reportJobLock.release();
+    }
+  };
+  res.once('finish', release);
+  res.once('close', release);
+  next();
+};
+
+const parseQeegUploads = upload.fields([
   { name: 'eyesOpen', maxCount: 1 },
   { name: 'eyesClosed', maxCount: 1 }
-]), async (req, res) => {
+]);
+
+async function processQeegRequest(req, res) {
   let eyesOpenFile = null;
   let eyesClosedFile = null;
   const processingStartTime = Date.now();
@@ -507,7 +534,7 @@ router.post('/process', upload.fields([
       const sanitizedName = (patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const sanitizedClinic = (clinicName || 'general').replace(/[^a-z0-9]/gi, '_').toLowerCase();
       pdfFilename = `neurosense-report-${sanitizedName}-${timestamp}.pdf`;
-      const uploadsDir = path.join(__dirname, '../uploads');
+      const uploadsDir = getReportUploadDir();
       const pdfOutputPath = path.join(uploadsDir, pdfFilename);
 
       // Clinic-wise folder path for Supabase
@@ -836,7 +863,9 @@ router.post('/process', upload.fields([
       } : undefined
     });
   }
-});
+}
+
+router.post('/process', reportLockMiddleware, parseQeegUploads, processQeegRequest);
 
 /**
  * POST /api/qeeg/generate-pdf
@@ -1551,4 +1580,4 @@ router.post('/replace-logo-download', upload.single('document'), async (req, res
 });
 
 module.exports = router;
-
+module.exports.processQeegRequest = processQeegRequest;
