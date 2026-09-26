@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path((?!ops/backend$).*)",
+      "source": "/api/:path((?!send-report-email$|render-performance-pdf$|generate-performance-report$|ops/backend$).*)",
       "destination": "https://limitlessbrainlab-backend.onrender.com/api/:path"
     },
     {
@@ -9,6 +9,11 @@
       "destination": "/index.html"
     }
   ],
+  "functions": {
+    "api/generate-performance-report.js": {
+      "maxDuration": 800
+    }
+  },
   "headers": [
     {
       "source": "/version.json",

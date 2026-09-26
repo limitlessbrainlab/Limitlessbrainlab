@@ -80,6 +80,8 @@ const AlgorithmDataProcessor = () => {
   const [consoleLog, setConsoleLog] = useState([]);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
+  const [canonicalResults, setCanonicalResults] = useState(null);
+  const [canonicalQeegData, setCanonicalQeegData] = useState(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
@@ -997,6 +999,11 @@ const AlgorithmDataProcessor = () => {
       setProgress(100);
 
       setResults(finalResults);
+      setCanonicalResults(data.data.canonicalResults || {
+        parameters: data.data.results,
+        overallScore: data.data.overallScore
+      });
+      setCanonicalQeegData(data.data.qeegData || null);
       setIsProcessing(false);
       setProcessingComplete(true);
       setIsSaved(false); // Mark as not saved yet
@@ -1048,6 +1055,8 @@ const AlgorithmDataProcessor = () => {
         },
         results: resultData,  // Primary field for DB schema compatibility
         outputData: resultData,  // Keep for backward compatibility
+        canonicalResults,
+        qeegData: canonicalQeegData,
         eyesOpenFile: eyesOpenFile?.name,
         eyesClosedFile: eyesClosedFile?.name,
         pdfUrl: pdfUrl || null,
@@ -1340,11 +1349,80 @@ const AlgorithmDataProcessor = () => {
     stageStartRef.current = now;
   };
 
+  const generatePerformanceOnVercel = async () => {
+    const token = await getFreshToken();
+    const uploadDateIso = reportAssessmentDate || selectedPatient?.lastProcessed || new Date().toISOString();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 13 * 60 * 1000);
+    try {
+      const response = await fetch('/api/generate-performance-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          savedResultId,
+          patientId: selectedPatient?.id,
+          clinicId: selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id || null,
+          clinicName: selectedPatient?.clinicName || '',
+          clinicLogoUrl: sessionLogoUrlFor(selectedPatient),
+          assessmentDate: uploadDateIso,
+          generatedAt: uploadDateIso,
+          patient: {
+            name: getPatientName(selectedPatient),
+            id: selectedPatient?.id,
+            clinicName: selectedPatient?.clinicName || '',
+            age: selectedPatient?.age || null,
+            gender: selectedPatient?.gender || null,
+          },
+          canonicalResults,
+          qeegData: canonicalQeegData,
+          idempotencyKey: `performance:${savedResultId}`,
+        }),
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 202) throw new Error('This report is already processing. Check Processing History shortly.');
+      if (!response.ok || !data.pdfUrl) throw new Error(data.message || `Server error (${response.status})`);
+      setClaudeProgress(100);
+      setClaudeReportUrl(data.pdfUrl);
+      setClaudeReportId(data.reportId || null);
+      setProcessingHistory((prev) => prev.map((rec) => (
+        rec.id === savedResultId
+          ? { ...rec, claude_report_url: data.pdfUrl, claudeReportUrl: data.pdfUrl, claude_report_id: data.reportId, claudeReportId: data.reportId }
+          : rec
+      )));
+      toast.success('Neurosense Performance Report ready!', { id: 'claude-report' });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const handleUploadToClaude = async () => {
     if (isGeneratingClaudeReport) return;
     if (!pdfUrl) { toast.error('Generate & save the NeuroSense report first.'); return; }
     // Hard block performance-report generation when the clinic has no credits left.
     if (await blockIfNoCredits(selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id)) return;
+
+    // New reports use the canonical server calculation directly on isolated
+    // Vercel compute. Legacy records without canonical data keep the old PDF
+    // extraction path below so historical reports remain usable.
+    if (savedResultId && canonicalResults && canonicalQeegData) {
+      setIsGeneratingClaudeReport(true);
+      setClaudeReportError(null);
+      setClaudeProgress(10);
+      toast.loading('Building the Performance Report on isolated report compute…', { id: 'claude-report' });
+      try {
+        await generatePerformanceOnVercel();
+      } catch (error) {
+        setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
+        toast.error(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'), { id: 'claude-report' });
+      } finally {
+        setIsGeneratingClaudeReport(false);
+      }
+      return;
+    }
 
     console.log('[Performance Report] ▶ Starting upload & compilation process…');
     const t0 = performance.now();
