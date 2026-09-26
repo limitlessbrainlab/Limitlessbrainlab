@@ -14,7 +14,6 @@ function serverClient() {
   if (!url || !key) throw new Error('Supabase server credentials are not configured');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-
 async function requireSuperAdmin(req, supabase) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -139,4 +138,3 @@ export default async function handler(req, res) {
     return json(res, 500, { jobId: job?.id || null, message: error.message || 'Report generation failed' });
   }
 }
-
