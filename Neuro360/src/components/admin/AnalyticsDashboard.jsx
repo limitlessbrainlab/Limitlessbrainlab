@@ -362,8 +362,8 @@ const AnalyticsDashboard = ({ analytics }) => {
           </div>
           <div className="h-64 w-full bg-gray-50 rounded-lg p-2">
             {loading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              <div className="flex h-full items-end gap-3 rounded-md bg-gray-200 p-6 dark:bg-gray-700">
+                {[35, 60, 45, 80, 55, 70].map((height, index) => <div key={index} className="flex-1 rounded-t bg-gray-300 dark:bg-gray-600" style={{ height: `${height}%` }} />)}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -390,8 +390,8 @@ const AnalyticsDashboard = ({ analytics }) => {
           </div>
           <div className="h-64 w-full bg-gray-50 rounded-lg p-2">
             {loading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              <div className="flex h-full items-end gap-3 rounded-md bg-gray-200 p-6 dark:bg-gray-700">
+                {[35, 60, 45, 80, 55, 70].map((height, index) => <div key={index} className="flex-1 rounded-t bg-gray-300 dark:bg-gray-600" style={{ height: `${height}%` }} />)}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -24,12 +24,47 @@ const formatRevenue = (value) => new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 2
 }).format(Number(value) || 0);
 
+const CountUp = ({ value, format = (number) => Math.round(number).toLocaleString('en-IN') }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const previousValue = useRef(0);
+
+  useEffect(() => {
+    const target = Number(value) || 0;
+    const start = previousValue.current;
+
+    if (start === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      previousValue.current = target;
+      setDisplayValue(target);
+      return undefined;
+    }
+
+    const startedAt = performance.now();
+    let frameId;
+    const animate = (now) => {
+      const progress = Math.min((now - startedAt) / 700, 1);
+      setDisplayValue(start + (target - start) * (1 - (1 - progress) ** 3));
+
+      if (progress < 1) {
+        frameId = requestAnimationFrame(animate);
+      } else {
+        previousValue.current = target;
+      }
+    };
+
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [value]);
+
+  return <span aria-label={format(value)}><span aria-hidden="true">{format(displayValue)}</span></span>;
+};
+
 const AdminDashboard = ({ analytics = {} }) => {
   const navigate = useNavigate();
   const [realTimeData, setRealTimeData] = useState({});
   const [allClinics, setAllClinics] = useState([]);
   const [allReports, setAllReports] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
+  const [activityFilter, setActivityFilter] = useState('all');
 
   useEffect(() => {
     loadRealTimeData();
@@ -87,7 +122,8 @@ const AdminDashboard = ({ analytics = {} }) => {
       changeType: 'increase',
       icon: Building2,
       color: 'blue',
-      subtitle: `${allClinics.length} total registered`
+      subtitle: `${allClinics.length} total registered`,
+      path: '/admin/clinics'
     },
     {
       name: 'Total Patients',
@@ -96,7 +132,8 @@ const AdminDashboard = ({ analytics = {} }) => {
       changeType: 'increase',
       icon: Users,
       color: 'green',
-      subtitle: 'Across all clinics'
+      subtitle: 'Across all clinics',
+      path: '/admin/reports'
     },
     {
       name: 'Reports Generated',
@@ -105,28 +142,35 @@ const AdminDashboard = ({ analytics = {} }) => {
       changeType: 'increase',
       icon: FileText,
       color: 'purple',
-      subtitle: 'Total system reports'
+      subtitle: 'Total system reports',
+      path: '/admin/reports'
     },
     {
       name: 'Total Revenue',
-      value: formatRevenue(realTimeData.monthlyRevenue),
+      value: realTimeData.monthlyRevenue || 0,
+      format: formatRevenue,
       change: '+8.12%',
       changeType: 'increase',
       icon: Banknote,
       color: 'yellow',
       subtitle: 'All time earnings',
       valueClassName: 'leading-tight break-all pr-2',
-      iconClassName: 'ml-3'
+      iconClassName: 'ml-3',
+      path: '/admin/payments'
     }
   ];
 
   // Real-time activities from actual data, newest first (widget shows 6).
-  const recentActivities = buildRecentActivities(allClinics, allReports, allPayments, 6).slice(0, 6);
+  const recentActivities = buildRecentActivities(allClinics, allReports, allPayments, 6).slice(0, 5);
+  const inactiveClinics = allClinics.filter((clinic) => !clinic.isActive).length;
+  const filteredActivities = activityFilter === 'all'
+    ? recentActivities
+    : recentActivities.filter((activity) => activity.type === activityFilter);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Welcome Section - Clean Design */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -146,19 +190,37 @@ const AdminDashboard = ({ analytics = {} }) => {
         </div>
       </div>
 
+      {inactiveClinics > 0 && (
+        <button
+          onClick={() => navigate('/admin/clinics')}
+          className="w-full flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-left text-amber-900 transition-colors hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        >
+          <span className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <span><strong>{inactiveClinics} {inactiveClinics === 1 ? 'clinic needs' : 'clinics need'} attention.</strong> Review their status.</span>
+          </span>
+          <span className="text-sm font-semibold">Review clinics →</span>
+        </button>
+      )}
+
       {/* Stats Grid - Clean Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <div
+            <button
               key={stat.name}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md dark:hover:shadow-xl dark:hover:shadow-gray-900/20 transition-shadow"
+              onClick={() => navigate(stat.path)}
+              aria-label={`View ${stat.name}`}
+              type="button"
+              className="w-full text-left bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md dark:hover:shadow-xl dark:hover:shadow-gray-900/20 hover:border-blue-300 dark:hover:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{stat.name}</p>
-                  <p className={`text-2xl font-bold text-gray-900 dark:text-white mb-1 ${stat.valueClassName || ''}`}>{stat.value}</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">{stat.name}</p>
+                  <p className={`text-2xl font-bold text-gray-900 dark:text-white mb-1 ${stat.valueClassName || ''}`}>
+                    <CountUp value={stat.value} format={stat.format} />
+                  </p>
                   {stat.subtitle && (
                     <p className="text-xs text-gray-500 dark:text-gray-500">{stat.subtitle}</p>
                   )}
@@ -177,14 +239,14 @@ const AdminDashboard = ({ analytics = {} }) => {
                     )}
                   </div>
                 </div>
-                <div className={`shrink-0 p-3 rounded-lg ${stat.iconClassName || ''} ${
+                <div className={`shrink-0 p-2.5 rounded-lg ${stat.iconClassName || ''} ${
                   stat.color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/30' :
                   stat.color === 'green' ? 'bg-green-50 dark:bg-green-900/30' :
                   stat.color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-900/30' :
                   stat.color === 'red' ? 'bg-red-50 dark:bg-red-900/30' :
                   'bg-gray-50 dark:bg-gray-700'
                 }`}>
-                  <Icon className={`h-6 w-6 ${
+                  <Icon className={`h-5 w-5 ${
                     stat.color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
                     stat.color === 'green' ? 'text-green-600 dark:text-green-400' :
                     stat.color === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
@@ -193,23 +255,23 @@ const AdminDashboard = ({ analytics = {} }) => {
                   }`} />
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* System Overview */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-          <div className="flex items-center space-x-3 mb-5">
-            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+          <div className="flex items-center space-x-3 mb-3">
+            <div className="w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
               <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">System Overview</h3>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                   <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -219,43 +281,49 @@ const AdminDashboard = ({ analytics = {} }) => {
               <span className="text-sm font-semibold text-green-600 dark:text-green-400">Operational</span>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                   <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active Users</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active Clinics</span>
               </div>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">127 online</span>
+              <button onClick={() => navigate('/admin/clinics')} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                {realTimeData.totalClinics || 0} active
+              </button>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Pending Alerts</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Clinics Needing Attention</span>
               </div>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">3 alerts</span>
+              <button onClick={() => navigate('/admin/clinics')} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                {inactiveClinics} inactive
+              </button>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                   <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reports Today</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Reports</span>
               </div>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">47 reports</span>
+              <button onClick={() => navigate('/admin/reports')} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                {realTimeData.totalReports || 0} reports
+              </button>
             </div>
           </div>
         </div>
 
         {/* Recent Activities */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-5">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-50 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <div className="w-9 h-9 bg-green-50 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                 <Activity className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activities</h3>
@@ -267,12 +335,27 @@ const AdminDashboard = ({ analytics = {} }) => {
               View All
             </button>
           </div>
+          <div className="flex gap-2 mb-3" role="group" aria-label="Filter activities">
+            {['all', 'clinic', 'report', 'payment'].map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActivityFilter(filter)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${activityFilter === filter ? 'bg-[#323956] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+              >
+                {filter === 'all' ? 'All' : `${filter}s`}
+              </button>
+            ))}
+          </div>
           <div className="space-y-3">
-            {recentActivities.map((activity) => {
+            {filteredActivities.map((activity) => {
               const Icon = activity.icon;
               return (
-                <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <div className={`p-2 rounded-lg ${getIconColor(activity.color)}`}>
+                <button
+                  key={activity.id}
+                  onClick={() => navigate(activity.type === 'clinic' ? '/admin/clinics' : activity.type === 'payment' ? '/admin/payments' : '/admin/reports')}
+                  className="w-full flex items-start space-x-3 p-2.5 text-left bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                >
+                  <div className={`p-1.5 rounded-lg ${getIconColor(activity.color)}`}>
                     <Icon className="h-4 w-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -282,9 +365,10 @@ const AdminDashboard = ({ analytics = {} }) => {
                       <p className="text-xs text-gray-500 dark:text-gray-400">{activity.time}</p>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
+            {!filteredActivities.length && <p className="py-6 text-center text-sm text-gray-500">No {activityFilter} activity yet.</p>}
           </div>
         </div>
       </div>

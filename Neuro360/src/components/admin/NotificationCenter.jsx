@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Bell, AlertTriangle, CheckCircle, X, Settings, Filter, Download, RefreshCw, FileText, CreditCard, Building2, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import NotificationService from '../../services/notificationService';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const NotificationCenter = () => {
   const [notifications, setNotifications] = useState([]);
@@ -300,10 +301,7 @@ const NotificationCenter = () => {
       {/* Notifications List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-8 text-center">
-            <RefreshCw className="w-8 h-8 text-gray-300 mx-auto mb-3 animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400">Loading notifications...</p>
-          </div>
+          <AdminPageSkeleton rows={5} />
         ) : notifications.length === 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-8 text-center">
             <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />

@@ -405,6 +405,10 @@
   }
 }
 
+@keyframes toastCountdown {
+  to { transform: scaleX(0); }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -442,6 +446,10 @@
 
 .animate-slide-in-right {
   animation: slideInRight 0.6s ease-out;
+}
+
+.animate-toast-countdown {
+  animation: toastCountdown 6s linear forwards;
 }
 
 .animate-slide-up {

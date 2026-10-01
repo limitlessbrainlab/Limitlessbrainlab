@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import DatabaseService from '../../services/databaseService';
 import toast from 'react-hot-toast';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const AdvancedAnalytics = () => {
   const [analytics, setAnalytics] = useState({});
@@ -234,12 +235,7 @@ const AdvancedAnalytics = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-[#323956]" />
-        <span className="ml-2 text-gray-600">Loading analytics...</span>
-      </div>
-    );
+    return <AdminPageSkeleton cards={3} />;
   }
 
   return (

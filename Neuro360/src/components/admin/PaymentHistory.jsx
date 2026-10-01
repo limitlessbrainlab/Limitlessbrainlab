@@ -14,12 +14,17 @@ import {
   AlertCircle,
   Clock,
   Users,
-  FileText
+  FileText,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import PaymentHistoryModal from '../payment/PaymentHistoryModal';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
+import AdminPageSkeleton from './AdminPageSkeleton';
+
+const PAGE_SIZE = 10;
 
 const PaymentHistory = ({ selectedClinic }) => {
   const [payments, setPayments] = useState([]);
@@ -28,10 +33,12 @@ const PaymentHistory = ({ selectedClinic }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
+  const [page, setPage] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
 
   useEffect(() => {
+    setPage(0);
     loadData();
   }, [selectedClinic]);
 
@@ -201,6 +208,7 @@ const PaymentHistory = ({ selectedClinic }) => {
     
     return matchesSearch && matchesStatus && matchesDate;
   });
+  const paginatedPayments = filteredPayments.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const getTotalRevenue = () => {
     return payments
@@ -284,28 +292,24 @@ const PaymentHistory = ({ selectedClinic }) => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <AdminPageSkeleton cards={3} />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5 lg:p-6 space-y-5">
       {/* Modern Revenue Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-white/20 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02]">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600"></div>
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <Banknote className="h-8 w-8 text-white" />
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <Banknote className="h-6 w-6 text-white" />
               </div>
             </div>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Total Revenue</p>
             <p className="text-3xl font-black text-slate-800">{formatAmount(getTotalRevenue())}</p>
-            <div className="flex items-center space-x-2 mt-4">
+            <div className="flex items-center space-x-2 mt-3">
               <div className="flex items-center space-x-2 px-3 py-1 bg-green-100 rounded-full">
                 <TrendingUp className="h-4 w-4 text-[#323956]" />
                 <span className="text-sm font-bold text-green-700">All time</span>
@@ -315,16 +319,16 @@ const PaymentHistory = ({ selectedClinic }) => {
         </div>
         
         <div className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-white/20 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02]">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#E4EFFF]0 to-blue-600"></div>
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-[#E4EFFF]0 to-blue-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <TrendingUp className="h-8 w-8 text-white" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <TrendingUp className="h-6 w-6 text-white" />
               </div>
             </div>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Monthly Revenue</p>
             <p className="text-3xl font-black text-slate-800">{formatAmount(getMonthlyRevenue())}</p>
-            <div className="flex items-center space-x-2 mt-4">
+            <div className="flex items-center space-x-2 mt-3">
               <div className="flex items-center space-x-2 px-3 py-1 bg-[#CAE0FF] rounded-full">
                 <Calendar className="h-4 w-4 text-[#323956]" />
                 <span className="text-sm font-bold text-blue-700">This month</span>
@@ -335,15 +339,15 @@ const PaymentHistory = ({ selectedClinic }) => {
         
         <div className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border border-white/20 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02]">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-purple-600"></div>
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
-                <CreditCard className="h-8 w-8 text-white" />
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                <CreditCard className="h-6 w-6 text-white" />
               </div>
             </div>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Total Transactions</p>
             <p className="text-3xl font-black text-slate-800">{payments.length}</p>
-            <div className="flex items-center space-x-2 mt-4">
+            <div className="flex items-center space-x-2 mt-3">
               <div className="flex items-center space-x-2 px-3 py-1 bg-purple-100 rounded-full">
                 <CheckCircle className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-bold text-purple-700">Completed</span>
@@ -354,22 +358,22 @@ const PaymentHistory = ({ selectedClinic }) => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <input
               type="text"
               placeholder="Search payments..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
           
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
           >
             <option value="">All Status</option>
@@ -380,7 +384,7 @@ const PaymentHistory = ({ selectedClinic }) => {
           
           <select
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
           >
             <option value="all">All Time</option>
@@ -395,6 +399,7 @@ const PaymentHistory = ({ selectedClinic }) => {
               setSearchTerm('');
               setStatusFilter('');
               setDateFilter('all');
+              setPage(0);
             }}
             className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 flex items-center justify-center space-x-2"
           >
@@ -437,7 +442,7 @@ const PaymentHistory = ({ selectedClinic }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredPayments.map((payment) => {
+              {paginatedPayments.map((payment) => {
                 const statusInfo = getPaymentStatus(payment);
                 const StatusIcon = statusInfo.icon;
                 
@@ -526,6 +531,28 @@ const PaymentHistory = ({ selectedClinic }) => {
             </div>
           )}
         </div>
+        {filteredPayments.length > 0 && (
+          <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
+            <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredPayments.length)} of {filteredPayments.length} payments</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((current) => current - 1)}
+                disabled={page === 0}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              </button>
+              <span>Page {page + 1} of {Math.ceil(filteredPayments.length / PAGE_SIZE)}</span>
+              <button
+                onClick={() => setPage((current) => current + 1)}
+                disabled={(page + 1) * PAGE_SIZE >= filteredPayments.length}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Enhanced Payment History Modal */}

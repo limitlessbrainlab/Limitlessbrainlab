@@ -448,7 +448,19 @@ export const AuthProvider = ({ children }) => {
       
       switch (method) {
         case 'email':
-          response = await authService.loginWithEmail(credentials);
+          {
+            let timeoutId;
+            try {
+              response = await Promise.race([
+                authService.loginWithEmail(credentials),
+                new Promise((_, reject) => {
+                  timeoutId = setTimeout(() => reject(new Error('Login request timed out')), 15000);
+                }),
+              ]);
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          }
           break;
         case 'google':
           response = await authService.loginWithGoogle();

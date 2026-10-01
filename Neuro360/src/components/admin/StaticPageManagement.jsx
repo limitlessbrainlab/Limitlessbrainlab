@@ -14,6 +14,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const StaticPageManagement = () => {
   const [pages, setPages] = useState([]);
@@ -222,10 +223,7 @@ const StaticPageManagement = () => {
       {/* Pages Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center">
-            <RefreshCw className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Loading pages...</p>
-          </div>
+          <AdminPageSkeleton rows={5} />
         ) : pages.length === 0 ? (
           <div className="p-8 text-center">
             <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />

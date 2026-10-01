@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, X, Eye, CheckCircle, Clock, CircleDashed } from 'lucide-react';
+import AdminPageSkeleton from './AdminPageSkeleton';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -80,7 +81,7 @@ const AssessmentResults = () => {
       </div>
 
       {loading ? (
-        <div className="p-10 text-center text-gray-500 text-sm">Loading…</div>
+        <div className="p-4"><AdminPageSkeleton rows={4} /></div>
       ) : rows.length === 0 ? (
         <div className="p-10 text-center text-gray-500 text-sm">No assessment purchases yet.</div>
       ) : (

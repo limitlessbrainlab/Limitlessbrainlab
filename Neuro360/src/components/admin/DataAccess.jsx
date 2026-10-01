@@ -35,6 +35,7 @@ import PersonalizedCarePlan from './PersonalizedCarePlan';
 import fileManagementService from '../../services/fileManagementService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import { supabase } from '../../lib/supabaseClient';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const DataAccess = () => {
   const [selectedClinic, setSelectedClinic] = useState(null);
@@ -361,10 +362,7 @@ const DataAccess = () => {
 
       {/* Content */}
       {loading ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading data...</p>
-        </div>
+        <AdminPageSkeleton cards={3} />
       ) : (
         <div className="space-y-4">
           {/* Clinics View */}

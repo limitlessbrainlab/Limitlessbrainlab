@@ -1071,11 +1071,46 @@ Please manually share these credentials with the clinic.`;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 font-medium">Loading Clinic Management...</p>
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8" role="status">
+        <span className="sr-only">Loading Clinic Management...</span>
+        <div className="space-y-4">
+          <div className="bg-white rounded-lg border border-gray-100 p-5">
+            <div className="flex flex-col lg:flex-row justify-between gap-5">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-blue-100"></div>
+                  <div className="space-y-2">
+                    <div className="h-6 w-56 rounded bg-gray-200"></div>
+                    <div className="h-4 w-80 max-w-full rounded bg-gray-100"></div>
+                  </div>
+                </div>
+                <div className="h-8 w-44 rounded-lg bg-gray-100"></div>
+              </div>
+              <div className="flex gap-2">
+                <div className="h-10 w-28 rounded-lg bg-gray-100"></div>
+                <div className="h-10 w-40 rounded-lg bg-gray-200"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between gap-3">
+            <div className="h-10 w-72 rounded-lg bg-white border border-gray-200"></div>
+            <div className="h-10 w-full sm:w-80 rounded-lg bg-white border border-gray-200"></div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-100 divide-y divide-gray-100">
+            {[...Array(5)].map((_, index) => (
+              <div key={index} className="flex items-center justify-between gap-4 p-5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-10 w-10 shrink-0 rounded-full bg-gray-200"></div>
+                  <div className="space-y-2 min-w-0">
+                    <div className="h-4 w-48 max-w-full rounded bg-gray-200"></div>
+                    <div className="h-3 w-64 max-w-full rounded bg-gray-100"></div>
+                  </div>
+                </div>
+                <div className="h-7 w-20 rounded-full bg-gray-100"></div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

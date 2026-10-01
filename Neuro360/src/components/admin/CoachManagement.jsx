@@ -27,6 +27,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const CoachManagement = ({ onUpdate }) => {
   const [coaches, setCoaches] = useState([]);
@@ -449,10 +450,7 @@ const CoachManagement = ({ onUpdate }) => {
       {activeTab === 'coaches' && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Loading coaches...</p>
-            </div>
+            <AdminPageSkeleton rows={5} />
           ) : filteredCoaches.length === 0 ? (
             <div className="p-8 text-center">
               <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />

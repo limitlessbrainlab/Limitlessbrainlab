@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import AlertService from '../../services/alertService';
 import DatabaseService from '../../services/databaseService';
 import { buildRecentActivities, getIconColor } from './recentActivitiesHelpers';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 // Notification-type filters for the activity feed shown alongside alerts.
 const NOTIF_TYPES = [
@@ -160,11 +161,7 @@ const AlertDashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <AdminPageSkeleton cards={3} />;
   }
 
   return (

@@ -395,8 +395,13 @@ const SystemSettings = () => {
 
       {/* Locations List */}
       {locationsLoading ? (
-        <div className="flex justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+        <div className="space-y-3 py-4" aria-busy="true" aria-label="Loading locations">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="flex items-center justify-between rounded-xl border border-gray-100 p-4">
+              <div className="space-y-2"><div className="h-4 w-40 rounded bg-gray-200" /><div className="h-3 w-24 rounded bg-gray-200" /></div>
+              <div className="h-8 w-16 rounded bg-gray-200" />
+            </div>
+          ))}
         </div>
       ) : locations.length === 0 ? (
         <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300">
@@ -691,8 +696,13 @@ const SystemSettings = () => {
 
       {/* Clinic Locations List */}
       {clinicLocationsLoading ? (
-        <div className="flex justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+        <div className="space-y-3 py-4" aria-busy="true" aria-label="Loading clinic locations">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="flex items-center justify-between rounded-xl border border-gray-100 p-4">
+              <div className="space-y-2"><div className="h-4 w-40 rounded bg-gray-200" /><div className="h-3 w-24 rounded bg-gray-200" /></div>
+              <div className="h-8 w-16 rounded bg-gray-200" />
+            </div>
+          ))}
         </div>
       ) : clinicLocations.length === 0 ? (
         <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300">

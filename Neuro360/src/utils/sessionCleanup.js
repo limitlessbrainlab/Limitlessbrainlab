@@ -26,7 +26,9 @@ export async function wipeBrowserCaches() {
 
 // Full wipe + sign out. For deploy gate, inactivity timeout and manual logout.
 export async function clearAllAndSignOut() {
-  try { if (supabase) await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+  // This runs before the login screen is usable after a deploy. Local sign-out
+  // clears the persisted session without waiting for a networked global logout.
+  try { if (supabase) await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* ignore */ }
   try { Cookies.remove('authToken'); Cookies.remove('authToken', { path: '/' }); } catch (e) { /* ignore */ }
   try {
     const remembered = localStorage.getItem(REMEMBER_KEY); // survive the wipe (Remember me)
@@ -34,12 +36,12 @@ export async function clearAllAndSignOut() {
     if (remembered !== null) localStorage.setItem(REMEMBER_KEY, remembered);
   } catch (e) { /* ignore */ }
   try { sessionStorage.clear(); } catch (e) { /* ignore */ }
-  await wipeBrowserCaches();
+  void wipeBrowserCaches();
 }
 
 // Clear stale cached app DATA but keep the (just-established) auth session. For login.
 export async function clearAppDataCachesKeepSession() {
-  await wipeBrowserCaches();
+  void wipeBrowserCaches();
   try {
     const stale = ['reports', 'clinics'];
     Object.keys(localStorage).forEach((k) => {

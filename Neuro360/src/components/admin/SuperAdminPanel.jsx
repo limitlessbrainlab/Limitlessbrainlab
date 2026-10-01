@@ -4,6 +4,7 @@ import DatabaseService from '../../services/databaseService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import DashboardLayout from '../layout/DashboardLayout';
 import { useAuth } from '../../contexts/AuthContext';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 // Tab panels are lazy-loaded: eagerly importing all ~24 admin screens made
 // this route's chunk ~1.7MB — admins downloaded every panel to view one.
@@ -232,12 +233,7 @@ const SuperAdminPanel = () => {
   if (loading) {
     return (
       <DashboardLayout title="Loading...">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading Super Admin Panel...</p>
-          </div>
-        </div>
+        <AdminPageSkeleton cards={3} />
       </DashboardLayout>
     );
   }

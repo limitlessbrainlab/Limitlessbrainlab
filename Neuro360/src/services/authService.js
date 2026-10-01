@@ -221,6 +221,13 @@ export const authService = {
               throw new Error(`This account was created on ${target}. Please log in there.`);
             }
 
+            // Login activity is informational only; it must never change subscription access.
+            const { error: loginActivityError } = await supabase
+              .from('patients')
+              .update({ last_login_at: new Date().toISOString() })
+              .eq('id', patient.id);
+            if (loginActivityError) console.warn('WARNING: could not record patient login:', loginActivityError.message);
+
             return {
               success: true,
               token: `patient_token_${Date.now()}`,

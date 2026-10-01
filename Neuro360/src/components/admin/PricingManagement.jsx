@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Save, X, Zap, Loader2, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const PricingManagement = () => {
   const [packages, setPackages] = useState([]);
@@ -232,11 +233,7 @@ const PricingManagement = () => {
   const clinicPackages = filteredPackages.filter(p => p.clinic_type === 'lbl_clinic');
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-[#323956]" />
-      </div>
-    );
+    return <AdminPageSkeleton cards={3} />;
   }
 
   return (

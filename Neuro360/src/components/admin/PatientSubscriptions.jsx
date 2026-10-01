@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Crown, Search, Filter, Download, RefreshCw, User, CreditCard,
-  Calendar, CheckCircle, XCircle, Clock, AlertTriangle, Eye, ChevronDown
+  Calendar, CheckCircle, XCircle, Clock, AlertTriangle, Eye, ChevronDown, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
+import useRealtimeRefetch from '../../hooks/useRealtimeRefetch';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const TIER_COLORS = {
   free: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -17,11 +19,18 @@ const STATUS_COLORS = {
   active: 'bg-green-50 text-green-700 border-green-200',
   expired: 'bg-red-50 text-red-700 border-red-200',
   trial: 'bg-blue-50 text-blue-700 border-blue-200',
-  cancelled: 'bg-gray-100 text-gray-600 border-gray-200'
+  cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+  inactive: 'bg-gray-100 text-gray-600 border-gray-200',
+  'not subscribed': 'bg-gray-100 text-gray-600 border-gray-200'
 };
+
+const PAGE_SIZE = 10;
 
 const PatientSubscriptions = () => {
   const [patients, setPatients] = useState([]);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [page, setPage] = useState(0);
+  const [stats, setStats] = useState({ total: 0, active: 0, premium: 0, pro: 0, basic: 0, free: 0 });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
@@ -31,24 +40,66 @@ const PatientSubscriptions = () => {
   const [patientPayments, setPatientPayments] = useState([]);
 
   useEffect(() => {
-    loadData();
+    loadStats();
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [page, searchTerm, tierFilter, statusFilter]);
+
+  const applyFilters = (query) => {
+    const search = searchTerm.trim().replace(/[%(),]/g, '');
+    if (search) query = query.or(`full_name.ilike.%${search}%,name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (tierFilter === 'free') query = query.or('subscription_tier.eq.free,subscription_tier.is.null');
+    else if (tierFilter !== 'all') query = query.eq('subscription_tier', tierFilter);
+    if (statusFilter === 'active') query = query.eq('subscription_status', 'active');
+    else if (statusFilter === 'expired') query = query.eq('subscription_status', 'expired');
+    else if (statusFilter !== 'all') query = query.eq('subscription_status', statusFilter);
+    return query;
+  };
+
+  const loadStats = async () => {
+    const countPatients = async (filter) => {
+      let query = supabase.from('patients').select('id', { count: 'exact', head: true });
+      if (filter) query = filter(query);
+      const { count, error } = await query;
+      if (error) throw error;
+      return count || 0;
+    };
+
+    try {
+      const [total, active, premium, pro, basic, free] = await Promise.all([
+        countPatients(),
+        countPatients((query) => query.eq('subscription_status', 'active')),
+        countPatients((query) => query.eq('subscription_tier', 'premium')),
+        countPatients((query) => query.eq('subscription_tier', 'pro')),
+        countPatients((query) => query.eq('subscription_tier', 'basic')),
+        countPatients((query) => query.or('subscription_tier.eq.free,subscription_tier.is.null'))
+      ]);
+      setStats({ total, active, premium, pro, basic, free });
+    } catch (err) {
+      console.error('Error loading patient subscription counts:', err);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // Fetch patients with subscription data
-      const { data: patientsData, error: patientsErr } = await supabase
+      // Fetch only the current page; the count drives the next/previous controls.
+      const patientQuery = applyFilters(
+        supabase
         .from('patients')
-        .select('*')
-        .order('updated_at', { ascending: false });
+        .select('*', { count: 'exact' })
+        .order('updated_at', { ascending: false })
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      );
+
+      const [{ data: patientsData, error: patientsErr, count }, { data: clinicsData }] = await Promise.all([
+        patientQuery,
+        supabase.from('clinics').select('id, name')
+      ]);
 
       if (patientsErr) throw patientsErr;
-
-      // Fetch clinics for enrichment
-      const { data: clinicsData } = await supabase
-        .from('clinics')
-        .select('id, name');
 
       const clinicMap = {};
       (clinicsData || []).forEach((c) => { clinicMap[c.id] = c.name; });
@@ -58,10 +109,11 @@ const PatientSubscriptions = () => {
         displayName: p.full_name || p.name || 'Unknown',
         clinicName: clinicMap[p.clinic_id] || 'N/A',
         tier: (p.subscription_tier || 'free').toLowerCase(),
-        status: p.subscription_status || (p.dashboard_access ? 'active' : 'expired')
+        status: p.subscription_status || 'not subscribed'
       }));
 
       setPatients(enriched);
+      setTotalPatients(count || 0);
     } catch (err) {
       console.error('Error loading patient subscriptions:', err);
       toast.error('Failed to load patient subscriptions');
@@ -69,6 +121,8 @@ const PatientSubscriptions = () => {
       setLoading(false);
     }
   };
+
+  useRealtimeRefetch([{ table: 'patients' }], loadData);
 
   const viewPatientHistory = async (patient) => {
     setSelectedPatient(patient);
@@ -159,31 +213,12 @@ const PatientSubscriptions = () => {
     }
   };
 
-  const filtered = patients.filter((p) => {
-    const matchesSearch =
-      !searchTerm ||
-      p.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTier = tierFilter === 'all' || p.tier === tierFilter;
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchesSearch && matchesTier && matchesStatus;
-  });
-
-  const stats = {
-    total: patients.length,
-    active: patients.filter((p) => p.status === 'active').length,
-    premium: patients.filter((p) => p.tier === 'premium').length,
-    pro: patients.filter((p) => p.tier === 'pro').length,
-    basic: patients.filter((p) => p.tier === 'basic').length,
-    free: patients.filter((p) => p.tier === 'free' || !p.tier).length
-  };
-
   const exportCSV = () => {
-    if (filtered.length === 0) {
+    if (patients.length === 0) {
       toast.error('No data to export');
       return;
     }
-    const rows = filtered.map((p) => ({
+    const rows = patients.map((p) => ({
       Name: p.displayName,
       Email: p.email || '',
       Tier: (p.tier || 'free').toUpperCase(),
@@ -214,7 +249,7 @@ const PatientSubscriptions = () => {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Patient Subscriptions</h2>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={loadData} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
+          <button onClick={() => { loadStats(); loadData(); }} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button onClick={exportCSV} className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">
@@ -249,13 +284,13 @@ const PatientSubscriptions = () => {
               type="text"
               placeholder="Search patients..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
               className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-white"
             />
           </div>
           <select
             value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value)}
+            onChange={(e) => { setTierFilter(e.target.value); setPage(0); }}
             className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-white"
           >
             <option value="all">All Tiers</option>
@@ -266,11 +301,12 @@ const PatientSubscriptions = () => {
           </select>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
             className="px-3 py-2 border dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-white"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
             <option value="expired">Expired</option>
             <option value="trial">Trial</option>
           </select>
@@ -280,11 +316,8 @@ const PatientSubscriptions = () => {
       {/* Patient List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center">
-            <RefreshCw className="w-8 h-8 text-gray-300 mx-auto mb-3 animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400">Loading subscriptions...</p>
-          </div>
-        ) : filtered.length === 0 ? (
+          <AdminPageSkeleton rows={5} />
+        ) : patients.length === 0 ? (
           <div className="p-8 text-center">
             <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">No patients found.</p>
@@ -297,14 +330,14 @@ const PatientSubscriptions = () => {
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Patient</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Clinic</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Tier</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Status</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Dashboard</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Subscription</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Last login</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-300">Updated</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-300">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-gray-700">
-                {filtered.map((patient) => (
+                {patients.map((patient) => (
                   <tr key={patient.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                     <td className="px-4 py-3">
                       <div>
@@ -324,11 +357,9 @@ const PatientSubscriptions = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {patient.dashboard_access ? (
-                        <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-gray-300 mx-auto" />
-                      )}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {patient.last_login_at ? new Date(patient.last_login_at).toLocaleString() : 'Never'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                       {patient.updated_at ? new Date(patient.updated_at).toLocaleDateString() : 'N/A'}
@@ -348,9 +379,26 @@ const PatientSubscriptions = () => {
             </table>
           </div>
         )}
-        {!loading && filtered.length > 0 && (
-          <div className="px-4 py-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 text-xs text-gray-500 dark:text-gray-400">
-            Showing {filtered.length} of {patients.length} patients
+        {!loading && patients.length > 0 && (
+          <div className="flex items-center justify-between gap-4 px-4 py-3 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 text-xs text-gray-500 dark:text-gray-400">
+            <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalPatients)} of {totalPatients} patients</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((current) => current - 1)}
+                disabled={page === 0}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              </button>
+              <span>Page {page + 1} of {Math.ceil(totalPatients / PAGE_SIZE)}</span>
+              <button
+                onClick={() => setPage((current) => current + 1)}
+                disabled={(page + 1) * PAGE_SIZE >= totalPatients}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>

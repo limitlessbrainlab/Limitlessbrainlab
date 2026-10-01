@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useRealtimeRefetch from '../../hooks/useRealtimeRefetch';
+import AdminPageSkeleton from './AdminPageSkeleton';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
@@ -511,10 +512,7 @@ const WebsiteInquiries = ({ subTab = 'contact' }) => {
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
-            <span className="ml-2 text-gray-500 dark:text-gray-400">Loading...</span>
-          </div>
+          <AdminPageSkeleton rows={5} />
         ) : filteredData.length === 0 ? (
           <div className="text-center py-16">
             <currentTabInfo.icon className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />

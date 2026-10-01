@@ -231,6 +231,7 @@ function App() {
               {/* Toast notifications */}
               <Toaster
                 position="top-right"
+                containerStyle={{ top: '5rem', right: '1.5rem' }}
                 toastOptions={{
                   duration: 4000,
                   style: {

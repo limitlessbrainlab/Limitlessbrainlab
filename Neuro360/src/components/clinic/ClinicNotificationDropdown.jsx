@@ -4,21 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import NotificationService from '../../services/notificationService';
 import toast from 'react-hot-toast';
 
-const ClinicNotificationDropdown = ({ clinicId, onClose, onCountChange }) => {
+const ClinicNotificationDropdown = ({ clinicId, onClose, onCountChange, limit = 20, destination = '/clinic/reports', viewAllLabel = 'View all reports →' }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   const loadNotifications = async () => {
-    const data = await NotificationService.getClinicNotifications(clinicId, { limit: 20 });
+    const data = clinicId
+      ? await NotificationService.getClinicNotifications(clinicId, { limit })
+      : await NotificationService.getNotifications({ limit });
     setNotifications(data);
     setLoading(false);
   };
 
   useEffect(() => {
     loadNotifications();
-  }, [clinicId]);
+  }, [clinicId, limit]);
 
   // Close on outside click
   useEffect(() => {
@@ -49,7 +51,7 @@ const ClinicNotificationDropdown = ({ clinicId, onClose, onCountChange }) => {
       onCountChange(newUnread);
     }
     onClose();
-    navigate('/clinic/reports');
+    navigate(destination);
   };
 
   const formatTime = (dateStr) => {
@@ -141,10 +143,10 @@ const ClinicNotificationDropdown = ({ clinicId, onClose, onCountChange }) => {
       {notifications.length > 0 && (
         <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <button
-            onClick={() => { navigate('/clinic/reports'); onClose(); }}
+            onClick={() => { navigate(destination); onClose(); }}
             className="w-full text-center text-xs text-blue-600 dark:text-blue-400 hover:underline py-1"
           >
-            View all reports →
+            {viewAllLabel}
           </button>
         </div>
       )}
