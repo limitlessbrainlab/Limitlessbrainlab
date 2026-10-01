@@ -5,6 +5,7 @@ import SupabaseService from '../../services/supabaseService';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import { grantCareProgramAccess } from '../../utils/careProgramEntitlements';
+import { shareReport } from '../../utils/shareReport';
 import SystemHealth from './SystemHealth';
 
 // Always return a CURRENT Supabase access token. supabase.auth.getSession() refreshes
@@ -1748,6 +1749,12 @@ const AlgorithmDataProcessor = () => {
     };
   };
 
+  const saveSharedReport = async (reportData) => {
+    const report = await shareReport(reportData, { getToken: getFreshToken });
+    checkCreditAlert(reportData.clinicId);
+    return report;
+  };
+
   // Send Report to Clinic and Patient - they can access it from their dashboards
   const handleSendReport = async () => {
     if (!pdfUrl) {
@@ -1862,15 +1869,7 @@ const AlgorithmDataProcessor = () => {
       };
 
 
-      // A DB save failure must NOT suppress the email — the patient/clinic still need
-      // their report link. Save best-effort, then always attempt email delivery below.
-      try {
-        await DatabaseService.addReport(reportData);
-        checkCreditAlert(clinicId); // credit consumed → maybe alert clinic + admin
-      } catch (saveError) {
-        console.error('⚠️ Could not save report row (continuing to email anyway):', saveError);
-        toast.error('Could not save the report to the dashboard, but we will still email it.');
-      }
+      await saveSharedReport(reportData);
 
       // Send report emails to clinic and patient
       try {
@@ -2037,15 +2036,7 @@ const AlgorithmDataProcessor = () => {
       };
 
 
-      // A DB save failure must NOT suppress the email — the patient/clinic still need
-      // their report link. Save best-effort, then always attempt email delivery below.
-      try {
-        await DatabaseService.addReport(reportData);
-        checkCreditAlert(clinicId); // credit consumed → maybe alert clinic + admin
-      } catch (saveError) {
-        console.error('⚠️ Could not save report row (continuing to email anyway):', saveError);
-        toast.error('Could not save the report to the dashboard, but we will still email it.');
-      }
+      await saveSharedReport(reportData);
 
       // Send report emails to clinic and patient
       try {
@@ -2142,8 +2133,7 @@ const AlgorithmDataProcessor = () => {
         status: 'completed'
       };
 
-      await DatabaseService.addReport(reportData);
-      checkCreditAlert(clinicId); // credit consumed → maybe alert clinic + admin
+      await saveSharedReport(reportData);
 
       const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
       const baseUrl = apiUrl.replace(/\/api\/?$/, '');
@@ -2228,8 +2218,7 @@ const AlgorithmDataProcessor = () => {
         status: 'completed'
       };
 
-      await DatabaseService.addReport(reportData);
-      checkCreditAlert(clinicId); // credit consumed → maybe alert clinic + admin
+      await saveSharedReport(reportData);
 
       const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
       const baseUrl = apiUrl.replace(/\/api\/?$/, '');

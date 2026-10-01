@@ -4,7 +4,7 @@
   "installCommand": "npm install && npm install --prefix server",
   "rewrites": [
     {
-      "source": "/api/:path((?!send-report-email$|render-performance-pdf$|generate-performance-report$|process-neurosense-report$|ops/backend$).*)",
+      "source": "/api/:path((?!send-report-email$|share-report$|render-performance-pdf$|generate-performance-report$|process-neurosense-report$|ops/backend$).*)",
       "destination": "https://limitlessbrainlab-backend.onrender.com/api/:path"
     },
     {

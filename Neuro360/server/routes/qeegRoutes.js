@@ -14,6 +14,7 @@ const SupabaseStorage = require('../services/supabaseStorage');
 const { createRoutedClient } = require('../dbRouter');
 const reportJobLock = require('../services/reportJobLock');
 const { getReportUploadDir, needsInstanceReportLock } = require('../services/reportRuntime');
+const { validateQeegInputs, canonicalQeegFileName } = require('../services/qeegInputValidation');
 
 // NEW: Gemini AI Service for report generation
 let GeminiService = null;
@@ -145,6 +146,7 @@ async function processQeegRequest(req, res) {
 
     eyesOpenFile = files.eyesOpen[0];
     eyesClosedFile = files.eyesClosed[0];
+    await validateQeegInputs(eyesOpenFile.path, eyesClosedFile.path);
 
     logProgress('FILE_UPLOAD', `Eyes Open received: ${eyesOpenFile.originalname} (${(eyesOpenFile.size / 1024).toFixed(2)} KB)`, '📁');
     logProgress('FILE_UPLOAD', `Eyes Closed received: ${eyesClosedFile.originalname} (${(eyesClosedFile.size / 1024).toFixed(2)} KB)`, '📁');
@@ -206,7 +208,7 @@ async function processQeegRequest(req, res) {
       const patientIdForUpload = extId ? `${extId}_${pName}` : (req.body.patientId || 'unknown');
 
       // Upload Eyes Open PDF (modified with NeuroSense logo)
-      const eoStoragePath = `${patientIdForUpload}/${timestamp}_EyesOpen_${eyesOpenFile.originalname}`;
+      const eoStoragePath = `${patientIdForUpload}/${timestamp}_${canonicalQeegFileName('Eyes Open', eyesOpenFile.originalname)}`;
       logProgress('SUPABASE_UPLOAD', `Uploading Eyes Open: ${eoStoragePath}`, '📤');
       const eoUploadResult = await SupabaseStorage.uploadFile(
         modifiedEyesOpenPath,
@@ -217,7 +219,7 @@ async function processQeegRequest(req, res) {
       eyesOpenUrl = eoUploadResult.url;  // Store URL for response
 
       // Upload Eyes Closed PDF (modified with NeuroSense logo)
-      const ecStoragePath = `${patientIdForUpload}/${timestamp}_EyesClosed_${eyesClosedFile.originalname}`;
+      const ecStoragePath = `${patientIdForUpload}/${timestamp}_${canonicalQeegFileName('Eyes Closed', eyesClosedFile.originalname)}`;
       logProgress('SUPABASE_UPLOAD', `Uploading Eyes Closed: ${ecStoragePath}`, '📤');
       const ecUploadResult = await SupabaseStorage.uploadFile(
         modifiedEyesClosedPath,

@@ -3,7 +3,6 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import DatabaseService from '../../services/databaseService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import DashboardLayout from '../layout/DashboardLayout';
-import DDOLink from '../DDOLink';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Tab panels are lazy-loaded: eagerly importing all ~24 admin screens made
@@ -246,7 +245,6 @@ const SuperAdminPanel = () => {
   return (
     <DashboardLayout
       title={getPageTitle()}
-      headerAction={<DDOLink label="DDO Admin Panel" className="text-sm" />}
     >
       <div className="space-y-6">
         {/* Clinic Selection for Reports and Payments tabs */}
