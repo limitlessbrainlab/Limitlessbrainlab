@@ -1134,13 +1134,12 @@ function checkoutProductImages(req) {
   return origin.startsWith('https://') ? [`${origin}${CHECKOUT_LOGO_PATH}`] : [];
 }
 
-// Card + Link (Apple Pay rides on 'card'), prefilled email, cardholder name, country.
-// No phone number and no forced billing address — keeps every checkout page to the
-// same approved shape.
+// Card-only checkout: Link is deliberately excluded so customers see card entry,
+// rather than Link's email verification screen.
 const CHECKOUT_UI = Object.freeze({
-  payment_method_types: ['card', 'link'],
+  payment_method_types: ['card'],
   billing_address_collection: 'auto',
-  customer_creation: 'always', // invisible on the form; lets Link reuse saved cards
+  customer_creation: 'always',
 });
 
 // Setup all security and utility middleware

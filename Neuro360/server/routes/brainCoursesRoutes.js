@@ -77,6 +77,7 @@ function createBrainCoursesRouter({ stripe, stagingFrontendUrl = process.env.STA
       const returnUrl = `${base}/patient?tab=brain-courses`;
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
+        payment_method_types: ['card'],
         customer_email: req.courseUser.email || undefined,
         success_url: `${returnUrl}&course_payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${returnUrl}&course_payment=cancelled`,

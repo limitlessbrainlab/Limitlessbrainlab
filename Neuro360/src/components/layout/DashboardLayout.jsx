@@ -138,7 +138,8 @@ const DashboardLayout = ({ children, title = 'Dashboard', customNotification = n
             <div className="flex items-center space-x-4">
               {headerAction && <div className="hidden sm:block">{headerAction}</div>}
 
-              {customNotification || (user?.role === 'super_admin' || (user?.role === 'clinic_admin' && user?.clinicId)) && (
+              {/* Super-admin header notification bell intentionally hidden. */}
+              {user?.role !== 'super_admin' && (customNotification || (user?.role === 'clinic_admin' && user?.clinicId)) && (
                 <div className="relative" ref={bellRef}>
                   <button
                     onClick={() => setShowClinicNotifications((prev) => !prev)}
