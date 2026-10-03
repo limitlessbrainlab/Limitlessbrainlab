@@ -37,6 +37,7 @@ import NotificationService from '../../services/notificationService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import useRealtimeRefetch from '../../hooks/useRealtimeRefetch';
 import { getPatientDisplayName, indexPatientsById, getReportSnapshotName, replaceNameInText } from '../../utils/patientNameResolver';
+import { buildAlgorithmDocuments, buildQeegStorageDocuments, uniqueDocumentsByUrl } from '../../utils/algorithmReportDocuments';
 
 const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) => {
   const { user } = useAuth();
@@ -331,18 +332,20 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           clinicId: r.clinic_id || r.clinicId,
           patientId: r.patient_id || r.patientId,
           patientName: r.patient_name || r.patientName || '',
-          fileName: `QEEG Report - ${r.patient_name || r.patientName || 'Patient'}`,
+          fileName: `${(r.report_mode || r.reportMode) === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense Report'} - ${r.patient_name || r.patientName || 'Patient'}`,
           filePath: r.pdf_url || r.pdfUrl || '',
           fileUrl: r.pdf_url || r.pdfUrl || '',
+          inputData: r.input_data || r.inputData || {},
+          claudeReportUrl: r.claude_report_url || r.claudeReportUrl || '',
           storedInCloud: true,
           reportData: {
-            title: 'QEEG Algorithm Report',
-            reportType: 'QEEG',
+            title: (r.report_mode || r.reportMode) === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense Algorithm Report',
+            reportType: (r.report_mode || r.reportMode) === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense',
             description: r.parameter_notes || '',
             source: 'algorithm_results',
             algorithmName: r.algorithm_name || r.algorithmName || 'Algorithm 1'
           },
-          title: `QEEG Report - ${r.patient_name || r.patientName || 'Patient'}`,
+          title: `${(r.report_mode || r.reportMode) === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense Report'} - ${r.patient_name || r.patientName || 'Patient'}`,
           uploadedAt: r.processed_at || r.processedAt || r.created_at,
           createdAt: r.created_at,
           uploadedBy: r.processed_by || 'Super Admin'
@@ -1712,6 +1715,8 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentsFetched, setDocumentsFetched] = useState(false);
   const [scanReportCount, setScanReportCount] = useState(null);
+  const [qeegDocuments, setQeegDocuments] = useState([]);
+  const [visibleReportCount, setVisibleReportCount] = useState(10);
 
   // Fetch real-time scan report count from database
   useEffect(() => {
@@ -1766,6 +1771,10 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
   useEffect(() => {
     if (activeTab === 'documents' && !documentsFetched && patient?.id) fetchAllDocuments();
   }, [activeTab]);
+
+  useEffect(() => {
+    setVisibleReportCount(10);
+  }, [patient?.id]);
 
   const fetchClinicalReport = async () => {
     setLoadingClinical(true);
@@ -1873,6 +1882,20 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
         });
       }
 
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const apiBase = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')).replace(/\/$/, '');
+        const response = await fetch(`${apiBase}/qeeg/patient-qeeg-files/${patient.id}`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          setQeegDocuments(buildQeegStorageDocuments(payload.files, patient.fullName || patient.full_name || patient.name || 'Patient'));
+        }
+      } catch (qeegError) {
+        console.error('Error fetching QEEG source files:', qeegError);
+      }
+
       setClinicalDocuments(allDocs);
       setDocumentsFetched(true);
     } catch (err) {
@@ -1895,6 +1918,11 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
     (r.patientId === patient.id || r.patient_id === patient.id) &&
     r.reportData?.source !== 'clinic_upload'
   );
+  const reportDocuments = uniqueDocumentsByUrl([
+    ...patientReports.flatMap(buildAlgorithmDocuments),
+    ...qeegDocuments
+  ]);
+  const visibleReportDocuments = reportDocuments.slice(0, visibleReportCount);
   const patientClinic = clinics?.find(c => c.id === (patient.clinicId || patient.clinic_id || patient.org_id));
   const clinicName = patient.clinicName || patientClinic?.name || 'Unknown Clinic';
   const clinicAddress = patientClinic?.address || patientClinic?.clinic_address || patient.clinicAddress || 'N/A';
@@ -2200,13 +2228,13 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
                   )}
 
                   {/* Neurosense Reports (Admin uploaded) */}
-                  {patientReports.length > 0 && (
+                  {reportDocuments.length > 0 && (
                     <div>
                       <h4 className="text-sm font-semibold text-[#323956] mb-3 flex items-center">
-                        <FileText className="h-4 w-4 mr-2" />Brain Wellness Reports
+                        <FileText className="h-4 w-4 mr-2" />Generated Reports
                       </h4>
                       <div className="space-y-2">
-                        {patientReports.map(report => (
+                        {visibleReportDocuments.map(report => (
                           <div key={report.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-[#CAE0FF] transition-colors">
                             <div className="flex items-center min-w-0">
                               <div className="h-10 w-10 rounded-lg bg-[#CAE0FF] flex items-center justify-center mr-3 flex-shrink-0">
@@ -2224,11 +2252,20 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
                           </div>
                         ))}
                       </div>
+                      {reportDocuments.length > visibleReportCount && (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleReportCount(count => count + 10)}
+                          className="mt-3 w-full rounded-lg border border-[#323956] px-4 py-2 text-sm font-medium text-[#323956] hover:bg-[#E4EFFF] transition-colors"
+                        >
+                          Load more reports ({reportDocuments.length - visibleReportCount} remaining)
+                        </button>
+                      )}
                     </div>
                   )}
 
                   {/* Empty state */}
-                  {patientReports.length === 0 && clinicalDocuments.length === 0 && (
+                  {reportDocuments.length === 0 && clinicalDocuments.length === 0 && (
                     <div className="text-center py-12"><FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No documents uploaded for this patient.</p></div>
                   )}
                 </>
