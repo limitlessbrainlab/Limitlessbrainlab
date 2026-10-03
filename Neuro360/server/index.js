@@ -7114,6 +7114,36 @@ app.post('/api/send-password-email', async (req, res) => {
   }
 });
 
+// Repair the Supabase Auth credential for a legacy patient only after the password
+// has been verified against the patient record. This lets protected purchases use a JWT.
+app.post('/api/ensure-patient-auth', rateLimiters.loginLimiter, async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email || !password || !supabase) return res.status(401).json({ success: false, error: 'Invalid email or password' });
+
+    const { data: patients, error: patientError } = await supabase.from('patients').select('email, password, full_name').eq('email', email).limit(1);
+    const patient = patients?.[0];
+    const storedPassword = patient?.password || '';
+    const passwordMatches = storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')
+      ? await bcrypt.compare(password.trim(), storedPassword)
+      : password.trim() === String(storedPassword).trim();
+    if (patientError || !patient || !passwordMatches) return res.status(401).json({ success: false, error: 'Invalid email or password' });
+
+    const { data: listed, error: listError } = await supabase.auth.admin.listUsers({ filter: email, perPage: 1 });
+    if (listError) throw listError;
+    const authUser = listed?.users?.find((user) => (user.email || '').toLowerCase() === email);
+    const { error } = authUser
+      ? await supabase.auth.admin.updateUserById(authUser.id, { password })
+      : await supabase.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { role: 'patient', full_name: patient.full_name || '' } });
+    if (error) throw error;
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('ensure-patient-auth error:', error?.message);
+    return res.status(500).json({ success: false, error: 'Could not prepare this account for checkout' });
+  }
+});
+
 // Create Patient Auth Account (admin API - no confirmation email)
 app.post('/api/create-patient-auth', async (req, res) => {
   try {

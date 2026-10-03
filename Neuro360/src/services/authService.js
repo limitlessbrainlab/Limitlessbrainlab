@@ -77,6 +77,21 @@ export const authService = {
     // "Invalid email or password" (including the LoginForm fallback that re-runs the
     // friendly-error mapper on this text).
     const SERVER_UNREACHABLE = 'Network error: unable to reach the server. Please check your connection and try again.';
+    const establishPatientSession = async () => {
+      const firstAttempt = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+      if (!firstAttempt.error && firstAttempt.data?.session?.access_token) return true;
+      try {
+        const repair = await fetch(`${API_BASE_URL}/ensure-patient-auth`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: normalizedEmail, password })
+        });
+        if (!repair.ok) return false;
+        const retry = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+        return !retry.error && Boolean(retry.data?.session?.access_token);
+      } catch (error) {
+        console.warn('WARNING: patient Supabase session repair failed:', error?.message);
+        return false;
+      }
+    };
 
     // Clear any stale/expired Supabase session so the pre-login table reads run as the
     // anonymous role. A leftover expired JWT makes clinics/profiles reads 401, which the
@@ -223,8 +238,8 @@ export const authService = {
 
             // Patient login requires a Supabase session for protected purchases.
             if (!patientHasSupabaseSession) {
-              const { error: sessionError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-              if (sessionError) console.warn('WARNING: patient Supabase session was not created:', sessionError.message);
+              patientHasSupabaseSession = await establishPatientSession();
+              if (!patientHasSupabaseSession) console.warn('WARNING: patient Supabase session was not created');
             }
 
             // Login activity is informational only; it must never change subscription access.
