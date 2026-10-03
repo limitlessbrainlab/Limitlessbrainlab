@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, GraduationCap, Lock } from 'lucide-react';
+import SupabaseService from '../services/supabaseService';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 const money = (value, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(Number(value || 0));
@@ -9,15 +10,24 @@ export function catalogueState(results) {
   return { courses: catalogue.status === 'fulfilled' ? catalogue.value : [], owned: new Set(access.status === 'fulfilled' ? access.value : []) };
 }
 
+const authHeaders = async () => {
+  const { data: { session } } = await SupabaseService.supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+};
+
 export default function BrainCourses() {
   const [courses, setCourses] = useState([]); const [owned, setOwned] = useState(new Set());
   const [category, setCategory] = useState('All'); const [error, setError] = useState(''); const [busy, setBusy] = useState('');
   useEffect(() => {
-    const token = localStorage.getItem('authToken'); const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    Promise.allSettled([
+    void (async () => {
+      const headers = await authHeaders();
+      const authenticated = Boolean(headers.Authorization);
+      const results = await Promise.allSettled([
       fetch(`${API_URL}/brain-courses`).then(async (r) => { if (!r.ok) throw new Error(); return (await r.json()).courses || []; }),
-      token ? fetch(`${API_URL}/brain-courses/access`, { headers }).then(async (r) => { if (!r.ok) throw new Error(); return (await r.json()).courseIds || []; }) : Promise.reject(new Error()),
-    ]).then((results) => { const state = catalogueState(results); setCourses(state.courses); setOwned(state.owned); if (results[0].status === 'rejected') setError('Courses are temporarily unavailable. Please try again.'); });
+      authenticated ? fetch(`${API_URL}/brain-courses/access`, { headers }).then(async (r) => { if (!r.ok) throw new Error(); return (await r.json()).courseIds || []; }) : Promise.reject(new Error()),
+      ]);
+      const state = catalogueState(results); setCourses(state.courses); setOwned(state.owned); if (results[0].status === 'rejected') setError('Courses are temporarily unavailable. Please try again.');
+    })();
   }, []);
   const categories = useMemo(() => ['All', ...new Set(courses.map((course) => course.category))], [courses]);
   const filtered = category === 'All' ? courses : courses.filter((course) => course.category === category);
@@ -25,7 +35,9 @@ export default function BrainCourses() {
   const checkout = async (course) => {
     setBusy(course.id); setError('');
     try {
-      const response = await fetch(`${API_URL}/brain-courses/${course.id}/checkout`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
+      const headers = await authHeaders();
+      if (!headers.Authorization) throw new Error('Your session has expired. Please sign in again.');
+      const response = await fetch(`${API_URL}/brain-courses/${course.id}/checkout`, { method: 'POST', headers });
       const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Could not start checkout'); window.location.assign(body.url);
     } catch (err) { setError(err.message); } finally { setBusy(''); }
   };

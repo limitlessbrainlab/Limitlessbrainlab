@@ -5,4 +5,5 @@ const source = readFileSync(new URL('./BrainCourses.jsx', import.meta.url), 'utf
 assert.match(source, /Promise\.allSettled/);
 assert.match(source, /courseIds/);
 assert.match(source, /Open Course/);
+assert.match(source, /SupabaseService\.supabase\.auth\.getSession/);
 console.log('BrainCourses.test.mjs: ok');

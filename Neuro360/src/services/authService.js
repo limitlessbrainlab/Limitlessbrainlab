@@ -175,6 +175,7 @@ export const authService = {
 
         if (patients && patients.length > 0) {
           let patient = null;
+          let patientHasSupabaseSession = false;
           for (const p of patients) {
             if (await comparePassword(password, p.password)) {
               patient = p;
@@ -199,6 +200,7 @@ export const authService = {
             });
             if (!authError && authData?.user) {
               patient = patients[0];
+              patientHasSupabaseSession = Boolean(authData.session?.access_token);
               try {
                 await supabase
                   .from('patients')
@@ -207,8 +209,6 @@ export const authService = {
               } catch (healErr) {
                 console.warn('WARNING: could not self-heal patient password hash:', healErr?.message);
               }
-              // Restore the anonymous role the rest of the login flow assumes.
-              try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) { /* ignore */ }
             }
           }
 
@@ -219,6 +219,12 @@ export const authService = {
             if (!sameEnv(patient.origin_url, getOriginUrl())) {
               const target = canonicalUrlForEnv(resolveEnv(patient.origin_url));
               throw new Error(`This account was created on ${target}. Please log in there.`);
+            }
+
+            // Patient login requires a Supabase session for protected purchases.
+            if (!patientHasSupabaseSession) {
+              const { error: sessionError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+              if (sessionError) console.warn('WARNING: patient Supabase session was not created:', sessionError.message);
             }
 
             // Login activity is informational only; it must never change subscription access.
