@@ -651,6 +651,29 @@ const AssessmentManagement = () => {
                   </div>
                 </div>
 
+                {/* Price Visibility: Show AED / INR price to customers */}
+                <div className="flex items-center space-x-6 rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register('show_aed_price')}
+                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show AED price to customers</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register('show_inr_price')}
+                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Show INR price to customers</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+                  USD pricing is always shown and remains the checkout currency.
+                </p>
+
                 {/* AED Prices */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -706,29 +729,6 @@ const AssessmentManagement = () => {
                     />
                   </div>
                 </div>
-
-                {/* Price Visibility: Show AED / INR price to customers */}
-                <div className="flex items-center space-x-6">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register('show_aed_price')}
-                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Show AED price to customers</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register('show_inr_price')}
-                      className="w-4 h-4 text-[#323956] border-gray-300 rounded focus:ring-[#323956]"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Show INR price to customers</span>
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-                  USD pricing is always shown and remains the checkout currency.
-                </p>
 
                 {/* Submit Buttons */}
                 <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
