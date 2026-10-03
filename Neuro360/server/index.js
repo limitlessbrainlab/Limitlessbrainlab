@@ -9,6 +9,7 @@ const qeegRoutes = require('./routes/qeegRoutes');
 const performanceReportRoutes = require('./routes/performanceReportRoutes');
 const patientDocumentRoutes = require('./routes/patientDocumentRoutes');
 const ssoRoutes = require('./routes/ssoRoutes');
+const { createBrainCoursesRouter } = require('./routes/brainCoursesRoutes');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const { getReportEmailHtml, getNeuroSenseReportEmailHtml } = require('../shared/reportEmailTemplate.cjs');
@@ -1303,6 +1304,7 @@ app.use('/api/qeeg', protectedRoutes.authRequired, qeegRoutes);
 
 // SSO routes - Optional auth
 app.use('/api/sso', protectedRoutes.optionalAuth, ssoRoutes);
+app.use('/api/brain-courses', createBrainCoursesRouter({ stripe }));
 
 // Contact Form API endpoint - PUBLIC (no auth required)
 app.post('/api/contact', async (req, res) => {
