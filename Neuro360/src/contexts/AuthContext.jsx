@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
 
     const wipeAndReload = async () => {
       stopped = true;
-      try { await clearAllAndSignOut(); } catch (e) { /* ignore */ }
+      try { await clearAllAndSignOut({ preserveRemembered: false }); } catch (e) { /* ignore */ }
       localStorage.setItem('app_build_id', APP_BUILD_ID); // keep on-load gate consistent
       // clearAllAndSignOut() wipes sessionStorage — restamp the deploy-reload
       // guard so a version.json/bundle skew can't re-trigger within its window
@@ -228,7 +228,7 @@ export const AuthProvider = ({ children }) => {
               // ignore failures while checking persisted Supabase session
             }
           }
-          await clearAllAndSignOut();
+          await clearAllAndSignOut({ preserveRemembered: false });
           localStorage.setItem('app_build_id', APP_BUILD_ID); // set AFTER clear → no reload loop
           if (hadSession) { window.location.reload(); return; } // hard refresh into login
         } else {

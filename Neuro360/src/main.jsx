@@ -7,6 +7,11 @@ import './index.css'
 import consoleErrorFixer from './utils/consoleErrorFixer.js'
 import './utils/globalErrorHandler.js'
 import { guardedReload } from './utils/guardedReload.js'
+import { clearAllAndSignOut } from './utils/sessionCleanup.js'
+import { needsDeploymentReset } from './utils/deploymentVersion.js'
+
+/* global __APP_BUILD_ID__ */
+const APP_BUILD_ID = typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : 'dev'
 
 // After a redeploy, a stale open tab lazy-loading an old hashed chunk gets a
 // 404 rewritten to index.html (text/html) → module MIME error. Vite reports
@@ -22,7 +27,7 @@ window.addEventListener('vite:preloadError', (event) => {
 //   consoleErrorFixer.init();
 // }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+const render = () => ReactDOM.createRoot(document.getElementById('root')).render(
   import.meta.env.PROD ? (
     <React.StrictMode>
       <App />
@@ -31,3 +36,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   )
 )
+
+const start = async () => {
+  if (import.meta.env.PROD && needsDeploymentReset(localStorage.getItem('app_build_id'), APP_BUILD_ID)) {
+    await clearAllAndSignOut({ preserveRemembered: false });
+    localStorage.setItem('app_build_id', APP_BUILD_ID);
+  }
+  render();
+}
+
+void start()
