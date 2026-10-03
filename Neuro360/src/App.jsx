@@ -200,6 +200,7 @@ function App() {
                   <Route path="/admin/inquiries/feedback" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminPanel /></ProtectedRoute>} />
                   <Route path="/admin/settings" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminPanel /></ProtectedRoute>} />
                   <Route path="/admin/patient-subscriptions" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminPanel /></ProtectedRoute>} />
+                  <Route path="/admin/advanced-setup" element={<ProtectedRoute requiredRole="super_admin"><SuperAdminPanel /></ProtectedRoute>} />
 
                   {/* Clinic Routes — accept both 'clinic' and 'clinic_admin' roles */}
                   <Route path="/clinic" element={<ProtectedRoute requiredRole={['clinic', 'clinic_admin']}><ClinicDashboard /></ProtectedRoute>} />

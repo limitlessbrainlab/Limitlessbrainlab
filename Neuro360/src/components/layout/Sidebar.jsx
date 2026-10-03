@@ -201,6 +201,7 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
         { id: 'payments', label: 'Payment History', icon: CreditCard, path: '/admin/payments' },
         { id: 'patient-subscriptions', label: 'Patient Subscriptions', icon: Crown, path: '/admin/patient-subscriptions' },
         { id: 'pricing', label: 'Pricing Management', icon: Zap, path: '/admin/pricing' },
+        { id: 'advanced-setup', label: 'Patient Brain Courses', icon: GraduationCap, path: '/admin/advanced-setup' },
         { id: 'analytics', label: 'Analytics', icon: PieChart, path: '/admin/analytics' },
         { id: 'alerts', label: 'Alerts & Monitoring', icon: Monitor, path: '/admin/alerts' },
         { id: 'coaches', label: 'Coach Management', icon: Users, path: '/admin/coaches' },
