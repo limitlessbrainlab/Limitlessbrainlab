@@ -37,5 +37,12 @@ export default function BrainCourses() {
       const unlocked = course.is_free || owned.has(course.id);
       return <article key={course.id} className="overflow-hidden rounded-xl border bg-white shadow-sm"><div className="h-36 bg-[#323956]">{course.thumbnail_url && <img src={course.thumbnail_url} alt="" className="h-full w-full object-cover" />}</div><div className="p-4"><h2 className="font-semibold line-clamp-2">{course.title}</h2><p className="mt-1 text-sm text-gray-500">{course.author}</p><div className="mt-3">{course.is_free ? <span className="font-semibold text-green-700">Free</span> : <><span className="mr-2 text-sm text-gray-400 line-through">{course.original_price && money(course.original_price, course.currency)}</span><span className="font-semibold text-blue-700">{money(course.sale_price, course.currency)}</span></>}</div><button onClick={() => unlocked ? open(course.course_url) : checkout(course)} disabled={busy === course.id} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#323956] px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{unlocked ? <><ExternalLink size={16}/>Open Course</> : <><Lock size={16}/>{busy === course.id ? 'Opening checkout…' : 'Buy Now'}</>}</button></div></article>;
     })}</div>
+    <section className="rounded-2xl bg-gradient-to-r from-[#323956] to-[#4a5578] px-6 py-7 text-center text-white">
+      <h2 className="text-lg font-bold">Want to explore all courses?</h2>
+      <p className="mt-2 text-sm text-blue-100">Visit Limitless Brain Academy for the complete catalog of brain health courses.</p>
+      <a href="https://www.limitlessbrainacademy.com/products#nav_bar" target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-[#323956] hover:bg-blue-50">
+        <GraduationCap size={18} /> Visit Limitless Brain Academy <ExternalLink size={16} />
+      </a>
+    </section>
   </div>;
 }
