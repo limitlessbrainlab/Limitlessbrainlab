@@ -58,17 +58,25 @@ async function applyBrainCoursePurchase(session, databaseClient) {
     amount_paid: (session.amount_total || 0) / 100,
     currency: session.currency?.toUpperCase() || null,
   };
+  const { data: alreadyGranted, error: existingError } = await databaseClient
+    .from('brain_course_purchases')
+    .select('*')
+    .eq('stripe_session_id', session.id)
+    .maybeSingle();
+  if (existingError) return { ok: false, status: 500, message: existingError.message || 'Could not read existing course access' };
+  if (alreadyGranted) return { ok: true, purchase: alreadyGranted, alreadyApplied: true };
+
   const { data, error } = await databaseClient.from('brain_course_purchases').insert(purchase).select().single();
   if (!error) return { ok: true, purchase: data, alreadyApplied: false };
   if (error.code !== '23505') return { ok: false, status: 500, message: error.message || 'Could not grant course access' };
 
-  const { data: existing, error: existingError } = await databaseClient
+  const { data: existing, error: duplicateReadError } = await databaseClient
     .from('brain_course_purchases')
     .select('*')
     .eq('patient_id', patientId)
     .eq('course_id', courseId)
     .single();
-  if (existingError) return { ok: false, status: 500, message: existingError.message || 'Could not read existing course access' };
+  if (duplicateReadError) return { ok: false, status: 500, message: duplicateReadError.message || 'Could not read existing course access' };
   return { ok: true, purchase: existing, alreadyApplied: true };
 }
 

@@ -11,28 +11,36 @@ assert.deepEqual(
   { course_url: 'https://example.com/', original_price: null, sale_price: null, is_free: true, currency: 'INR' }
 );
 
-const existing = { id: 'purchase-1', patient_id: 'patient-1', course_id: 'course-1', stripe_session_id: 'cs_test_1' };
+let insertCalls = 0;
+let existing = null;
 const fakeDatabase = {
   from(table) {
     assert.equal(table, 'brain_course_purchases');
     const query = {
-      inserted: false,
-      insert() { this.inserted = true; return this; },
+      inserted: null,
+      insert(values) { insertCalls += 1; this.inserted = values; return this; },
       select() { return this; },
       eq() { return this; },
-      single: async () => query.inserted
-        ? { data: null, error: { code: '23505' } }
-        : { data: existing, error: null },
+      maybeSingle: async () => ({ data: existing, error: null }),
+      single: async () => {
+        existing = { id: 'purchase-1', ...query.inserted };
+        return { data: existing, error: null };
+      },
     };
     return query;
   },
 };
-const result = await applyBrainCoursePurchase({
+const paidSession = {
   id: 'cs_test_1', payment_status: 'paid', amount_total: 409900, currency: 'inr',
   metadata: { type: 'brain_course', patient_id: 'patient-1', course_id: 'course-1' },
-}, fakeDatabase);
-assert.equal(result.ok, true);
-assert.equal(result.alreadyApplied, true);
-assert.deepEqual(result.purchase, existing);
+};
+const firstResult = await applyBrainCoursePurchase(paidSession, fakeDatabase);
+const repeatedResult = await applyBrainCoursePurchase(paidSession, fakeDatabase);
+assert.equal(firstResult.ok, true);
+assert.equal(firstResult.alreadyApplied, false);
+assert.equal(repeatedResult.ok, true);
+assert.equal(repeatedResult.alreadyApplied, true);
+assert.equal(insertCalls, 1);
+assert.deepEqual(repeatedResult.purchase, existing);
 
 console.log('brainCoursePurchases.test.mjs: ok');

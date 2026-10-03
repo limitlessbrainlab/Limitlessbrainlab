@@ -88,7 +88,13 @@ function createBrainCoursesRouter({ stripe, stagingFrontendUrl = process.env.STA
           },
           quantity: 1,
         }],
-        metadata: { type: 'brain_course', course_id: course.id, patient_id: req.courseUser.id, patient_email: req.courseUser.email || '' },
+        metadata: {
+          type: 'brain_course',
+          course_id: course.id,
+          patient_id: req.courseUser.id,
+          patient_email: req.courseUser.email || '',
+          environment: base === stagingFrontendUrl.replace(/\/$/, '') ? 'staging' : 'production',
+        },
       });
       return res.json({ success: true, url: session.url, sessionId: session.id });
     } catch (error) {

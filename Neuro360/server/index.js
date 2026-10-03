@@ -10,6 +10,7 @@ const performanceReportRoutes = require('./routes/performanceReportRoutes');
 const patientDocumentRoutes = require('./routes/patientDocumentRoutes');
 const ssoRoutes = require('./routes/ssoRoutes');
 const { createBrainCoursesRouter } = require('./routes/brainCoursesRoutes');
+const { applyBrainCoursePurchase } = require('./services/brainCoursePurchases');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const { getReportEmailHtml, getNeuroSenseReportEmailHtml } = require('../shared/reportEmailTemplate.cjs');
@@ -2669,6 +2670,9 @@ app.get('/api/stripe/verify-session/:sessionId', async (req, res) => {
             // subscription confirmed via this path granted no plan access.
             const subResult = await applySubscriptionPurchase(session);
             if (!subResult.ok) console.error('verify-session applySubscriptionPurchase failed:', subResult.message);
+          } else if (paymentType === 'brain_course') {
+            const courseResult = await applyBrainCoursePurchase(session, supabase);
+            if (!courseResult.ok) console.error('verify-session applyBrainCoursePurchase failed:', courseResult.message);
           } else if (paymentType === 'coaching_session') {
             // Coaching must NOT fall through to the frequency/meditation branch
             // (it used to create a spurious frequency_purchases row with an
@@ -4535,6 +4539,15 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
           const subResult = await applySubscriptionPurchase(session);
           if (!subResult.ok) {
             console.error('Webhook applySubscriptionPurchase failed:', subResult.message);
+          }
+
+        } else if (paymentType === 'brain_course') {
+          const courseDatabase = session.metadata?.environment === 'staging' && process.env.STAGING_SUPABASE_URL && process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY
+            ? createClient(process.env.STAGING_SUPABASE_URL, process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY)
+            : supabase;
+          const courseResult = await applyBrainCoursePurchase(session, courseDatabase);
+          if (!courseResult.ok) {
+            console.error('Webhook applyBrainCoursePurchase failed:', courseResult.message);
           }
 
         } else if (paymentType === 'assessment') {
