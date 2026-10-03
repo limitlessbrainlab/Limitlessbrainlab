@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import SupabaseService from '../../services/supabaseService';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 const blank = { slug: '', title: '', author: 'Dr Sweta Adatia', category: 'general', thumbnail_url: '', course_url: '', original_price: '', sale_price: '', currency: 'INR', sort_order: 0, is_free: false, is_visible: true };
@@ -7,10 +9,10 @@ export const serializeCourse = (course) => ({ ...course, original_price: course.
 export default function BrainCoursesManagement() {
   const [courses, setCourses] = useState([]); const [form, setForm] = useState(blank); const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
-  const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` });
-  const load = async () => { setLoading(true); try { const r = await fetch(`${API_URL}/brain-courses/admin`, { headers: headers() }); const b = await r.json(); if (!r.ok) throw new Error(b.error); setCourses(b.courses || []); } catch (e) { setError(e.message || 'Could not load courses'); } finally { setLoading(false); } };
+  const headers = async () => { const { data: { session } } = await SupabaseService.supabase.auth.getSession(); const token = session?.access_token || localStorage.getItem('authToken'); return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }; };
+  const load = async () => { setLoading(true); try { const r = await fetch(`${API_URL}/brain-courses/admin`, { headers: await headers() }); const b = await r.json(); if (!r.ok) throw new Error(b.error); setCourses(b.courses || []); } catch (e) { setError(e.message || 'Could not load courses'); } finally { setLoading(false); } };
   useEffect(() => { load(); }, []);
-  const save = async (e) => { e.preventDefault(); setSaving(true); setError(''); try { const r = await fetch(`${API_URL}/brain-courses/admin${editing ? `/${editing}` : ''}`, { method: editing ? 'PATCH' : 'POST', headers: headers(), body: JSON.stringify(serializeCourse(form)) }); const b = await r.json(); if (!r.ok) throw new Error(b.error); setForm(blank); setEditing(null); await load(); } catch (err) { setError(err.message || 'Could not save course'); } finally { setSaving(false); } };
+  const save = async (e) => { e.preventDefault(); setSaving(true); setError(''); try { const r = await fetch(`${API_URL}/brain-courses/admin${editing ? `/${editing}` : ''}`, { method: editing ? 'PATCH' : 'POST', headers: await headers(), body: JSON.stringify(serializeCourse(form)) }); const b = await r.json(); if (!r.ok) throw new Error(b.error); toast.success(editing ? 'Course updated successfully' : 'Course added successfully'); setForm(blank); setEditing(null); await load(); } catch (err) { setError(err.message || 'Could not save course'); } finally { setSaving(false); } };
   const edit = (course) => { setEditing(course.id); setForm({ ...course, original_price: course.original_price ?? '', sale_price: course.sale_price ?? '' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const field = (key, label, type = 'text') => <label className="block text-sm font-medium text-gray-700">{label}<input required={['slug','title','author','category','course_url'].includes(key)} type={type} value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} className="mt-1 w-full rounded border p-2" /></label>;
   if (loading) return <div className="animate-pulse space-y-3"><div className="h-10 rounded bg-gray-100"/><div className="h-32 rounded bg-gray-100"/></div>;

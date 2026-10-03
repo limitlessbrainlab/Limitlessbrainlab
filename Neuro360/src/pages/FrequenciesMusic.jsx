@@ -785,10 +785,10 @@ const FrequenciesMusic = () => {
         
         {/* Frequency Packs Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-6 auto-rows-fr">
-          {frequencyPacks.map((pack, index) => {
-            const isFirstCard = index === 0;
+          {frequencyPacks.map((pack) => {
             const isPurchased = purchasedPacks.includes(pack.id) || hasFullContentAccess;
-            const isUnlocked = isFirstCard || isPurchased;
+            const isSolfeggio = pack.id.startsWith('solfeggio_');
+            const isUnlocked = !isSolfeggio || isPurchased;
             const isLocked = !isUnlocked;
             return (
               <div
@@ -825,8 +825,7 @@ const FrequenciesMusic = () => {
                       <Lock className="h-4 w-4 text-gray-600 dark:text-gray-300" />
                     </div>
                   )}
-                  {/* Free badge for first card */}
-                  {isFirstCard && !isPurchased && (
+                  {!isSolfeggio && !isPurchased && (
                     <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
                       <CheckCircle className="h-3 w-3" />
                       <span>Free</span>
@@ -849,7 +848,7 @@ const FrequenciesMusic = () => {
                   <div className="mt-auto">
                     {isUnlocked ? (
                       <>
-                        {isFirstCard && !isPurchased && (
+                        {!isSolfeggio && !isPurchased && (
                           <div className="mb-1.5 sm:mb-2">
                             <span className="text-sm sm:text-lg font-bold text-green-600">Free</span>
                           </div>

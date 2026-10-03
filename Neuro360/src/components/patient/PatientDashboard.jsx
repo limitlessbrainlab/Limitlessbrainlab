@@ -118,7 +118,7 @@ import MyBookings from './MyBookings';
 import ProfileGate from './ProfileGate';
 import { getCareProtocol } from '../../utils/careProtocolLookup';
 
-const CARE_PROGRAM_YOGA_NIDRA_URL = 'https://sweta8238.graphy.com/products/Yoga-Nidra---The-Ultimate-Whole-Brain-Synchronization-6788054d6cd6065534a49399';
+const CARE_PROGRAM_YOGA_NIDRA_URL = 'https://drive.google.com/file/d/1G7M7EiWU7tHzFkb0Gy6KIPNwUt1p3pn8/preview';
 const getGuideThumbnailUrl = (url) => {
   if (!url || typeof url !== 'string') return null;
   const youtubeMatch = url.match(/(?:youtube\.com\/embed\/|youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
@@ -2413,11 +2413,11 @@ const PatientDashboard = () => {
         </p>
         <div className="space-y-2 sm:space-y-3">
           <a
-            href="mailto:limitlessbrainlab@gmail.com"
+            href="mailto:info@limitlessbrainlab.com"
             className="flex items-center space-x-2 sm:space-x-3 p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
           >
             <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-[#323956] dark:text-blue-400 flex-shrink-0" />
-            <span className="text-xs sm:text-base text-gray-700 dark:text-gray-300 truncate">limitlessbrainlab@gmail.com</span>
+            <span className="text-xs sm:text-base text-gray-700 dark:text-gray-300 truncate">info@limitlessbrainlab.com</span>
           </a>
           <a
             href="tel:+971501382897"
@@ -8581,7 +8581,7 @@ const PatientDashboard = () => {
         {/* Video Previews Section */}
         {(() => {
           const driveEmbed = (id) => `https://drive.google.com/file/d/${id}/preview`;
-          const YOGA_NIDRA_URL = 'https://sweta8238.graphy.com/products/Yoga-Nidra---The-Ultimate-Whole-Brain-Synchronization-6788054d6cd6065534a49399';
+          const YOGA_NIDRA_URL = driveEmbed('1G7M7EiWU7tHzFkb0Gy6KIPNwUt1p3pn8');
           const meditationVideos = [
             {
               num: 0, featured: true,
@@ -8601,7 +8601,11 @@ const PatientDashboard = () => {
             { num: 9,  title: 'NEURO MANIFESTATION MEDITATION',        embedUrl: driveEmbed('1cjmrKIC683t42CcJuZvkPug0Ed6GdPCU'), thumb: '/meditation-thumbs/thumb-9.webp' },
             { num: 10, title: 'NEURO DEPRESSION HEALING MEDITATION',   embedUrl: driveEmbed('1xkTyCTbZ2WMmi3Ose_76xck1bq6Z0GBb'), thumb: '/meditation-thumbs/thumb-10.webp' },
             { num: 11, title: 'NEURO DEEP SLEEP MEDITATION',           embedUrl: driveEmbed('1AZNpbXzRT_XU9mNIU1pKuZVutUi3fNn9'), thumb: '/meditation-thumbs/thumb-11.webp' },
-            { num: 12, title: 'YOGA NIDRA — THE ULTIMATE WHOLE BRAIN SYNCHRONIZATION', thumb: '/meditation-thumbs/yoga-nidra.webp', buyUrl: YOGA_NIDRA_URL },
+            { num: 12, title: 'THETA MEDITATION — MANIFESTATION MAGIC', embedUrl: driveEmbed('1mNaSY-9eaTFXmCrVzmicziwP07QMsrbw'), thumb: 'https://drive.google.com/thumbnail?id=1HQ81VwcKHHsKpgCJE8fZkNz-L7qg-gjK&sz=w1000', isFree: true },
+            { num: 13, title: 'DELTA MEDITATION — SLEEP AND REPAIR', embedUrl: driveEmbed('1DZtRbvhhJz8dskMwIrSc6WkW4Ik-MJ21'), thumb: 'https://drive.google.com/thumbnail?id=1pbhPW7nJZOLTXRhxzvEgADbfOTD_4rRu&sz=w1000', isFree: true },
+            { num: 14, title: 'BETA MEDITATION — FOCUS & ATTENTION', embedUrl: driveEmbed('1Y584iFTo4jc_HdqwfK7oqaBMv6mMOqfm'), thumb: 'https://drive.google.com/thumbnail?id=1MdqqjcYi4hi4Jq2R2QWG4AyboCCEEsgi&sz=w1000', isFree: true },
+            { num: 15, title: 'ALPHA MEDITATION — RELAXATION AND CALM', embedUrl: driveEmbed('1zUDQF-fKTVpFS8v1CwHKiCpO0-MnqAra'), thumb: 'https://drive.google.com/thumbnail?id=1JQBI68OvyWr-OXNdg8HqKpQfyLTCEmMW&sz=w1000', isFree: true },
+            { num: 16, title: 'YOGA NIDRA — THE ULTIMATE WHOLE BRAIN SYNCHRONIZATION', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/yoga-nidra.webp', isFree: true },
           ];
           const featured = meditationVideos[0];
           const rest = meditationVideos.slice(1);
@@ -8663,7 +8667,7 @@ const PatientDashboard = () => {
                 </div>
               </div>
 
-              {/* 11 Meditation Video Cards */}
+              {/* Meditation video cards */}
               <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 {rest.map((v) => {
                   const videoSlug = slugifyCareProgramTarget(v.title);
@@ -8694,15 +8698,17 @@ const PatientDashboard = () => {
                     </div>
                     <div className="p-3 flex flex-col flex-grow">
                       <p className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-white leading-snug line-clamp-2 flex-grow mb-3">{v.title}</p>
-                      <a
-                        href={v.buyUrl || 'https://sweta8238.graphy.com/products#nav_barv'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full bg-[#c9a227] hover:bg-[#b8911f] text-white py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition-colors"
-                      >
-                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        <span>Buy Now</span>
-                      </a>
+                      {v.isFree ? (
+                        <button type="button" onClick={() => setSelectedVideo(v)} className="w-full bg-green-600 hover:bg-green-700 text-white py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition-colors">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          <span>Watch Free</span>
+                        </button>
+                      ) : (
+                        <a href="https://sweta8238.graphy.com/products#nav_barv" target="_blank" rel="noopener noreferrer" className="w-full bg-[#c9a227] hover:bg-[#b8911f] text-white py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition-colors">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                          <span>Buy Now</span>
+                        </a>
+                      )}
                     </div>
                   </div>
                   );
