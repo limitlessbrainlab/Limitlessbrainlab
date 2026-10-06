@@ -10,7 +10,6 @@
 const { FONTS, LAYOUT } = require('./pdfStyles');
 const fs = require('fs');
 const path = require('path');
-const pdfToImg = require('pdf-to-img');
 const { extractReliabilityAssessment } = require('./brainMapComparisonPage');
 
 // Image paths
@@ -35,7 +34,8 @@ async function extractPageImage(pdfPath) {
 
     // Convert PDF pages with scale for good quality
     console.log('   Loading PDF document...');
-    var document = await pdfToImg.pdf(pdfPath, { scale: 2.0 });
+    const { pdf } = await import('pdf-to-img');
+    var document = await pdf(pdfPath, { scale: 2.0 });
 
     // Iterate through pages to get page 2
     var pageNum = 0;

@@ -3,9 +3,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const source = fs.readFileSync(path.resolve(__dirname, '../services/pdf/yourNumbersPage.js'), 'utf8');
 const { extractPageImage } = require('../services/pdf/yourNumbersPage');
 
 async function run() {
+  assert.ok(source.includes("const { pdf } = await import('pdf-to-img');"));
+  assert.ok(!source.includes("require('pdf-to-img')"));
   const pdfPath = path.join(os.tmpdir(), `page6-map-${process.pid}.pdf`);
   const doc = new PDFDocument();
   const output = fs.createWriteStream(pdfPath);
