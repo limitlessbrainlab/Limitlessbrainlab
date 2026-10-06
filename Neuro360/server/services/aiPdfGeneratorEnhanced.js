@@ -379,7 +379,7 @@ class EnhancedAIPdfGenerator {
     yPos += infoBoxHeight + 35;
 
     // === DETAILED PARAMETER SECTIONS ===
-    const parameters = (this.algorithmResults.parameters || []).filter(p => !['Learning', 'Creativity'].includes(p.name));
+    const parameters = this.algorithmResults.parameters || [];
 
     parameters.forEach((param, index) => {
       // Check if we need a new page
@@ -715,7 +715,7 @@ class EnhancedAIPdfGenerator {
         return this.getDefaultInsights();
       }
 
-      const parametersText = this.algorithmResults.parameters.filter(p => !['Learning', 'Creativity'].includes(p.name)).map((param, index) => {
+      const parametersText = this.algorithmResults.parameters.map((param, index) => {
         return `${index + 1}. ${param.name}: ${param.score}/${param.maxScore} (${param.classification})`;
       }).join('\n');
 
@@ -772,7 +772,7 @@ Your comprehensive QEEG analysis reveals an overall brain health score of ${over
 
 INDIVIDUAL PARAMETER ANALYSIS
 
-${this.algorithmResults.parameters.filter(p => !['Learning', 'Creativity'].includes(p.name)).map((param, i) => {
+${this.algorithmResults.parameters.map((param, i) => {
   return `${i + 1}. ${param.name} - ${param.classification} Performance
    Score: ${param.score}/${param.maxScore}
    Clinical Observation: ${this.getParameterInsight(param)}`;

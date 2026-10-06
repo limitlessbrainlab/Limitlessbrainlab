@@ -556,13 +556,9 @@ function buildReportDataFromNeuroSenseMd(mdText, patient = {}, algorithmResults 
     icon: p.icon,
   }));
 
-  // The uploaded NeuroSense report already prints the authoritative overall
-  // percentage. Recomputing it here changed valid source scores (for example,
-  // 72 became 53 after Stress/Burnout inversion). Retain the old derivation
-  // only for legacy reports that do not print an overall percentage.
-  const overall = Number.isFinite(parsed.overall.percentage)
-    ? parsed.overall.percentage
-    : overallFromBars(bars);
+  // Overall = average of the 7 parameter percentages, with Stress & Burnout
+  // inverted (100 - percent) so low stress/burnout counts as high health.
+  const overall = overallFromBars(bars);
   const findBar = (key) => bars.find((b) => b.key === key)
     || { key, label: key, percent: 0, status: 'N/A', icon: '' };
 

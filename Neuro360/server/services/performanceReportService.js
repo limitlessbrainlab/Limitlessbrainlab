@@ -84,7 +84,7 @@ const NARRATIVE_SCHEMA = `{
   "brainwaveCards": [ { "title": "short", "body": "1-2 sentences" } ],
   "performance": { "cognition": "1-2 sentences", "stress": "1-2 sentences", "focus": "1-2 sentences", "burnout": "1-2 sentences" },
   "performanceFeature": "A short paragraph (3-4 sentences) on the single most clinically interesting finding.",
-  "innerBandwidth": { "emotional": "1-2 sentences" },
+  "innerBandwidth": { "emotional": "1-2 sentences", "learning": "1-2 sentences", "creativity": "1-2 sentences", "link": "1-2 sentences on how the three move together." },
   "deepDive": { "alphaPeak": "1 sentence", "arousal": "1 sentence", "relaxation": "1 sentence", "regeneration": "1 sentence", "frontalAsymmetry": "1 sentence", "daytimeDelta": "1 sentence", "readingPattern": "1-2 sentences on the overall pattern." },
   "plan": { "intro": "1-2 sentences framing the 30-day plan.", "after30": "1-2 sentences on which markers shift first." },
   "closing": "2-3 sentences, encouraging and forward-looking."
@@ -99,9 +99,6 @@ function buildNarrativePrompt(reportData, learnedExamples = []) {
 
   return `You are a clinical neuroscience writer producing the narrative prose for a
 "Neuro Performance Report" that a DOCTOR will read alongside a patient.
-
-Present Emotional Regulation, but do not write separate Learning or Creativity markers, sections, or advice. The seven underlying calculated values remain unchanged.
-Stress and Burnout & Fatigue are severity/load measures: lower values are favourable. Never rename them as “Stress Regulation” or “Burnout Resistance”, and never interpret a higher value as better.
 
 Below is a REFERENCE EXAMPLE showing exactly the style, tone, and level of detail required.
 This is from a real Sagar Ahiwale Neuro Performance Report. Match this style exactly —
@@ -249,8 +246,8 @@ Rules:
   "Overall Brain Health Score: 14/21 (67%)"). Copy the numerator into "score"
   and the percentage into "percentage" exactly as printed. If absent, use null.
 - "markers" are the seven performance percentages exactly as shown on the report's
-  snapshot/markers pages (e.g. "Stress 55%", "Cognition 67%", "Burnout & Fatigue
-  90%", "Emotional Regulation 33%"). Copy the number shown — do NOT invert
+  snapshot/markers pages (e.g. "Stress Regulation 100%", "Cognition 67%", "Burnout
+  Resistance 67%", "Emotional Regulation 33%"). Copy the number shown — do NOT invert
   or recompute. If the report shows a 0-3 score instead of a %, convert 3→100, 2→67,
   1→33, 0→0.
 - "deepDive" values are raw numbers wherever they appear (Alpha Peak in Hz, Arousal,

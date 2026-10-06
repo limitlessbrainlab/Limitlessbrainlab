@@ -55,7 +55,6 @@ async function extractPageImage(pdfPath) {
         return imageBuffer;
       }
     }
-
     console.error('   PDF has only ' + pageNum + ' page(s), need at least 2');
     return null;
 
@@ -359,7 +358,6 @@ function drawConditionPanel(doc, x, y, w, h, title, imagePath) {
       var scale = Math.min(imgW / image.width, imgH / (image.height * 0.74));
       var renderW = image.width * scale;
       var renderH = image.height * scale;
-
       doc.save();
       doc.rect(x + 5, imgY, imgW, imgH).clip();
       doc.image(imagePath, x + 5 + (imgW - renderW) / 2, imgY - renderH * 0.18, {

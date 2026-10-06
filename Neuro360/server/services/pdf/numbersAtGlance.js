@@ -67,7 +67,7 @@ function generateNumbersAtGlance(doc, qeegData, algorithmResults) {
   yPos += 20;
 
   // Generate brain type pattern string (e.g., "Cognition M · Stress L · Focus L...")
-  const parameters = (algorithmResults.parameters || []).filter(p => !['Learning', 'Creativity'].includes(p.name));
+  const parameters = algorithmResults.parameters || [];
   const brainTypePattern = parameters.map(param => {
     const initial = param.classification.charAt(0); // H, M, or L
     return `${param.name} ${initial}`;
@@ -115,7 +115,7 @@ function drawAlgorithmResultsTable(doc, algorithmResults, x, yPos) {
   const tableWidth = LAYOUT.contentWidth - 30;
   const rowHeight = 60; // Increased for 3-line format
 
-  const parameters = (algorithmResults.parameters || []).filter(p => !['Learning', 'Creativity'].includes(p.name));
+  const parameters = algorithmResults.parameters || [];
 
   // Draw each parameter in the new 3-line format
   parameters.forEach((param, index) => {

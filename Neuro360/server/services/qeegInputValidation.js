@@ -7,9 +7,7 @@ const conditionIn = (text) => {
   const match = String(text).match(/Condition:\s*Eyes\s*(Open|Closed)/i);
   return match && `Eyes ${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()}`;
 };
-
 const fileHash = (filePath) => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
-
 const canonicalQeegFileName = (condition, originalName) =>
   `${String(condition).replace(/\s+/g, '')}${path.extname(originalName).toLowerCase() || '.pdf'}`;
 

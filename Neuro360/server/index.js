@@ -7624,9 +7624,8 @@ app.post('/api/send-report-email', async (req, res) => {
     // NeuroSense Report (QEEG) uses its own template/subject; everything else keeps the
     // existing Neuro Performance Report template unchanged.
     const isNeuroSense = reportType === 'neurosense';
-    const isWNeuro = reportType === 'w_neuro';
-    const reportLabel = isWNeuro ? 'W Neuro Report' : isNeuroSense ? 'NeuroSense Report' : 'Neuro Performance Report';
-    const buildReportHtml = isWNeuro || isNeuroSense ? getNeuroSenseReportEmailHtml : getReportEmailHtml;
+    const reportLabel = isNeuroSense ? 'NeuroSense Report' : 'Neuro Performance Report';
+    const buildReportHtml = isNeuroSense ? getNeuroSenseReportEmailHtml : getReportEmailHtml;
 
     const reportHtmlPatient = buildReportHtml({ isClinic: false, patientName, clinicName, reportUrl, loginUrl: patientLoginUrl, generatedAt });
     const reportHtmlClinic = buildReportHtml({ isClinic: true, patientName, clinicName, reportUrl, loginUrl: clinicLoginUrl, generatedAt });

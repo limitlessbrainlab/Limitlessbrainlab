@@ -228,7 +228,7 @@ function renderReportHtml(reportData, narrative = {}) {
   // Brainwave relative-power distribution (fixed band palette).
   const profileRows = [
     waveRow('Delta', '0.5–4 Hz · Deep rest', fmt(prof.delta, '%'), prof.delta, '#2b6cb0'),
-    waveRow('Theta', '4–7 Hz · Slow-wave activity', fmt(prof.theta, '%'), prof.theta, '#3b82f6'),
+    waveRow('Theta', '4–7 Hz · Creativity', fmt(prof.theta, '%'), prof.theta, '#3b82f6'),
     waveRow('Alpha', '8–12 Hz · Calm focus', `Peak ${fmt(prof.alphaPeakHz, 'Hz')}`, prof.alpha, '#14b8c4'),
     waveRow('Beta', '13–30 Hz · Active thinking', fmt(prof.beta, '%'), prof.beta, '#94a3c8'),
     waveRow('Hi-Beta', '20–30 Hz · Vigilance', fmt(prof.hiBeta, '%'), prof.hiBeta, '#94a3c8'),
@@ -265,6 +265,12 @@ function renderReportHtml(reportData, narrative = {}) {
     'Slow-exhale breathing (longer out than in) calms the nervous system.',
     'Response-gap training — pause before reacting; reframe the situation.',
     'Limit news / social media in the first and last hour of the day.',
+  ];
+  const learningAdvice = n.innerBandwidth?.learningAdvice || [
+    'Use spaced repetition — review material across days, not in one block.',
+    'Schedule short "no-input" breaks — ideas surface when the brain is idle.',
+    'Change your environment once a week for fresh thinking.',
+    'Separate brainstorming from editing — never do both at once.',
   ];
 
   // Deep-dive metric descriptions (page 10) — narrative override or default.
@@ -446,13 +452,13 @@ function renderReportHtml(reportData, narrative = {}) {
       <div class="toc-row"><div class="toc-num">3</div><div class="t">Your Brain Type — the NeuroSense five-type framework</div><div class="pg">PAGE 5–6</div></div>
       <div class="toc-row"><div class="toc-num">4</div><div class="t">Type-Specific Strategy Guide</div><div class="pg">PAGE 7</div></div>
       <div class="toc-row"><div class="toc-num">5</div><div class="t">Performance Markers — Cognition, Focus, Stress, Burnout</div><div class="pg">PAGE 8</div></div>
-      <div class="toc-row"><div class="toc-num">6</div><div class="t">Emotional Regulation</div><div class="pg">PAGE 9</div></div>
+      <div class="toc-row"><div class="toc-num">6</div><div class="t">Emotional Regulation, Learning &amp; Creativity</div><div class="pg">PAGE 9</div></div>
       <div class="toc-row"><div class="toc-num">7</div><div class="t">Deep-Dive Neuro-Metrics</div><div class="pg">PAGE 10</div></div>
       <div class="toc-row"><div class="toc-num">8</div><div class="t">Your 30-Day Brain Optimization Plan</div><div class="pg">PAGE 11</div></div>
     </div>
     <div class="card mt24" style="background:#f8fafc;">
       <div class="mini-title">How to read this report</div>
-      <p class="mini-body">Each metric is shown as a percentile or raw EEG value. Stress and burnout are severity markers: lower values are favourable, while the other markers retain their NeuroSense meanings. Look for the colored status badges on every metric card. Your Brain Type on page 5 is the lens through which every score should be interpreted.</p>
+      <p class="mini-body">Each metric is shown as a percentile or raw EEG value. Higher isn't always better — for stress regulation, higher means calmer. Look for the colored status badges (Excellent → Needs Attention) on every metric card. Your Brain Type on page 5 is the lens through which every score should be interpreted.</p>
     </div>
     ${pageFooter('Page 2 • Welcome')}
   </section>
@@ -467,9 +473,9 @@ function renderReportHtml(reportData, narrative = {}) {
       <div class="score-card">
         <div class="lbl">Overall Brain Performance</div>
         <div class="big">${d.overall}<span style="font-size:22px;opacity:.7;">/100</span></div>
-        <p style="font-size:11px;opacity:.92;margin-top:14px;line-height:1.55;">${esc(n.overallSummary || 'A composite from the full qEEG calculation. Recovery habits can help move the visible markers over time.')}</p>
+        <p style="font-size:11px;opacity:.92;margin-top:14px;line-height:1.55;">${esc(n.overallSummary || 'A composite of your seven performance markers. The growth zones are where small, consistent daily practices move the numbers most — recovery-first habits shift these fastest.')}</p>
       </div>
-      <div>${d.bars.filter(b => !['learning', 'creativity'].includes(b.key)).map(snapCard).join('')}</div>
+      <div>${d.bars.map(snapCard).join('')}</div>
     </div>
     <h3 class="h3">Your three biggest signals</h3>
     <div class="signals">
@@ -569,20 +575,24 @@ function renderReportHtml(reportData, narrative = {}) {
     ${pageFooter('Page 8 • Cognition & Stress')}
   </section>
 
-  <!-- PAGE 9 — EMOTIONAL REGULATION -->
+  <!-- PAGE 9 — EMOTION / LEARNING / CREATIVITY -->
   <section class="page page-9">
-    ${pageHeader('05', 'EMOTIONAL REGULATION')}
-    <div class="eyebrow">Section 5 — Emotional Regulation</div>
-    <h2>Emotional <span class="hl">regulation</span></h2>
-    <p class="lead">How readily your nervous system returns to a steady state after pressure.</p>
+    ${pageHeader('05', 'INNER BANDWIDTH')}
+    <div class="eyebrow">Section 5 — Inner Bandwidth</div>
+    <h2>Emotion, learning &amp; <span class="hl">creativity</span></h2>
+    <p class="lead">When the nervous system is busy scanning for threat and running on empty, it has less bandwidth left for emotional flexibility, divergent thinking and the open-mode states that drive creativity. This is exactly the pattern your data shows — and it's also the most reversible.</p>
     <div class="grid3 mt18">
       ${innerCard('💗 Emotional Regulation', d.innerBandwidth.emotional, n.innerBandwidth?.emotional)}
+      ${innerCard('📚 Learning Capacity', d.innerBandwidth.learning, n.innerBandwidth?.learning)}
+      ${innerCard('🎨 Creativity', d.innerBandwidth.creativity, n.innerBandwidth?.creativity)}
     </div>
+    <div class="inner-bandwidth-callout">${calloutBox('The hidden link between these three', n.innerBandwidth?.link || 'Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise — usually together. That\'s why the plan focuses on calming and recovering, not on adding more.', 'info')}</div>
     <h3 class="h3">For your type — Type ${bt.id} specific advice</h3>
     <div class="grid2">
       <div class="advice-col"><h5>Emotional regulation</h5><ul>${emotionAdvice.map((i) => `<li><span class="dot"></span><span>${esc(i)}</span></li>`).join('')}</ul></div>
+      <div class="advice-col"><h5>Learning &amp; creativity</h5><ul>${learningAdvice.map((i) => `<li><span class="dot"></span><span>${esc(i)}</span></li>`).join('')}</ul></div>
     </div>
-    ${pageFooter('Page 9 • Emotional Regulation')}
+    ${pageFooter('Page 9 • Inner Bandwidth')}
   </section>
 
   <!-- PAGE 10 — DEEP-DIVE METRICS -->

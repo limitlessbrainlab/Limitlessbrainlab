@@ -12,7 +12,8 @@ const templateManager = require('../services/pdf/templateManager');
 const AIPdfGenerator = require('../services/aiPdfGenerator');
 const SupabaseStorage = require('../services/supabaseStorage');
 const { createRoutedClient } = require('../dbRouter');
-const { generateWNeuroPdf } = require('../services/wNeuroPdfGenerator');
+const reportJobLock = require('../services/reportJobLock');
+const { getReportUploadDir, needsInstanceReportLock } = require('../services/reportRuntime');
 const { validateQeegInputs, canonicalQeegFileName } = require('../services/qeegInputValidation');
 
 // NEW: Gemini AI Service for report generation
@@ -53,7 +54,7 @@ const router = express.Router();
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, '../uploads');
+    const uploadDir = getReportUploadDir();
     // Ensure upload directory exists
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -86,10 +87,35 @@ const upload = multer({
  * POST /api/qeeg/process
  * Process QEEG files and calculate 7 brain health parameters
  */
-router.post('/process', upload.fields([
+const reportLockMiddleware = (req, res, next) => {
+  if (!needsInstanceReportLock()) return next();
+  // ponytail: one job per instance; use a distributed queue if Render is scaled horizontally.
+  if (!reportJobLock.acquire()) {
+    return res.status(503).json({
+      error: true,
+      code: 'REPORT_PROCESSING_BUSY',
+      message: 'Another NeuroSense report is being generated. Please wait and try again.'
+    });
+  }
+
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      reportJobLock.release();
+    }
+  };
+  res.once('finish', release);
+  res.once('close', release);
+  next();
+};
+
+const parseQeegUploads = upload.fields([
   { name: 'eyesOpen', maxCount: 1 },
   { name: 'eyesClosed', maxCount: 1 }
-]), async (req, res) => {
+]);
+
+async function processQeegRequest(req, res) {
   let eyesOpenFile = null;
   let eyesClosedFile = null;
   const processingStartTime = Date.now();
@@ -117,12 +143,10 @@ router.post('/process', upload.fields([
         debug: progressLog
       });
     }
+
     eyesOpenFile = files.eyesOpen[0];
     eyesClosedFile = files.eyesClosed[0];
     await validateQeegInputs(eyesOpenFile.path, eyesClosedFile.path);
-    if (req.body.reportMode && !['neurosense', 'claude', 'w_neuro'].includes(req.body.reportMode)) {
-      throw Object.assign(new Error('Invalid report mode'), { status: 400 });
-    }
 
     logProgress('FILE_UPLOAD', `Eyes Open received: ${eyesOpenFile.originalname} (${(eyesOpenFile.size / 1024).toFixed(2)} KB)`, '📁');
     logProgress('FILE_UPLOAD', `Eyes Closed received: ${eyesClosedFile.originalname} (${(eyesClosedFile.size / 1024).toFixed(2)} KB)`, '📁');
@@ -490,8 +514,7 @@ router.post('/process', upload.fields([
         profession: patientOccupation,
         patientId: patientId,
         clinic: clinicName,
-        clinicLogoPath,
-        assessmentDate: req.body.assessmentDate || null
+        clinicLogoPath
       };
 
       // Prepare algorithm results for PDF
@@ -512,9 +535,8 @@ router.post('/process', upload.fields([
       const timestamp = Date.now();
       const sanitizedName = (patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const sanitizedClinic = (clinicName || 'general').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const isWNeuro = req.body.reportMode === 'w_neuro';
-      pdfFilename = `${isWNeuro ? 'w-neuro-report' : 'neurosense-report'}-${sanitizedName}-${timestamp}.pdf`;
-      const uploadsDir = path.join(__dirname, '../uploads');
+      pdfFilename = `neurosense-report-${sanitizedName}-${timestamp}.pdf`;
+      const uploadsDir = getReportUploadDir();
       const pdfOutputPath = path.join(uploadsDir, pdfFilename);
 
       // Clinic-wise folder path for Supabase
@@ -541,11 +563,7 @@ router.post('/process', upload.fields([
       // AI PDF GENERATOR - Uses Gemini AI
       const USE_AI_PDF_GENERATOR = true; // Set to false to use basic fallback
 
-      if (isWNeuro) {
-        pdfGenerator = { generateReport: (output) => generateWNeuroPdf(output, pdfPatientData, results, qeegData, {
-          eyesOpen: eyesOpenFile?.path, eyesClosed: eyesClosedFile?.path
-        }) };
-      } else if (USE_AI_PDF_GENERATOR && GeminiPdfGenerator) {
+      if (USE_AI_PDF_GENERATOR && GeminiPdfGenerator) {
         console.log('\n🤖 === USING AI PDF GENERATOR (Gemini) ===');
         console.log('   Engine: Google Gemini + PDFKit');
         console.log('   Patient:', pdfPatientData.name);
@@ -643,7 +661,6 @@ router.post('/process', upload.fields([
 
       // Set pdfUrl to null so frontend knows PDF failed
       pdfUrl = null;
-      if (req.body.reportMode === 'w_neuro') throw pdfError;
 
       // Don't fail the whole request if PDF fails - processing still succeeded
       console.log('⚠️ Continuing without PDF - processing succeeded');
@@ -715,6 +732,11 @@ router.post('/process', upload.fields([
         processedAt: new Date().toISOString(),
         dataType: 'raw', // Using RAW power calculator (as per specification)
         results: results.parameters,
+        canonicalResults: {
+          parameters: results.parameters,
+          overallScore: results.overallScore
+        },
+        qeegData,
         overallScore: results.overallScore,
         maxScore: 21,
         pdfUrl: pdfUrl,
@@ -770,7 +792,7 @@ router.post('/process', upload.fields([
     }
 
     // Categorize errors for better user feedback
-    let statusCode = error.status || 500;
+    let statusCode = 500;
     let userMessage = error.message;
 
     // Check for Gemini quota error in error message
@@ -843,7 +865,9 @@ router.post('/process', upload.fields([
       } : undefined
     });
   }
-});
+}
+
+router.post('/process', reportLockMiddleware, parseQeegUploads, processQeegRequest);
 
 /**
  * POST /api/qeeg/generate-pdf
@@ -1558,3 +1582,4 @@ router.post('/replace-logo-download', upload.single('document'), async (req, res
 });
 
 module.exports = router;
+module.exports.processQeegRequest = processQeegRequest;
