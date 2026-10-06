@@ -1472,6 +1472,7 @@ class GeminiPdfGenerator {
       'RELAXATION SCORE':              { min: 0,  max: 25,  unit: '',   steps: 5, normalMin: 8, normalMax: 25 },   // > 8 is healthy
       'REGENERATION AND REPAIR SCORE': { min: 0,  max: 100, unit: '%',  steps: 5, normalMin: 30, normalMax: 100 }, // > 30% is healthy
       'ASYMMETRY EYE OPEN':            { min: -5, max: 5,   unit: '',   steps: 5, normalMin: -5, normalMax: 1 },   // < 1 is normal
+      'ALPHA ASYMMETRY':               { min: -5, max: 5,   unit: '',   steps: 5, normalMin: -5, normalMax: 1 },   // < 1 is normal
     };
 
     for (const sp of subParams) {
