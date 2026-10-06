@@ -8626,6 +8626,7 @@ const PatientDashboard = () => {
             { num: 14, title: 'BETA MEDITATION — FOCUS & ATTENTION', embedUrl: driveEmbed('1Y584iFTo4jc_HdqwfK7oqaBMv6mMOqfm'), thumb: 'https://drive.google.com/thumbnail?id=1MdqqjcYi4hi4Jq2R2QWG4AyboCCEEsgi&sz=w1000', isFree: true },
             { num: 15, title: 'ALPHA MEDITATION — RELAXATION AND CALM', embedUrl: driveEmbed('1zUDQF-fKTVpFS8v1CwHKiCpO0-MnqAra'), thumb: 'https://drive.google.com/thumbnail?id=1JQBI68OvyWr-OXNdg8HqKpQfyLTCEmMW&sz=w1000', isFree: true },
             { num: 16, title: 'YOGA NIDRA — THE ULTIMATE WHOLE BRAIN SYNCHRONIZATION', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/yoga-nidra.webp', isFree: true },
+            { num: 17, title: 'ADVANCED YOGA NIDRA', embedUrl: driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB'), thumb: 'https://drive.google.com/thumbnail?id=1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB&sz=w1000', isFree: true },
           ];
           const featured = meditationVideos[0];
           const rest = meditationVideos.slice(1);
