@@ -1458,7 +1458,8 @@ class GeminiPdfGenerator {
       'FOCUS AND ATTENTION': 'Focus Score (Theta:Beta)',
       'RELAXATION SCORE': 'Relaxation Score',
       'REGENERATION AND REPAIR SCORE': 'Regeneration (Alpha Modulation)',
-      'ASYMMETRY EYE OPEN': 'Alpha Asymmetry (Frontal)'
+      'ASYMMETRY EYE OPEN': 'Alpha Asymmetry (Frontal)',
+      'ALPHA ASYMMETRY': 'Alpha Asymmetry (Frontal)'
     };
 
     // Clinical scale ranges for each sub-parameter (min-max for pill bar positioning)
@@ -1470,7 +1471,7 @@ class GeminiPdfGenerator {
       'FOCUS AND ATTENTION':           { min: 0,  max: 4,   unit: '',   steps: 4, normalMin: 0, normalMax: 1.5 },  // < 1.5 is normal
       'RELAXATION SCORE':              { min: 0,  max: 25,  unit: '',   steps: 5, normalMin: 8, normalMax: 25 },   // > 8 is healthy
       'REGENERATION AND REPAIR SCORE': { min: 0,  max: 100, unit: '%',  steps: 5, normalMin: 30, normalMax: 100 }, // > 30% is healthy
-      'ASYMMETRY EYE OPEN':            { min: 0,  max: 50,  unit: '',   steps: 5, normalMin: 0, normalMax: 1 },    // < 1 is normal
+      'ASYMMETRY EYE OPEN':            { min: -5, max: 5,   unit: '',   steps: 5, normalMin: -5, normalMax: 1 },   // < 1 is normal
     };
 
     for (const sp of subParams) {
@@ -1498,11 +1499,11 @@ class GeminiPdfGenerator {
 
         const scale = subParamScales[sp.title];
         if (numericValue !== null && scale) {
-          // Dynamically expand scale max if value exceeds it
+          const dynamicMin = numericValue < scale.min ? Math.floor(numericValue * 1.1) : scale.min;
           const dynamicMax = numericValue > scale.max ? Math.ceil(numericValue * 1.1) : scale.max;
-          sp.pillBarScore = Math.max(0, Math.min(100, Math.round(((numericValue - scale.min) / (dynamicMax - scale.min)) * 100)));
-          sp.pillBarScale = { min: scale.min, max: dynamicMax, value: numericValue, unit: scale.unit || '', steps: scale.steps || 5, normalMin: scale.normalMin, normalMax: scale.normalMax };
-          console.log(`      Pill bar: value=${numericValue}, scale=[${scale.min}-${dynamicMax}] → ${sp.pillBarScore}%`);
+          sp.pillBarScore = Math.max(0, Math.min(100, Math.round(((numericValue - dynamicMin) / (dynamicMax - dynamicMin)) * 100)));
+          sp.pillBarScale = { min: dynamicMin, max: dynamicMax, value: numericValue, unit: scale.unit || '', steps: scale.steps || 5, normalMin: scale.normalMin, normalMax: scale.normalMax };
+          console.log(`      Pill bar: value=${numericValue}, scale=[${dynamicMin}-${dynamicMax}] → ${sp.pillBarScore}%`);
         } else if (matchedSub.score !== undefined) {
           // Fallback: use binary score if no numeric value available
           sp.pillBarScore = matchedSub.score === 1 ? 75 : 25;
