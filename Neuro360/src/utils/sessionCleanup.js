@@ -36,7 +36,7 @@ export async function clearAllAndSignOut({ preserveRemembered = true } = {}) {
     if (remembered !== null) localStorage.setItem(REMEMBER_KEY, remembered);
   } catch (e) { /* ignore */ }
   try { sessionStorage.clear(); } catch (e) { /* ignore */ }
-  void wipeBrowserCaches();
+  await wipeBrowserCaches();
 }
 
 // Clear stale cached app DATA but keep the (just-established) auth session. For login.

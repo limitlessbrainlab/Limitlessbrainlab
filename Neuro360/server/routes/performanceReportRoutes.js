@@ -9,6 +9,7 @@ const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('
 const { buildNeuroSenseMarkdown } = require('../services/neurosenseMarkdown');
 const { generateBrainReportPdf, engineWarmupRequired } = require('../services/performanceReportBuilder');
 const SupabaseStorage = require('../services/supabaseStorage');
+const { createRoutedClient } = require('../dbRouter');
 
 const router = express.Router();
 
@@ -57,6 +58,38 @@ const STAGE_LABELS = {
   saving: 'Saving your report…',
 };
 const STAGE_PCT = { engine: 5, reading: 10, extract: 25, build: 55, narrative: 60, render: 88, saving: 95 };
+const IDEMPOTENCY_KEY = /^performance:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+async function claimReportGeneration(key) {
+  const supabase = createRoutedClient();
+  const { error } = await supabase.from('report_generation_jobs').insert({ idempotency_key: key });
+  if (!error) return { owner: true };
+  if (error.code !== '23505') throw error;
+
+  const { data, error: lookupError } = await supabase
+    .from('report_generation_jobs')
+    .select('status, report_url, report_id')
+    .eq('idempotency_key', key)
+    .single();
+  if (lookupError) throw lookupError;
+  return { owner: false, job: data };
+}
+
+async function waitForReportGeneration(key) {
+  const supabase = createRoutedClient();
+  // ponytail: 2s polling is sufficient for a rare duplicate request; use Realtime if duplicates become frequent.
+  for (let attempt = 0; attempt < 600; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const { data, error } = await supabase
+      .from('report_generation_jobs')
+      .select('status, report_url, report_id')
+      .eq('idempotency_key', key)
+      .single();
+    if (error || !data) throw new Error('The original report generation failed. Please try again.');
+    if (data.status === 'completed') return data;
+  }
+  throw new Error('The existing report is still being generated. Please try again shortly.');
+}
 
 // The SSE `error` frame's message is shown to the user as-is by the frontend,
 // so map low-level renderer/Chrome failures to plain language here.
@@ -76,10 +109,14 @@ function friendlyPipelineError(message) {
 
 router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
   const tempPath = req.file?.path;
+  const idempotencyKey = String(req.body?.idempotencyKey || '');
 
   // The "no file" guard stays plain JSON — emitted BEFORE we switch to SSE.
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'A PDF file (field "pdf") is required.' });
+  }
+  if (!IDEMPOTENCY_KEY.test(idempotencyKey)) {
+    return res.status(400).json({ success: false, message: 'A saved report result is required.' });
   }
 
   // Switch the response to Server-Sent Events so the frontend can show live,
@@ -110,9 +147,18 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
     try { res.write(`: ping\n\n`); } catch (_) { /* ignore */ }
   }, 15000);
   let clientGone = false;
+  let ownsGeneration = false;
   req.on('close', () => { clientGone = true; clearInterval(heartbeat); });
 
   try {
+    const claim = await claimReportGeneration(idempotencyKey);
+    ownsGeneration = claim.owner;
+    if (!claim.owner) {
+      const existing = claim.job.status === 'completed' ? claim.job : await waitForReportGeneration(idempotencyKey);
+      send('done', { success: true, pdfUrl: existing.report_url, reportId: existing.report_id });
+      return;
+    }
+
     // Chromium renderer only: warm the engine FIRST — before spending minutes
     // of Gemini work — so the PDF render never starts from a cold install/
     // launch. Single-flight: instant once the boot pre-warm has succeeded.
@@ -238,12 +284,18 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
       if (!uploadResult || !uploadResult.url) {
         throw new Error('Supabase upload returned an invalid result');
       }
+      const { error: completionError } = await createRoutedClient()
+        .from('report_generation_jobs')
+        .update({ status: 'completed', report_url: uploadResult.url, report_id: reportData.patient.reportId, completed_at: new Date().toISOString() })
+        .eq('idempotency_key', idempotencyKey);
+      if (completionError) throw completionError;
       console.log('🔗 Claude Report uploaded to Supabase:', uploadResult.url);
       send('done', { success: true, pdfUrl: uploadResult.url, reportId: reportData.patient.reportId });
     } finally {
       fs.unlink(outPath, () => {});
     }
   } catch (error) {
+    if (ownsGeneration) await createRoutedClient().from('report_generation_jobs').delete().eq('idempotency_key', idempotencyKey);
     console.error('[Performance Report] Error:', error.message);
     postLesson('report-generation', error.message,
       `Report generation failed: "${error.message}". Investigate root cause and prevent recurrence.`);

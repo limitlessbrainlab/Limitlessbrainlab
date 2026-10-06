@@ -455,7 +455,7 @@ class GeminiPdfGenerator {
       // Track expected pages to detect unwanted blank pages
       const expectedPages = [
         'Cover', 'Introduction', 'Congratulations', 'Brainwave Profiles',
-        'Brain Markers', 'Numbers at a Glance', 'Radar Chart',
+        'Brain Markers', 'Numbers at a Glance',
         'Cognition Gauge', 'Cognition Details',
         'Param Gauge 1', 'Param Details 1', 'Param Gauge 2', 'Param Details 2',
         'Param Gauge 3', 'Param Details 3', 'Param Gauge 4', 'Param Details 4',
@@ -684,7 +684,8 @@ class GeminiPdfGenerator {
    */
   async generatePDFContent(doc) {
     const reportData = this.geminiReportData;
-    const params = reportData.parameters || [];
+    // Keep all seven calculated values in reportData; only five are presented.
+    const params = (reportData.parameters || []).filter(p => !['learning', 'creativity'].includes(String(p.name || '').toLowerCase()));
 
     console.log('\n📄 === Generating PDF Content ===');
     console.log('   Parameters count:', params.length);
@@ -877,209 +878,7 @@ class GeminiPdfGenerator {
     }
     this.addSimpleFooter(doc, 6);
 
-    // ========== RADAR CHART PAGE (Page7.png background + PDFKit radar) ==========
-    doc.addPage();
-    console.log('   📄 Page 7: Radar Chart (new design)');
-    try {
-      const PAGE7_IMG = path.join(__dirname, '../../public/assets/Page7.png');
-      const LOGO_PATH_P7 = path.join(__dirname, '../../public/assets/Layer_1.png');
-      if (fs.existsSync(PAGE7_IMG)) {
-        doc.image(PAGE7_IMG, 0, 0, { width: 595.28, height: 841.89 });
-      }
-      if (this.clinicLogoPath && fs.existsSync(this.clinicLogoPath)) {
-        require('./pdf/pdfStyles').drawClinicLogo(doc, this.clinicLogoPath, 494, 12, 87.85, 59.58);
-      } else if (fs.existsSync(LOGO_PATH_P7)) {
-        doc.image(LOGO_PATH_P7, 494, 12, { fit: [87.85, 59.58], align: 'center', valign: 'center' });
-      }
-
-      // Radar chart helper (inline) — 3 discrete rings: Low (33.33%), Medium (66.67%), High (100%)
-      const drawRadarChart = (rdoc, chartX, chartY, chartW, chartH, labels, datasets, labelColors) => {
-        var cx = chartX + chartW / 2;
-        var cy = chartY + chartH / 2;
-        var maxR = Math.min(chartW, chartH) / 2 - 30;
-        var sides = labels.length;
-        var angleStep = (2 * Math.PI) / sides;
-        var startAngle = -Math.PI / 2;
-        function getPoint(index, value) {
-          var angle = startAngle + index * angleStep;
-          var r = (value / 100) * maxR;
-          return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
-        }
-        // Draw 3 grid rings: Low, Medium, High
-        var ringLevels = [
-          { value: 33.33, label: 'Low' },
-          { value: 66.67, label: 'Medium' },
-          { value: 100,   label: 'High' }
-        ];
-        ringLevels.forEach(function(ring) {
-          rdoc.save();
-          var first = getPoint(0, ring.value);
-          rdoc.moveTo(first.x, first.y);
-          for (var i = 1; i < sides; i++) { var p = getPoint(i, ring.value); rdoc.lineTo(p.x, p.y); }
-          rdoc.closePath().strokeColor('#666666').strokeOpacity(0.8).lineWidth(0.7).stroke();
-          rdoc.strokeOpacity(1); rdoc.restore();
-          // Draw ring label on the right side of the first axis (top)
-          var labelPoint = getPoint(0, ring.value);
-          rdoc.save();
-          rdoc.font('Helvetica').fontSize(6).fillColor('#888888')
-             .text(ring.label, labelPoint.x + 4, labelPoint.y - 3, { width: 40, lineBreak: false });
-          rdoc.restore();
-        });
-        // Draw axis lines from center to each vertex
-        for (var i = 0; i < sides; i++) {
-          var p = getPoint(i, 100);
-          rdoc.save(); rdoc.moveTo(cx, cy).lineTo(p.x, p.y).strokeColor('#666666').strokeOpacity(0.8).lineWidth(0.6).stroke(); rdoc.strokeOpacity(1); rdoc.restore();
-        }
-        // Draw data polygons
-        datasets.forEach(function(ds) {
-          rdoc.save();
-          var f0 = getPoint(0, ds.values[0]); rdoc.moveTo(f0.x, f0.y);
-          for (var i = 1; i < sides; i++) { var fp = getPoint(i, ds.values[i]); rdoc.lineTo(fp.x, fp.y); }
-          rdoc.closePath().fillColor(ds.color).fillOpacity(ds.fillOpacity).fill(); rdoc.fillOpacity(1); rdoc.restore();
-          rdoc.save();
-          var s0 = getPoint(0, ds.values[0]); rdoc.moveTo(s0.x, s0.y);
-          for (var i = 1; i < sides; i++) { var sp = getPoint(i, ds.values[i]); rdoc.lineTo(sp.x, sp.y); }
-          rdoc.closePath().strokeColor(ds.color).strokeOpacity(ds.strokeOpacity).lineWidth(ds.lineWidth).stroke(); rdoc.strokeOpacity(1); rdoc.restore();
-          // Data points (dots) — larger for visibility on snapped positions
-          for (var i = 0; i < sides; i++) { var dp = getPoint(i, ds.values[i]); rdoc.save(); rdoc.circle(dp.x, dp.y, 3.5).fillColor(ds.color).fill(); rdoc.restore(); }
-        });
-        // Draw parameter labels at each axis
-        for (var i = 0; i < sides; i++) {
-          var angle = startAngle + i * angleStep;
-          var labelR = maxR + 18;
-          var lx = cx + labelR * Math.cos(angle);
-          var ly = cy + labelR * Math.sin(angle);
-          var labelW = 80;
-          var align = 'center'; var xOffset = -labelW / 2;
-          if (Math.cos(angle) < -0.3) { align = 'right'; xOffset = -labelW; }
-          else if (Math.cos(angle) > 0.3) { align = 'left'; xOffset = 0; }
-          var labelColor = labelColors && labelColors[i] ? labelColors[i] : '#333333';
-          rdoc.save(); rdoc.font('Helvetica-Bold').fontSize(8).fillColor(labelColor)
-             .text(labels[i], lx + xOffset, ly - 5, { width: labelW, align: align, lineBreak: true }); rdoc.restore();
-        }
-      };
-
-      // Build radar chart from actual parameter scores
-      var radarLabels = ['Cognition', 'Burnout & Fatigue', 'Learning', 'Focus & Attention', 'Emotional Regulation', 'Stress', 'Creativity'];
-
-      // Map parameter names to radar label indices
-      // radarLabels order: [0:Cognition, 1:Burnout&Fatigue, 2:Learning, 3:Focus&Attention, 4:EmotionalRegulation, 5:Stress, 6:Creative]
-      var radarParamMap = {
-        'Cognition': 0,
-        'cognition': 0,
-        'BurnoutAndFatigue': 1,
-        'Burnout & Fatigue': 1,
-        'burnout & fatigue': 1,
-        'Brain Burn Out': 1,
-        'Learning': 2,
-        'learning': 2,
-        'FocusAndAttention': 3,
-        'Focus & Attention': 3,
-        'focus & attention': 3,
-        'Focus And Attention': 3,
-        'EmotionalRegulation': 4,
-        'Emotional Regulation': 4,
-        'emotional regulation': 4,
-        'Stress': 5,
-        'stress': 5,
-        'Stress & Mental Overload': 5,
-        'Creativity': 6,
-        'Creative': 6,
-        'creativity': 6,
-        'creative': 6
-      };
-
-      // Extract scores from params — use bucket/classification directly for 3 discrete levels
-      // Low ring=33.33, Medium ring=66.67, High ring=100
-      var dynamicValues = [33.33, 33.33, 33.33, 33.33, 33.33, 33.33, 33.33]; // defaults (Low)
-      var negativeIndices = [1, 5]; // indices for Burnout & Fatigue, Stress
-      var rawScores = [null, null, null, null, null, null, null]; // store raw score/maxScore
-      var hasData = false;
-
-      params.forEach(function(p) {
-        var paramKey = p.name;
-        var normalizedKey = paramKey.replace(/\s+/g, '').replace(/&/g, 'And');
-        var idx = radarParamMap[paramKey] !== undefined ? radarParamMap[paramKey] : radarParamMap[normalizedKey];
-
-        if (idx !== undefined && p.score !== undefined) {
-          var maxScore = p.maxScore || 3;
-          var bucket = (p.bucket || p.classification || '').toLowerCase().trim();
-          var pct;
-
-          // Map bucket/classification directly to radar ring position
-          // Standard: Low → 1st ring, Medium → 2nd ring, High → 3rd ring
-          // Stress/Burnout: Low → 1st ring, Mild/Moderate → 2nd ring, Severe → 3rd ring
-          if (bucket === 'low') {
-            pct = 33.33;   // 1st ring (innermost)
-          } else if (bucket === 'medium' || bucket === 'mild' || bucket === 'moderate') {
-            pct = 66.67;   // 2nd ring (middle)
-          } else if (bucket === 'high' || bucket === 'severe') {
-            pct = 100;     // 3rd ring (outermost)
-          } else {
-            // Fallback: compute from score if bucket is missing
-            var isInverted = (idx === 1 || idx === 5);
-            if (isInverted) {
-              // Stress/Burnout: score=RED count, 0=Low, 1-2=Medium, 3=High
-              if (p.score === 0) pct = 33.33;
-              else if (p.score <= 2) pct = 66.67;
-              else pct = 100;
-            } else {
-              // Standard: 0-1=Low, 2=Medium, 3=High
-              if (p.score >= maxScore) pct = 100;
-              else if (p.score >= maxScore - 1 && p.score > 0) pct = 66.67;
-              else pct = 33.33;
-            }
-          }
-
-          var levelName = pct === 100 ? 'High' : (pct === 66.67 ? 'Medium' : 'Low');
-          dynamicValues[idx] = pct;
-          rawScores[idx] = { score: p.score, maxScore: maxScore };
-          hasData = true;
-          console.log('   📊 Radar: ' + paramKey + ' → score=' + p.score + '/' + maxScore + ', bucket=' + bucket + ' → ' + levelName + ' (' + pct + '%)');
-        }
-      });
-
-      if (hasData) {
-        console.log('   ✅ Using dynamic radar values:', dynamicValues);
-      } else {
-        console.log('   ⚠️ No parameter data found, using defaults');
-      }
-
-      // Build label colors based on score and parameter type
-      // Positive params: 3/3=Green, 2/3=Yellow, 0-1/3=Red
-      // Negative params (Stress, Burnout): 0/3=Green, 1/3=Yellow, 2/3=Orange, 3/3=Red
-      var radarLabelColors = radarLabels.map(function(label, i) {
-        var rs = rawScores[i];
-        if (!rs) return '#333333'; // default gray if no data
-        var score = rs.score;
-        var maxScore = rs.maxScore;
-        var isNegative = negativeIndices.indexOf(i) !== -1;
-
-        if (isNegative) {
-          // Negative: lower score = better
-          if (score === 0) return '#38A169';       // Green - best
-          if (score === 1) return '#D69E2E';       // Yellow - mild
-          if (score === 2) return '#DD6B20';       // Orange - moderate
-          return '#E53E3E';                         // Red - severe
-        } else {
-          // Positive: higher score = better
-          if (score >= maxScore) return '#38A169';  // Green - high/best
-          if (score >= maxScore - 1 && score > 0) return '#D69E2E'; // Yellow - medium
-          return '#E53E3E';                         // Red - low
-        }
-      });
-
-      var radarData = [
-        { values: dynamicValues, color: '#0175FF', fillOpacity: 0.15, strokeOpacity: 1, lineWidth: 1.5 }
-      ];
-      // Vertically center: title ends ~130, footer at ~800, available=670, chartH=310
-      drawRadarChart(doc, 103, 290, 372, 310, radarLabels, radarData, radarLabelColors);
-    } catch (e) {
-      console.error('   ⚠️ Error generating Radar Chart page:', e.message);
-    }
-    this.addSimpleFooter(doc, 7);
-
-    // ========== Page 8: Cognition (dynamic from params) ==========
+    // ========== Page 7: Cognition (dynamic from params) ==========
     doc.addPage();
     console.log('   📄 Page 8: Cognition (new design)');
     try {
@@ -1088,9 +887,9 @@ class GeminiPdfGenerator {
     } catch (e) {
       console.error('   ⚠️ Error generating Cognition page:', e.message);
     }
-    this.addSimpleFooter(doc, 8);
+    this.addSimpleFooter(doc, 7);
 
-    // ========== Page 9: Cognition Details ==========
+    // ========== Page 8: Cognition Details ==========
     doc.addPage();
     console.log('   📄 Page 9: Cognition Details (new design)');
     try {
@@ -1098,19 +897,10 @@ class GeminiPdfGenerator {
     } catch (e) {
       console.error('   ⚠️ Error generating Cognition Details page:', e.message);
     }
-    this.addSimpleFooter(doc, 9);
+    this.addSimpleFooter(doc, 8);
 
-    // ========== PAGES 10+: Each parameter gets gauge page (new UI) + details page ==========
-    // Skip 'Cognition' since it's already on Pages 8-9
-    // Reorder: ensure Learning comes before Creativity
-    const learningIdx = params.findIndex(p => (p.name || '').replace(/\s+/g, '').replace(/&/g, 'And').toLowerCase() === 'learning');
-    const creativityIdx = params.findIndex(p => (p.name || '').replace(/\s+/g, '').replace(/&/g, 'And').toLowerCase() === 'creativity');
-    if (learningIdx > -1 && creativityIdx > -1 && learningIdx > creativityIdx) {
-      const [learningParam] = params.splice(learningIdx, 1);
-      params.splice(creativityIdx, 0, learningParam);
-    }
-
-    let pageNum = 10;
+    // ========== PAGES 9+: Remaining five-marker detail pages ==========
+    let pageNum = 9;
     for (let i = 0; i < params.length && i < 7; i++) {
       const p = params[i];
       const normalizedName = (p.name || '').replace(/\s+/g, '').replace(/&/g, 'And').toLowerCase();

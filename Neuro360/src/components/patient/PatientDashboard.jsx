@@ -436,8 +436,12 @@ const PatientDashboard = () => {
   useEffect(() => {
     if (!user?.id || !patientDbId) return;
     writePatientPortalCache(user.id, {
-      patientData, patientReports, algorithmResults, careProgramScores,
-      patientDbId, patientClinicId,
+      patientData,
+      patientReports,
+      algorithmResults,
+      careProgramScores,
+      patientDbId,
+      patientClinicId,
     });
   }, [user?.id, patientData, patientReports, algorithmResults, careProgramScores, patientDbId, patientClinicId]);
 
@@ -1408,7 +1412,8 @@ const PatientDashboard = () => {
       setScanCount(allMatched.length);
 
       if (latestAny) {
-        const isPerformanceMode = (latestAny.report_mode || latestAny.reportMode) === 'claude';
+        const reportMode = latestAny.report_mode || latestAny.reportMode;
+        const isPerformanceMode = reportMode === 'claude' || reportMode === 'w_neuro';
         setAlgorithmResults({
           data: scoresOf(latestAny),
           // ponytail: performance rows should update scores, not expose the hidden source NeuroSense PDF.
@@ -1929,7 +1934,7 @@ const PatientDashboard = () => {
   ];
 
   // Use dynamic or default brain parameters
-  const activeBrainParameters = brainParameters || defaultBrainParameters;
+  const activeBrainParameters = (brainParameters || defaultBrainParameters).filter(param => !['learning', 'creativity'].includes(String(param.id || param.name || '').toLowerCase()));
 
   // Sidebar menu items based on requirements
   const sidebarItems = [
@@ -1948,7 +1953,7 @@ const PatientDashboard = () => {
         icon: iconMap[param.icon] || Lightbulb
       }))
     },
-    { id: 'neurosense-reports', label: 'NeuroSense & Performance Reports', icon: Download },
+    { id: 'neurosense-reports', label: 'Brain Reports', icon: Download },
     { id: 'care-program', label: 'Customized Care Program', icon: ClipboardList },
     { id: 'ans-reset', label: 'Breath Reset Protocol', icon: RefreshCw },
     // { id: 'movers', label: 'MOVERS', icon: Activity },
@@ -2854,7 +2859,7 @@ const PatientDashboard = () => {
 
     const currentParameter = activeParameter ? brainParameters[activeParameter] : null;
     const displayParameter = hoveredParameter ? brainParameters[hoveredParameter] : currentParameter;
-    const brainParameterList = Object.values(brainParameters);
+    const brainParameterList = Object.values(brainParameters).filter(param => !['learning', 'creativity'].includes(param.id));
 
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -2957,24 +2962,6 @@ const PatientDashboard = () => {
                     }`}>Emotional Regulation</span>
                   </button>
 
-                  {/* Learning - ON the GREEN/TEAL area (middle of brain) */}
-                  <button
-                    onClick={() => setActiveParameter(activeParameter === 'learning' ? null : 'learning')}
-                    onMouseEnter={() => setHoveredParameter('learning')}
-                    onMouseLeave={() => setHoveredParameter(null)}
-                    className={`absolute flex flex-col items-center justify-center transition-all duration-300 cursor-pointer group ${
-                      activeParameter === 'learning' ? 'scale-125 z-20' : 'hover:scale-110 z-10'
-                    }`}
-                    style={{ top: '46%', left: '52%' }}
-                  >
-                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/60 ${
-                      activeParameter === 'learning' ? 'ring-4 ring-emerald-400/50 animate-pulse' : 'group-hover:ring-2 group-hover:ring-emerald-400/40'
-                    }`} />
-                    <span className={`mt-1 text-[9px] sm:text-xs font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] whitespace-nowrap ${
-                      activeParameter === 'learning' ? 'opacity-100' : 'opacity-90 group-hover:opacity-100'
-                    }`}>Learning</span>
-                  </button>
-
                   {/* Burnout & Fatigue - ON the lower brainstem area */}
                   <button
                     onClick={() => setActiveParameter(activeParameter === 'burnout' ? null : 'burnout')}
@@ -2993,23 +2980,6 @@ const PatientDashboard = () => {
                     }`}>Burnout & Fatigue</span>
                   </button>
 
-                  {/* Creativity - ON the PURPLE/PINK cerebellum area */}
-                  <button
-                    onClick={() => setActiveParameter(activeParameter === 'creativity' ? null : 'creativity')}
-                    onMouseEnter={() => setHoveredParameter('creativity')}
-                    onMouseLeave={() => setHoveredParameter(null)}
-                    className={`absolute flex flex-col items-center justify-center transition-all duration-300 cursor-pointer group ${
-                      activeParameter === 'creativity' ? 'scale-125 z-20' : 'hover:scale-110 z-10'
-                    }`}
-                    style={{ top: '42%', left: '62%' }}
-                  >
-                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-violet-500 shadow-lg shadow-violet-500/60 ${
-                      activeParameter === 'creativity' ? 'ring-4 ring-violet-400/50 animate-pulse' : 'group-hover:ring-2 group-hover:ring-violet-400/40'
-                    }`} />
-                    <span className={`mt-1 text-[9px] sm:text-xs font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] whitespace-nowrap ${
-                      activeParameter === 'creativity' ? 'opacity-100' : 'opacity-90 group-hover:opacity-100'
-                    }`}>Creativity</span>
-                  </button>
                 </div>
 
                 <p className="text-center text-xs sm:text-sm text-gray-400 mt-4">
@@ -3942,12 +3912,12 @@ const PatientDashboard = () => {
     ];
 
     // Merge live data with defaults if available
-    const brainParameters = liveBrainParams && Array.isArray(liveBrainParams)
+    const brainParameters = (liveBrainParams && Array.isArray(liveBrainParams)
       ? liveBrainParams.map((liveParam, index) => ({
           ...defaultBrainParameters[index],
           ...liveParam
         }))
-      : defaultBrainParameters;
+      : defaultBrainParameters).filter(param => !['learning', 'creativity'].includes(String(param.name || '').toLowerCase()));
 
     return (
       <div className="space-y-2 sm:space-y-6">
@@ -3957,7 +3927,7 @@ const PatientDashboard = () => {
             <div className="p-1.5 sm:p-2 bg-[#E4EFFF] dark:bg-blue-900/30 rounded-lg">
               <Brain className="h-5 w-5 sm:h-6 sm:w-6 text-[#323956] dark:text-blue-400" />
             </div>
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">NeuroSense & Performance Reports</h2>
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">Brain Reports</h2>
           </div>
 
         <div className="grid gap-3 sm:gap-4">
@@ -8625,8 +8595,9 @@ const PatientDashboard = () => {
             { num: 13, title: 'DELTA MEDITATION — SLEEP AND REPAIR', embedUrl: driveEmbed('1DZtRbvhhJz8dskMwIrSc6WkW4Ik-MJ21'), thumb: 'https://drive.google.com/thumbnail?id=1pbhPW7nJZOLTXRhxzvEgADbfOTD_4rRu&sz=w1000', isFree: true },
             { num: 14, title: 'BETA MEDITATION — FOCUS & ATTENTION', embedUrl: driveEmbed('1Y584iFTo4jc_HdqwfK7oqaBMv6mMOqfm'), thumb: 'https://drive.google.com/thumbnail?id=1MdqqjcYi4hi4Jq2R2QWG4AyboCCEEsgi&sz=w1000', isFree: true },
             { num: 15, title: 'ALPHA MEDITATION — RELAXATION AND CALM', embedUrl: driveEmbed('1zUDQF-fKTVpFS8v1CwHKiCpO0-MnqAra'), thumb: 'https://drive.google.com/thumbnail?id=1JQBI68OvyWr-OXNdg8HqKpQfyLTCEmMW&sz=w1000', isFree: true },
-            { num: 16, title: 'YOGA NIDRA — THE ULTIMATE WHOLE BRAIN SYNCHRONIZATION', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/yoga-nidra.webp', isFree: true },
-            { num: 17, title: 'ADVANCED YOGA NIDRA', embedUrl: driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB'), thumb: 'https://drive.google.com/thumbnail?id=1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB&sz=w1000', isFree: true },
+            { num: 16, title: 'Ultimate Yoga Nidra', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/yoga-nidra.webp', isFree: true },
+            { num: 17, title: 'Advanced Yoga Nidra', embedUrl: driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB'), thumb: 'https://drive.google.com/thumbnail?id=1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB&sz=w1000', isFree: true },
+            { num: 18, title: 'Super Yoga Nidra', embedUrl: driveEmbed('1zH2JjSQz41jG0s_I2yiH0zawBT2XYUXm'), thumb: 'https://drive.google.com/thumbnail?id=1zH2JjSQz41jG0s_I2yiH0zawBT2XYUXm&sz=w1000', isFree: true },
           ];
           const featured = meditationVideos[0];
           const rest = meditationVideos.slice(1);
@@ -8725,7 +8696,12 @@ const PatientDashboard = () => {
                           <span>Watch Free</span>
                         </button>
                       ) : (
-                        <a href="https://sweta8238.graphy.com/products#nav_barv" target="_blank" rel="noopener noreferrer" className="w-full bg-[#c9a227] hover:bg-[#b8911f] text-white py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition-colors">
+                        <a
+                          href="https://sweta8238.graphy.com/products#nav_barv"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full bg-[#c9a227] hover:bg-[#b8911f] text-white py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition-colors"
+                        >
                           <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                           <span>Buy Now</span>
                         </a>
@@ -10278,6 +10254,7 @@ const PatientDashboard = () => {
                 const title = reportData.title || report.fileName || report.file_name || 'Neurosense Performance Report';
                 const reportType = reportData.reportType || report.reportType || 'Report';
                 const isPerformanceReport = reportType.toLowerCase().includes('claude') || reportType.toLowerCase().includes('performance');
+                const isWNeuro = reportType.toLowerCase().includes('w neuro');
                 const createdAt = report.createdAt || report.created_at;
                 const isResponse = reportData.isResponseReport;
 
@@ -10295,7 +10272,7 @@ const PatientDashboard = () => {
                               ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
                               : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                           }`}>
-                            {isPerformanceReport ? 'NeuroSense Performance Report' : 'NeuroSense EEG Report'}
+                            {isWNeuro ? 'W Neuro Report' : isPerformanceReport ? 'NeuroSense Performance Report' : 'NeuroSense EEG Report'}
                           </span>
                           {isResponse && (
                             <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">Response Report</span>

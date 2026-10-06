@@ -26,18 +26,24 @@ async function requireSuperAdmin(req, supabase) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
+
   try {
     const supabase = serverClient();
     if (!await requireSuperAdmin(req, supabase)) return res.status(401).json({ message: 'Super admin access is required' });
+
     const error = validateShareRequest(req.body);
     if (error) return res.status(400).json({ message: error });
     const { clinicId, patientId, fileName, filePath, reportData, status = 'completed' } = req.body;
-    const { data: patient, error: patientError } = await supabase.from('patients').select('id, clinic_id').eq('id', patientId).single();
+
+    const { data: patient, error: patientError } = await supabase
+      .from('patients').select('id, clinic_id').eq('id', patientId).single();
     if (patientError || !patient || patient.clinic_id !== clinicId) return res.status(400).json({ message: 'Patient does not belong to this clinic' });
+
     const { data: existing, error: findError } = await supabase.from('reports').select('*')
       .eq('clinic_id', clinicId).eq('patient_id', patientId).eq('file_name', fileName).eq('file_path', filePath).maybeSingle();
     if (findError) throw findError;
     if (existing) return res.status(200).json({ report: existing, existing: true });
+
     const { data: report, error: insertError } = await supabase.from('reports').insert({
       clinic_id: clinicId, patient_id: patientId, file_name: fileName, file_path: filePath, report_data: reportData, status,
     }).select().single();

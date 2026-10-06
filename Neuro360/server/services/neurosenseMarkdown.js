@@ -29,14 +29,14 @@ const PARAMS = [
 
 // Deep-dive metric definitions: sourceKey is the key in `source.deepDive`.
 const DD_FIELDS = [
-  { key: 'alphaPeak', label: 'Alpha Peak Frequency', unit: 'Hz', optimal: '9.5 – 11.5 Hz', sourceKey: 'alphaPeak' },
-  { key: 'arousal', label: 'Arousal Score', unit: '', optimal: '< 1.0', sourceKey: 'arousal' },
-  { key: 'relaxation', label: 'Relaxation Score', unit: '', optimal: '> 8', sourceKey: 'relaxation' },
-  { key: 'regeneration', label: 'Regeneration (Alpha Modulation)', unit: '%', optimal: '> 30%', sourceKey: 'regeneration' },
-  { key: 'frontalAsymmetry', label: 'Frontal Alpha Asymmetry', unit: '', optimal: 'Balanced (near 0)', sourceKey: 'frontalAsymmetry' },
-  { key: 'daytimeDelta', label: 'Excessive / Daytime Delta', unit: '%', optimal: '< 20%', sourceKey: 'daytimeDelta' },
-  { key: 'focusScore', label: 'Focus Score', unit: '', optimal: '< 1.5', sourceKey: 'focusScore' },
-  { key: 'alphaTheta', label: 'Alpha:Theta Balance', unit: '', optimal: '> 1.0 (healthy)', sourceKey: 'alphaTheta' },
+  { key: 'alphaPeak', label: 'Alpha Peak Frequency', unit: 'Hz', optimal: '9.5 – 11.5 Hz', sourceKey: 'alphaPeak', metric: 'Alpha Peak' },
+  { key: 'arousal', label: 'Arousal Score', unit: '', optimal: '< 1.0', sourceKey: 'arousal', metric: 'Arousal Score' },
+  { key: 'relaxation', label: 'Relaxation Score', unit: '', optimal: '> 8', sourceKey: 'relaxation', metric: 'Relaxation Score' },
+  { key: 'regeneration', label: 'Regeneration (Alpha Modulation)', unit: '%', optimal: '> 30%', sourceKey: 'regeneration', metric: 'Regeneration' },
+  { key: 'frontalAsymmetry', label: 'Frontal Alpha Asymmetry', unit: '', optimal: 'Balanced (near 0)', sourceKey: 'frontalAsymmetry', metric: 'Alpha Asymmetry' },
+  { key: 'daytimeDelta', label: 'Excessive / Daytime Delta', unit: '%', optimal: '< 20%', sourceKey: 'daytimeDelta', metric: 'Excessive Delta' },
+  { key: 'focusScore', label: 'Focus Score', unit: '', optimal: '< 1.5', sourceKey: 'focusScore', metric: 'Focus Score' },
+  { key: 'alphaTheta', label: 'Alpha:Theta Balance', unit: '', optimal: '> 1.0 (healthy)', sourceKey: 'alphaTheta', metric: 'Alpha:Theta Balance' },
 ];
 
 function num(v) {
@@ -125,6 +125,25 @@ function normalizeForType(algorithmResults) {
   return algorithmResults;
 }
 
+function algorithmPercent(param) {
+  if (!param) return null;
+  const bucket = String(param.classification || '').toLowerCase();
+  if (bucket === 'low') return 20;
+  if (bucket === 'mild' || bucket === 'moderate' || bucket === 'medium') return 55;
+  if (bucket === 'high' || bucket === 'severe') return 90;
+  const score = Number(param.score);
+  return Number.isFinite(score) ? [10, 25, 55, 90][Math.max(0, Math.min(3, score))] : null;
+}
+
+function algorithmMetric(parameters, name) {
+  const needle = String(name).toLowerCase();
+  for (const parameter of parameters) {
+    const found = (parameter.metrics || []).find((metric) => String(metric.name || '').toLowerCase().includes(needle));
+    if (found && found.value != null) return found.value;
+  }
+  return null;
+}
+
 /**
  * Build the NeuroSense-values Markdown document.
  * @param {object} source           extractReportSource output: { patient, markers, deepDive, brainwave, overall? }
@@ -138,6 +157,8 @@ function buildNeuroSenseMarkdown(source, algorithmResults, patient = {}) {
   const dd = s.deepDive || {};
   const bw = s.brainwave || {};
   const ov = s.overall || {};
+  const algorithmParameters = normalizeForType(algorithmResults)?.parameters || [];
+  const algorithmParameter = (label) => algorithmParameters.find((parameter) => parameter.name === label);
 
   const patName = (s.patient && s.patient.name) || patient.name || 'Patient';
   const patDate = (s.patient && s.patient.assessmentDate) || patient.assessmentDate || patient.processedAt || '';
@@ -165,14 +186,15 @@ function buildNeuroSenseMarkdown(source, algorithmResults, patient = {}) {
   lines.push('');
   lines.push('## Parameters');
   for (const p of PARAMS) {
-    const pct = num(markers[p.markerKey]);
-    const classification = classFromPercent(pct, p.inverted);
+    const supplied = algorithmParameter(p.label);
+    const pct = algorithmPercent(supplied) ?? num(markers[p.markerKey]);
+    const classification = supplied?.classification || classFromPercent(pct, p.inverted);
     lines.push('param|' + p.key + '|' + p.label + '|' + p.icon + '|' + (p.inverted ? 1 : 0) + '|' + (pct != null ? pct : 'null') + '|' + classification);
   }
   lines.push('');
   lines.push('## Deep Dive');
   for (const f of DD_FIELDS) {
-    const v = dd[f.sourceKey];
+    const v = algorithmMetric(algorithmParameters, f.metric) ?? dd[f.sourceKey];
     const status = ddStatus(f.label, v);
     lines.push('deepdive|' + f.key + '|' + f.label + '|' + fmtDDVal(v) + '|' + f.unit + '|' + f.optimal + '|' + status);
   }

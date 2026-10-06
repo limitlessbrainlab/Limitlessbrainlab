@@ -37,7 +37,10 @@ const getAdminRole = async (userId, fallbackRole) => {
   if (cached?.expiresAt > Date.now()) return cached.role;
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
   const role = profile?.role || fallbackRole;
-  if (adminRoleCache.size >= MAX_ADMIN_ROLE_CACHE_ENTRIES) adminRoleCache.delete(adminRoleCache.keys().next().value);
+  if (adminRoleCache.size >= MAX_ADMIN_ROLE_CACHE_ENTRIES) {
+    const firstKey = adminRoleCache.keys().next().value;
+    if (firstKey) adminRoleCache.delete(firstKey);
+  }
   adminRoleCache.set(userId, { role, expiresAt: Date.now() + ADMIN_ROLE_CACHE_TTL_MS });
   return role;
 };
@@ -7621,8 +7624,9 @@ app.post('/api/send-report-email', async (req, res) => {
     // NeuroSense Report (QEEG) uses its own template/subject; everything else keeps the
     // existing Neuro Performance Report template unchanged.
     const isNeuroSense = reportType === 'neurosense';
-    const reportLabel = isNeuroSense ? 'NeuroSense Report' : 'Neuro Performance Report';
-    const buildReportHtml = isNeuroSense ? getNeuroSenseReportEmailHtml : getReportEmailHtml;
+    const isWNeuro = reportType === 'w_neuro';
+    const reportLabel = isWNeuro ? 'W Neuro Report' : isNeuroSense ? 'NeuroSense Report' : 'Neuro Performance Report';
+    const buildReportHtml = isWNeuro || isNeuroSense ? getNeuroSenseReportEmailHtml : getReportEmailHtml;
 
     const reportHtmlPatient = buildReportHtml({ isClinic: false, patientName, clinicName, reportUrl, loginUrl: patientLoginUrl, generatedAt });
     const reportHtmlClinic = buildReportHtml({ isClinic: true, patientName, clinicName, reportUrl, loginUrl: clinicLoginUrl, generatedAt });

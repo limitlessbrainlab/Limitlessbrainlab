@@ -443,7 +443,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     ['Your Brain Type - the NeuroSense five-type framework', 'PAGE 5\u20136'],
     ['Type-Specific Strategy Guide', 'PAGE 7'],
     ['Performance Markers - Cognition, Focus, Stress, Burnout', 'PAGE 8'],
-    ['Emotional Regulation, Learning & Creativity', 'PAGE 9'],
+    ['Emotional Regulation', 'PAGE 9'],
     ['Deep-Dive Neuro-Metrics', 'PAGE 10'],
     ['Your 30-Day Brain Optimization Plan', 'PAGE 11'],
   ];
@@ -456,7 +456,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   });
 
   miniCard(M, 470, W - 2 * M, 78, 'How to read this report',
-    "Each metric is shown as a percentile or raw EEG value. Higher isn't always better - for stress regulation, higher means calmer. Look for the colored status badges (Excellent -> Needs Attention) on every metric card. Your Brain Type on page 5 is the lens through which every score should be interpreted.");
+    "Each metric is shown as a percentile or raw EEG value. Stress and burnout are severity markers: lower values are favourable, while the other markers retain their NeuroSense meanings. Look for the colored status badges on every metric card. Your Brain Type on page 5 is the lens through which every score should be interpreted.");
   footer(2, 'Welcome');
 
   // ================= PAGE 3 — SNAPSHOT =================
@@ -491,11 +491,11 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
     const overallWidth = doc.widthOfString(overallText);
     text(overallText, M + 16, top + 42, lw - 32, 44, '#ffffff', { bold: true, lineGap: 0 });
     text('/100', M + 18 + overallWidth, top + 68, lw - 32 - overallWidth, 14, '#cfe0f7', { bold: true, lineGap: 0 });
-    fit(n.overallSummary || 'A composite of your seven performance markers. The growth zones are where small, consistent daily practices move the numbers most — recovery-first habits shift these fastest.', M + 16, top + 108, lw - 32, 8.4, '#e2efff', { maxHeight: gridH - 118 });
+    fit(n.overallSummary || 'A composite from the full qEEG calculation. Recovery habits can help move the visible markers over time.', M + 16, top + 108, lw - 32, 8.4, '#e2efff', { maxHeight: gridH - 118 });
 
     // .scard rows
-    const rows = bars.slice(0, 7);
-    const rh = (gridH - 6 * 7) / rows.length;
+    const rows = bars.filter(b => !['learning', 'creativity'].includes(b.key));
+    const rh = (gridH - 7 * (rows.length - 1)) / rows.length;
     rows.forEach((b, i) => {
       const y = top + i * (rh + 7);
       const x = M + lw + gap;
@@ -532,7 +532,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
 
   const waves = [
     ['Delta', profile.delta, '0.5-4 Hz - Deep rest', fmt(profile.delta, '%')],
-    ['Theta', profile.theta, '4-7 Hz - Creativity', fmt(profile.theta, '%')],
+    ['Theta', profile.theta, '4-7 Hz - Slow-wave activity', fmt(profile.theta, '%')],
     ['Alpha', profile.alpha, '8-12 Hz - Calm focus', `Peak ${fmt(profile.alphaPeakHz, 'Hz')}`],
     ['Beta', profile.beta, '13-30 Hz - Active thinking', fmt(profile.beta, '%')],
     ['Hi-Beta', profile.hiBeta, '20-30 Hz - Vigilance', fmt(profile.hiBeta, '%')],
@@ -702,7 +702,7 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   {
     const perfItems = [performance.cognition, performance.stress, performance.focus, performance.burnout];
     const subs = [perfSub.cognition, perfSub.stress, perfSub.focus, perfSub.burnout];
-    const fallbackLabels = ['Cognition', 'Stress Regulation', 'Focus & Attention', 'Burnout Resistance'];
+    const fallbackLabels = ['Cognition', 'Stress', 'Focus & Attention', 'Burnout & Fatigue'];
     const bodies = [n.performance?.cognition, n.performance?.stress, n.performance?.focus, n.performance?.burnout];
     const gap = 13.5;
     const cw = (W - 2 * M - gap) / 2;
@@ -722,36 +722,24 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
   }
   footer(8, 'Cognition & Stress');
 
-  // ================= PAGE 9 — INNER BANDWIDTH =================
+  // ================= PAGE 9 — EMOTIONAL REGULATION =================
   addPage();
-  header('05', 'INNER BANDWIDTH');
-  eyebrow('Section 5 - Inner Bandwidth');
-  h2('Emotion, learning &', 'creativity');
-  lead("When the nervous system is busy scanning for threat and running on empty, it has less bandwidth left for emotional flexibility, divergent thinking and the open-mode states that drive creativity. This is exactly the pattern your data shows - and it's also the most reversible.");
+  header('05', 'EMOTIONAL REGULATION');
+  eyebrow('Section 5 - Emotional Regulation');
+  h2('Emotional', 'regulation');
+  lead('How readily your nervous system returns to a steady state after pressure.');
 
   {
-    const items = [
-      ['Emotional Regulation', inner.emotional, n.innerBandwidth?.emotional],
-      ['Learning Capacity', inner.learning, n.innerBandwidth?.learning],
-      ['Creativity', inner.creativity, n.innerBandwidth?.creativity],
-    ];
-    const gap = 9;
-    const cw = (W - 2 * M - gap * 2) / 3;
-    items.forEach(([label, b, body], i) => {
-      const x = M + i * (cw + gap);
-      const y = 200;
-      const mark = b || {};
-      const cp = colorPct(mark);
-      const c = pctColor(cp);
-      card(x, y, cw, 138);
-      text(label, x + 12, y + 12, cw - 24, 9.4, COLORS.navy, { bold: true });
-      text(`${Number(mark.percent) || 0}%`, x + 12, y + 28, cw - 24, 22, c, { bold: true, lineGap: 0 });
-      pill(mark.status || '-', x + 12, y + 56, pctTint(cp), pctFg(cp));
-      fit(body || '', x + 12, y + 76, cw - 24, 7.9, COLORS.muted, { maxHeight: 54 });
-    });
+    const mark = inner.emotional || {};
+    const cp = colorPct(mark);
+    card(M, 200, W - 2 * M, 152);
+    text('Emotional Regulation', M + 16, 216, W - 2 * M - 32, 13, COLORS.navy, { bold: true });
+    text(`${Number(mark.percent) || 0}%`, M + 16, 244, 160, 27, pctColor(cp), { bold: true });
+    pill(mark.status || '-', M + 16, 286, pctTint(cp), pctFg(cp));
+    fit(n.innerBandwidth?.emotional || '', M + 16, 315, W - 2 * M - 32, 9, COLORS.muted, { maxHeight: 30 });
   }
 
-  h3(`For your type - Type ${bt.id || '-'} specific advice`, M, 362);
+  h3(`For your type - Type ${bt.id || '-'} specific advice`, M, 390);
   {
     const emotionAdvice = n.innerBandwidth?.emotionalAdvice || [
       'Daily "name it to tame it" - label what you\'re feeling before reacting.',
@@ -759,21 +747,11 @@ function makeRenderer(reportData, narrative = {}, onProgress) {
       'Response-gap training - pause before reacting; reframe the situation.',
       'Limit news / social media in the first and last hour of the day.',
     ];
-    const learningAdvice = n.innerBandwidth?.learningAdvice || [
-      'Use spaced repetition - review material across days, not in one block.',
-      'Schedule short "no-input" breaks - ideas surface when the brain is idle.',
-      'Change your environment once a week for fresh thinking.',
-      'Separate brainstorming from editing - never do both at once.',
-    ];
-    text('Emotional regulation', M, 382, colW, 9.4, COLORS.navy, { bold: true });
-    bullets(emotionAdvice, M, 398, colW, 'info', false, 8.3, 5);
-    text('Learning & creativity', M + colW + 13.5, 382, colW, 9.4, COLORS.navy, { bold: true });
-    bullets(learningAdvice, M + colW + 13.5, 398, colW, 'info', false, 8.3, 5);
+    text('Emotional regulation', M, 414, W - 2 * M, 9.4, COLORS.navy, { bold: true });
+    bullets(emotionAdvice, M, 434, W - 2 * M, 'info', false, 8.3, 5);
   }
 
-  callout(M, 560, W - 2 * M, 72, 'info', 'The hidden link between these three',
-    n.innerBandwidth?.link || "Emotional regulation, creative thinking and durable learning all depend on the same underlying state: low arousal plus alert alpha. When the nervous system runs hot and depleted, all three drop together. When you give the brain real recovery, all three rise - usually together. That's why the plan focuses on calming and recovering, not on adding more.");
-  footer(9, 'Inner Bandwidth');
+  footer(9, 'Emotional Regulation');
 
   // ================= PAGE 10 — DEEP-DIVE METRICS =================
   addPage();

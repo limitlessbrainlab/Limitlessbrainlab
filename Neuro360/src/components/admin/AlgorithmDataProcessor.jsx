@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Play, Download, FileText, CheckCircle, Activity, User, Building2, Calendar, History, X, ArrowLeft, Search, Filter, Send, Loader2, RefreshCw, Clock } from 'lucide-react';
+import { Upload, Play, Download, Eye, FileText, CheckCircle, Activity, User, Building2, Calendar, History, X, ArrowLeft, Search, Filter, Send, Loader2, RefreshCw, Clock } from 'lucide-react';
 import DatabaseService from '../../services/databaseService';
 import SupabaseService from '../../services/supabaseService';
 import toast from 'react-hot-toast';
@@ -67,6 +67,7 @@ const AlgorithmDataProcessor = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showProcessingUI, setShowProcessingUI] = useState(false);
   const [processingHistory, setProcessingHistory] = useState([]);
+  const [historyLimit, setHistoryLimit] = useState(3);
   const [loading, setLoading] = useState(true);
 
   // Filter states
@@ -81,8 +82,6 @@ const AlgorithmDataProcessor = () => {
   const [consoleLog, setConsoleLog] = useState([]);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
-  const [canonicalResults, setCanonicalResults] = useState(null);
-  const [canonicalQeegData, setCanonicalQeegData] = useState(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(null);
@@ -171,6 +170,7 @@ const AlgorithmDataProcessor = () => {
       // preserve-on-error behaviour still protects a just-generated report.
       if (lastLoadedPatientIdRef.current !== selectedPatient.id) {
         setProcessingHistory([]);
+        setHistoryLimit(3);
         lastLoadedPatientIdRef.current = selectedPatient.id;
       }
       loadProcessingHistory(selectedPatient.id);
@@ -736,7 +736,9 @@ const AlgorithmDataProcessor = () => {
       formData.append('patientName', getPatientName(selectedPatient));
       formData.append('clinicName', selectedPatient.clinicName);
       formData.append('clinicId', selectedPatient.clinicId || selectedPatient.clinic_id || selectedPatient.org_id || '');
+      formData.append('reportMode', reportMode);
       formData.append('clinicLogoUrl', sessionLogoUrlFor(selectedPatient));
+      formData.append('assessmentDate', new Date().toISOString());
       // Add complete patient data for PDF
       formData.append('dateOfBirth', selectedPatient.dateOfBirth || selectedPatient.date_of_birth || 'Not specified');
       formData.append('age', selectedPatient.age || calculateAge(selectedPatient.dateOfBirth || selectedPatient.date_of_birth) || 'N/A');
@@ -777,7 +779,11 @@ const AlgorithmDataProcessor = () => {
         // Get auth token from localStorage
         const token = await getFreshToken();
 
-        const fetchOptions = { method: 'POST', body: formData, signal: controller.signal };
+        const fetchOptions = {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal
+        };
 
         // Add authorization header if token exists
         if (token) {
@@ -786,34 +792,7 @@ const AlgorithmDataProcessor = () => {
           };
         }
 
-        const processingEndpoint = import.meta.env.PROD ? '/api/process-neurosense-report' : `${apiUrl}/qeeg/process`;
-        if (import.meta.env.PROD) {
-          if (!token) throw new Error('Your session expired. Please log in again.');
-          const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-          const prepared = await fetch(processingEndpoint, {
-            method: 'POST', headers: authHeaders, signal: controller.signal,
-            body: JSON.stringify({ action: 'prepare', files: [eyesOpenFile, eyesClosedFile].map((file) => ({ name: file.name, size: file.size, type: file.type })) })
-          });
-          const preparedData = await prepared.json();
-          if (!prepared.ok) throw new Error(preparedData.message || 'Could not prepare report upload');
-          const [eyesOpenUpload, eyesClosedUpload] = preparedData.uploads;
-          const bucket = SupabaseService.supabase.storage.from('qeeg-uploads');
-          const [eoResult, ecResult] = await Promise.all([
-            bucket.uploadToSignedUrl(eyesOpenUpload.path, eyesOpenUpload.token, eyesOpenFile, { contentType: eyesOpenFile.type || 'application/pdf' }),
-            bucket.uploadToSignedUrl(eyesClosedUpload.path, eyesClosedUpload.token, eyesClosedFile, { contentType: eyesClosedFile.type || 'application/pdf' })
-          ]);
-          if (eoResult.error || ecResult.error) throw new Error(eoResult.error?.message || ecResult.error?.message || 'QEEG upload failed');
-          fetchOptions.headers = authHeaders;
-          fetchOptions.body = JSON.stringify({
-            action: 'process',
-            inputs: {
-              eyesOpen: { path: eyesOpenUpload.path, name: eyesOpenFile.name },
-              eyesClosed: { path: eyesClosedUpload.path, name: eyesClosedFile.name }
-            },
-            fields: Object.fromEntries([...formData.entries()].filter(([, value]) => typeof value === 'string'))
-          });
-        }
-        response = await fetch(processingEndpoint, fetchOptions);
+        response = await fetch(`${apiUrl}/qeeg/process`, fetchOptions);
         clearTimeout(timeoutId);
       } catch (fetchError) {
         clearTimeout(timeoutId);
@@ -1023,11 +1002,6 @@ const AlgorithmDataProcessor = () => {
       setProgress(100);
 
       setResults(finalResults);
-      setCanonicalResults(data.data.canonicalResults || {
-        parameters: data.data.results,
-        overallScore: data.data.overallScore
-      });
-      setCanonicalQeegData(data.data.qeegData || null);
       setIsProcessing(false);
       setProcessingComplete(true);
       setIsSaved(false); // Mark as not saved yet
@@ -1079,15 +1053,13 @@ const AlgorithmDataProcessor = () => {
         },
         results: resultData,  // Primary field for DB schema compatibility
         outputData: resultData,  // Keep for backward compatibility
-        canonicalResults,
-        qeegData: canonicalQeegData,
         eyesOpenFile: eyesOpenFile?.name,
         eyesClosedFile: eyesClosedFile?.name,
         pdfUrl: pdfUrl || null,
         processedAt: new Date().toISOString(),
         processedBy: 'super_admin',
         parameter_notes: parameterNotes || '', // Notes from textarea (snake_case for Supabase)
-        report_mode: reportMode, // 'neurosense' (default) or 'claude' — controls dashboard visibility
+        report_mode: reportMode,
         status: 'completed',
         errorMessage: null
       };
@@ -1131,7 +1103,7 @@ const AlgorithmDataProcessor = () => {
         let finalPdfUrl = pdfUrl;
 
         if (!finalPdfUrl) {
-          const existingPdf = await findExistingPDF();
+          const existingPdf = reportMode === 'w_neuro' ? null : await findExistingPDF();
 
           if (existingPdf) {
             finalPdfUrl = existingPdf;
@@ -1142,11 +1114,7 @@ const AlgorithmDataProcessor = () => {
 
         // Step 2: Save results to database (with or without PDF URL)
         const saved = await saveResultsToDatabase(results);
-        if (saved && saved.id) {
-          setSavedResultId(saved.id);
-          setCanonicalResults(saved.canonicalResults || canonicalResults);
-          setCanonicalQeegData(saved.qeegData || canonicalQeegData);
-        }
+        if (saved && saved.id) setSavedResultId(saved.id);
 
         // Step 3: Show success message
         if (finalPdfUrl) {
@@ -1165,6 +1133,7 @@ const AlgorithmDataProcessor = () => {
 
   // New function: Generate and download PDF separately
   const handleGenerateAndDownloadPDF = async () => {
+    if (reportMode === 'w_neuro') { toast.error('Reprocess the qEEG files to generate a W Neuro Report.'); return; }
     if (!results) {
       toast.error('No results to generate PDF from');
       return;
@@ -1377,81 +1346,11 @@ const AlgorithmDataProcessor = () => {
     stageStartRef.current = now;
   };
 
-  const generatePerformanceOnVercel = async () => {
-    const token = await getFreshToken();
-    const uploadDateIso = reportAssessmentDate || selectedPatient?.lastProcessed || new Date().toISOString();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 13 * 60 * 1000);
-    try {
-      const response = await fetch('/api/generate-performance-report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          savedResultId,
-          patientId: selectedPatient?.id,
-          clinicId: selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id || null,
-          clinicName: selectedPatient?.clinicName || '',
-          clinicLogoUrl: sessionLogoUrlFor(selectedPatient),
-          assessmentDate: uploadDateIso,
-          generatedAt: uploadDateIso,
-          patient: {
-            name: getPatientName(selectedPatient),
-            id: selectedPatient?.id,
-            clinicName: selectedPatient?.clinicName || '',
-            age: selectedPatient?.age || null,
-            gender: selectedPatient?.gender || null,
-          },
-          canonicalResults,
-          qeegData: canonicalQeegData,
-          idempotencyKey: `performance:${savedResultId}`,
-        }),
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.status === 202) throw new Error('This report is already processing. Check Processing History shortly.');
-      if (!response.ok || !data.pdfUrl) throw new Error(data.message || `Server error (${response.status})`);
-      setClaudeProgress(100);
-      setClaudeReportUrl(data.pdfUrl);
-      setClaudeReportId(data.reportId || null);
-      setProcessingHistory((prev) => prev.map((rec) => (
-        rec.id === savedResultId
-          ? { ...rec, claude_report_url: data.pdfUrl, claudeReportUrl: data.pdfUrl, claude_report_id: data.reportId, claudeReportId: data.reportId }
-          : rec
-      )));
-      toast.success('Neurosense Performance Report ready!', { id: 'claude-report' });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  };
-
   const handleUploadToClaude = async () => {
     if (isGeneratingClaudeReport) return;
     if (!pdfUrl) { toast.error('Generate & save the NeuroSense report first.'); return; }
     // Hard block performance-report generation when the clinic has no credits left.
     if (await blockIfNoCredits(selectedPatient?.clinicId || selectedPatient?.clinic_id || selectedPatient?.org_id)) return;
-
-    if (!savedResultId || !canonicalResults || !canonicalQeegData) {
-      const message = 'NeuroSense calculation data is not ready. Generate and save the NeuroSense Report again before building its Performance Report.';
-      setClaudeReportError(message);
-      toast.error(message, { id: 'claude-report' });
-      return;
-    }
-
-    setIsGeneratingClaudeReport(true);
-    setClaudeReportError(null);
-    setClaudeProgress(10);
-    toast.loading('Building the Performance Report on isolated report compute…', { id: 'claude-report' });
-    try {
-      await generatePerformanceOnVercel();
-    } catch (error) {
-      setClaudeReportError(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'));
-      toast.error(getFriendlyErrorMessage(error, 'The report could not be generated. Please try again.'), { id: 'claude-report' });
-    } finally {
-      setIsGeneratingClaudeReport(false);
-    }
 
     console.log('[Performance Report] ▶ Starting upload & compilation process…');
     const t0 = performance.now();
@@ -1517,6 +1416,7 @@ const AlgorithmDataProcessor = () => {
       // report and can render the "Report generated on … by <patientId>" line.
       const uploadDateIso = selectedPatient?.lastProcessed || new Date().toISOString();
       formData.append('patientId', selectedPatient?.id || '');
+      formData.append('idempotencyKey', `performance:${savedResultId}`);
       formData.append('patientName', getPatientName(selectedPatient) || '');
       formData.append('clinicName', selectedPatient?.clinicName || '');
       formData.append('clinicLogoUrl', sessionLogoUrlFor(selectedPatient));
@@ -1749,6 +1649,7 @@ const AlgorithmDataProcessor = () => {
     };
   };
 
+  // Patient Downloads must contain the report before any success email is sent.
   const saveSharedReport = async (reportData) => {
     const report = await shareReport(reportData, { getToken: getFreshToken });
     checkCreditAlert(reportData.clinicId);
@@ -1846,10 +1747,10 @@ const AlgorithmDataProcessor = () => {
         patientId: selectedPatient.id,
         fileName: fileName,
         filePath: filePath, // Storage path for signed URL
-        reportType: 'NeuroSense Report',
+        reportType: reportMode === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense Report',
         reportData: {
-          title: `Limitless Brain Lab QEEG Report - ${patientName}`,
-          reportType: 'NeuroSense Report',
+          title: `${reportMode === 'w_neuro' ? 'W Neuro Report' : 'Limitless Brain Lab QEEG Report'} - ${patientName}`,
+          reportType: reportMode === 'w_neuro' ? 'W Neuro Report' : 'NeuroSense Report',
           description: `Algorithm processing results for ${patientName}`,
           fileUrl: fullUrl, // Full URL for direct download
           filePath: filePath, // Also store in reportData for redundancy
@@ -1894,7 +1795,7 @@ const AlgorithmDataProcessor = () => {
             clinicEmail: clinicEmail,
             reportUrl: fullUrl,
             reportFileName: fileName,
-            reportType: 'neurosense',
+            reportType: reportMode === 'w_neuro' ? 'w_neuro' : 'neurosense',
             generatedAt: new Date().toISOString()
           })
         });
@@ -2178,6 +2079,7 @@ const AlgorithmDataProcessor = () => {
   const sendReportForRecord = async (record) => {
     const url = record.pdfUrl || record.pdf_url;
     if (!url) { toast.error('No Neurosense Report on this record'); return; }
+    const isWNeuro = (record.report_mode || record.reportMode) === 'w_neuro';
 
     try {
       const patientName = record.inputData?.patientName || record.patientName || getPatientName(selectedPatient);
@@ -2193,7 +2095,7 @@ const AlgorithmDataProcessor = () => {
       if (await blockIfNoCredits(clinicId)) return;
 
       // Standard Neurosense-Report-<name>.pdf name (matches the download button).
-      const fileName = `Neurosense-Report-${(patientName || 'patient').replace(/[^a-z0-9]/gi, '-')}.pdf`;
+      const fileName = `${isWNeuro ? 'W-Neuro-Report' : 'Neurosense-Report'}-${(patientName || 'patient').replace(/[^a-z0-9]/gi, '-')}.pdf`;
       const savedResults = parseResultsData(record.outputData || record.output_data || record.results);
 
       const reportData = {
@@ -2201,10 +2103,10 @@ const AlgorithmDataProcessor = () => {
         patientId: record.patientId || selectedPatient?.id,
         fileName: fileName,
         filePath: url,
-        reportType: 'NeuroSense Report',
+        reportType: isWNeuro ? 'W Neuro Report' : 'NeuroSense Report',
         reportData: {
-          title: `Neurosense Report - ${patientName}`,
-          reportType: 'NeuroSense Report',
+          title: `${isWNeuro ? 'W Neuro Report' : 'Neurosense Report'} - ${patientName}`,
+          reportType: isWNeuro ? 'W Neuro Report' : 'NeuroSense Report',
           description: `Neurosense Report for ${patientName}`,
           fileUrl: url,
           filePath: url,
@@ -2238,7 +2140,7 @@ const AlgorithmDataProcessor = () => {
           clinicEmail: clinicEmail,
           reportUrl: url,
           reportFileName: fileName,
-          reportType: 'neurosense',
+          reportType: isWNeuro ? 'w_neuro' : 'neurosense',
           generatedAt: record.processed_at || record.processedAt || record.created_at || record.createdAt || new Date().toISOString()
         })
       });
@@ -2496,7 +2398,7 @@ const AlgorithmDataProcessor = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 100);
+      window.URL.revokeObjectURL(objectUrl);
       toast.success('PDF download started!', { id: toastId });
     } catch (e) {
       console.error('downloadViaBlob failed, falling back to direct open:', e);
@@ -2513,9 +2415,15 @@ const AlgorithmDataProcessor = () => {
   // Backwards-compatible alias used by the report-download buttons.
   const downloadPdfFromUrl = (url, filename) => downloadViaBlob(url, filename);
 
+  const handleViewPDF = () => {
+    if (!pdfUrl) return toast.error('Report not available yet.');
+    const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
+    window.open(pdfUrl.startsWith('http') ? pdfUrl : `${apiUrl.replace('/api', '')}${pdfUrl}`, '_blank', 'noopener');
+  };
+
   const handleDownloadPDF = async () => {
     if (!pdfUrl) {
-      toast.error('PDF not available. Please save results first.');
+      toast.error('Report not available yet.');
       return;
     }
 
@@ -3007,6 +2915,15 @@ const AlgorithmDataProcessor = () => {
                   <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Both the NeuroSense EEG Report and Neurosense Performance Report are sent to the patient and the clinic.</span>
                 </span>
               </label>
+              <label className="flex items-start space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-primary dark:hover:border-primary-light transition-colors">
+                <input type="radio" name="reportMode" value="w_neuro" checked={reportMode === 'w_neuro'}
+                  onChange={() => handleReportModeChange('w_neuro')}
+                  className="mt-1 h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:border-gray-600" />
+                <span>
+                  <span className="block text-sm font-medium text-gray-900 dark:text-white">W Neuro Report</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Only the W Neuro Report is shared with Patient &amp; Clinic.</span>
+                </span>
+              </label>
             </div>
           </div>
 
@@ -3464,21 +3381,30 @@ const AlgorithmDataProcessor = () => {
                   )}
                 </button>
 
-                {/* Generate/Download PDF Button (Separate) */}
+                {pdfUrl && (
                 <button
-                  onClick={pdfUrl ? handleDownloadPDF : handleGenerateAndDownloadPDF}
-                  disabled={!results || !isSaved}
+                  onClick={handleViewPDF}
+                  className="w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors shadow-md bg-indigo-600 hover:bg-indigo-700 text-white"
+                  title="View PDF report"
+                >
+                  <Eye className="h-5 w-5" />
+                  <span>View {reportMode === 'w_neuro' ? 'W Neuro' : 'Neurosense'} Report</span>
+                </button>
+                )}
+
+                {/* PDF is ready as soon as generation returns its URL; saving only adds it to history. */}
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={!results || !pdfUrl}
                   className={`w-full py-3 px-4 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors shadow-md ${
-                    !results || !isSaved
+                    !results || !pdfUrl
                       ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                      : pdfUrl
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
                   }`}
-                  title={!isSaved ? 'Please save results first' : pdfUrl ? 'Download PDF report' : 'Generate and download PDF report'}
+                  title={pdfUrl ? 'Download PDF report' : 'Report is generated automatically'}
                 >
                   <Download className="h-5 w-5" />
-                  <span>{pdfUrl ? 'Neurosense Report' : 'Generate PDF Report'}</span>
+                  <span>Download {reportMode === 'w_neuro' ? 'W Neuro' : 'Neurosense'} Report</span>
                 </button>
 
                 {/* Post-generation action buttons — mode-aware. NeuroSense mode sends
@@ -3665,7 +3591,7 @@ const AlgorithmDataProcessor = () => {
             </button>
           </div>
           <div className="space-y-3">
-            {processingHistory.map((record, index) => (
+            {processingHistory.slice(0, historyLimit).map((record, index) => (
               <div
                 key={record.id}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -3748,10 +3674,12 @@ const AlgorithmDataProcessor = () => {
                           setResults(savedResults);
                           setProcessingComplete(true);
                           setIsSaved(true);
+                          setSavedResultId(record.id);
                           // Set PDF URL if available
                           if (record.pdfUrl) {
                             setPdfUrl(record.pdfUrl);
                           }
+                          setReportMode(record.report_mode || record.reportMode || 'neurosense');
                           // Set QEEG input PDF URLs if available
                           if (record.inputData?.eyesOpenUrl) {
                             setEyesOpenUrl(record.inputData.eyesOpenUrl);
@@ -3783,8 +3711,12 @@ const AlgorithmDataProcessor = () => {
                             const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
                             url = apiUrl.replace(/\/api\/?$/, '') + url;
                           }
-                          const fname = `neurosense-report-${(record.inputData?.patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+                          const fname = `${(record.report_mode || record.reportMode) === 'w_neuro' ? 'w-neuro-report' : 'neurosense-report'}-${(record.inputData?.patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
                           await downloadViaBlob(url, fname, 'history-download');
+                          return;
+                        }
+                        if ((record.report_mode || record.reportMode) === 'w_neuro') {
+                          toast.error('The W Neuro PDF is unavailable. Reprocess the original qEEG files.');
                           return;
                         }
 
@@ -3954,12 +3886,12 @@ const AlgorithmDataProcessor = () => {
                     {/* Base Neurosense Report — download the stored report PDF */}
                     {(record.pdfUrl || record.pdf_url) && (
                       <button
-                        onClick={() => downloadPdfFromUrl(record.pdfUrl || record.pdf_url, `Neurosense-Report-${(record.inputData?.patientName || getPatientName(selectedPatient) || 'patient').replace(/[^a-z0-9]/gi, '-')}.pdf`)}
+                        onClick={() => downloadPdfFromUrl(record.pdfUrl || record.pdf_url, `${(record.report_mode || record.reportMode) === 'w_neuro' ? 'W-Neuro-Report' : 'Neurosense-Report'}-${(record.inputData?.patientName || getPatientName(selectedPatient) || 'patient').replace(/[^a-z0-9]/gi, '-')}.pdf`)}
                         className="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-1"
                         title="Download the base Neurosense Report PDF"
                       >
                         <Download className="h-4 w-4" />
-                        <span>Download Neurosense Report</span>
+                        <span>Download {(record.report_mode || record.reportMode) === 'w_neuro' ? 'W Neuro' : 'Neurosense'} Report</span>
                       </button>
                     )}
 
@@ -3971,7 +3903,7 @@ const AlgorithmDataProcessor = () => {
                         title="Send the Neurosense Report to the patient and clinic"
                       >
                         <Send className="h-4 w-4" />
-                        <span>Send to Clinic & Patient</span>
+                        <span>Send {(record.report_mode || record.reportMode) === 'w_neuro' ? 'W Neuro Report' : 'to Clinic & Patient'}</span>
                       </button>
                     )}
 
@@ -4019,6 +3951,16 @@ const AlgorithmDataProcessor = () => {
               </div>
             ))}
           </div>
+          {processingHistory.length > historyLimit && (
+            <div className="mt-5 flex justify-center">
+              <button
+                onClick={() => setHistoryLimit((limit) => limit + 3)}
+                className="px-4 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white transition-colors"
+              >
+                Load 3 More ({processingHistory.length - historyLimit} remaining)
+              </button>
+            </div>
+          )}
         </div>
       )}
 
