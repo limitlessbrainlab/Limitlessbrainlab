@@ -614,7 +614,9 @@ async function processQeegRequest(req, res) {
         const uploadResult = await SupabaseStorage.uploadFile(
           pdfOutputPath,
           'neurosense-reports', // bucket name - All NeuroSense PDFs go here
-          supabaseClinicPath // Clinic-wise path: reports/[clinic]/[filename].pdf
+          supabaseClinicPath, // Clinic-wise path: reports/[clinic]/[filename].pdf
+          'application/pdf',
+          req.supabaseClient || undefined
         );
 
         // Verify upload was successful and URL is valid
@@ -634,13 +636,11 @@ async function processQeegRequest(req, res) {
           throw new Error('Supabase upload returned invalid result');
         }
       } catch (supabaseError) {
-        console.error('⚠️  Supabase upload failed, using local storage');
+        console.error('❌ Supabase upload failed');
         console.error('   Error message:', supabaseError.message);
         console.error('   Error stack:', supabaseError.stack);
         console.error('   Full error:', JSON.stringify(supabaseError, null, 2));
-        // Fallback to local storage
-        pdfUrl = `/uploads/${pdfFilename}`;
-        console.log('📁 Using local file as fallback:', pdfUrl);
+        throw new Error(`Report upload failed: ${supabaseError.message}`);
       }
 
     } catch (pdfError) {
@@ -650,11 +650,7 @@ async function processQeegRequest(req, res) {
       console.error('Full error:', pdfError);
       console.error('=================================\n');
 
-      // Set pdfUrl to null so frontend knows PDF failed
-      pdfUrl = null;
-
-      // Don't fail the whole request if PDF fails - processing still succeeded
-      console.log('⚠️ Continuing without PDF - processing succeeded');
+      throw pdfError;
     }
 
     // Clean up uploaded files

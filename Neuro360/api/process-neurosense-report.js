@@ -68,6 +68,7 @@ async function processReport(req, res, supabase, user) {
   ]);
   req.body = fields;
   req.files = { eyesOpen: [eyesOpen], eyesClosed: [eyesClosed] };
+  req.supabaseClient = supabase;
 
   try {
     await router.processQeegRequest(req, res);

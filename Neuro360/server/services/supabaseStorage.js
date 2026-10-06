@@ -28,14 +28,14 @@ class SupabaseStorage {
    * @param {string} destinationPath - Path within the bucket (optional)
    * @returns {Promise<{success: boolean, url: string, path: string}>}
    */
-  static async uploadFile(filePath, bucketName = 'neurosense-reports', destinationPath = null, contentType = 'application/pdf') {
+  static async uploadFile(filePath, bucketName = 'neurosense-reports', destinationPath = null, contentType = 'application/pdf', client = supabase) {
     try {
       console.log('📤 Uploading file to Supabase storage...');
       console.log('   Local file:', filePath);
       console.log('   Bucket:', bucketName);
 
       // Check if Supabase client is initialized
-      if (!supabase) {
+      if (!client) {
         throw new Error('Supabase client not initialized - check environment variables');
       }
 
@@ -49,7 +49,7 @@ class SupabaseStorage {
       console.log('   Storage path:', storagePath);
 
       // Upload to Supabase
-      const { data, error } = await supabase.storage
+      const { data, error } = await client.storage
         .from(bucketName)
         .upload(storagePath, fileBuffer, {
           contentType: contentType || 'application/octet-stream',
@@ -65,7 +65,7 @@ class SupabaseStorage {
       console.log('   Upload data:', data);
 
       // Get public URL
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = client.storage
         .from(bucketName)
         .getPublicUrl(storagePath);
 
