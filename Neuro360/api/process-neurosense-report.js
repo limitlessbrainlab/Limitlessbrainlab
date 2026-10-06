@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import router from '../server/routes/qeegRoutes.js';
 
 const BUCKET = 'qeeg-uploads';
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -69,7 +70,6 @@ async function processReport(req, res, supabase, user) {
   req.files = { eyesOpen: [eyesOpen], eyesClosed: [eyesClosed] };
 
   try {
-    const { default: router } = await import('../server/routes/qeegRoutes.js');
     await router.processQeegRequest(req, res);
   } finally {
     await supabase.storage.from(BUCKET).remove([inputs.eyesOpen.path, inputs.eyesClosed.path]);

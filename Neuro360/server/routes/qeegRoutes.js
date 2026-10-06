@@ -39,17 +39,12 @@ try {
   console.error('   Stack:', error.stack);
 }
 
-// Enhanced AI PDF Generator (keeping as fallback)
-let EnhancedAIPdfGenerator = null;
-try {
-  EnhancedAIPdfGenerator = require('../services/aiPdfGeneratorEnhanced');
-  console.log('✅ Enhanced AI PDF Generator loaded successfully');
-} catch (error) {
-  console.warn('⚠️  Enhanced AI PDF Generator failed to load:', error.message);
-  console.warn('   Will use fallback PDF generator');
-}
-
 const router = express.Router();
+
+const requireFullNeuroSenseGenerator = () => {
+  if (GeminiPdfGenerator) return GeminiPdfGenerator;
+  throw Object.assign(new Error('Full NeuroSense PDF generator is unavailable. Please try again after the report service is restored.'), { status: 503 });
+};
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -556,14 +551,14 @@ async function processQeegRequest(req, res) {
       // === USE GEMINI PDF GENERATOR (with fallback) ===
       console.log('\n🔍 Checking available PDF generators...');
       console.log('   GeminiPdfGenerator available:', !!GeminiPdfGenerator);
-      console.log('   EnhancedAIPdfGenerator available:', !!EnhancedAIPdfGenerator);
-      console.log('   PDFReportGenerator available:', !!PDFReportGenerator);
+      console.log('   Full NeuroSense PDF Generator available:', !!GeminiPdfGenerator);
 
       let pdfGenerator;
       // AI PDF GENERATOR - Uses Gemini AI
       const USE_AI_PDF_GENERATOR = true; // Set to false to use basic fallback
 
-      if (USE_AI_PDF_GENERATOR && GeminiPdfGenerator) {
+      if (USE_AI_PDF_GENERATOR) {
+        const FullNeuroSenseGenerator = requireFullNeuroSenseGenerator();
         console.log('\n🤖 === USING AI PDF GENERATOR (Gemini) ===');
         console.log('   Engine: Google Gemini + PDFKit');
         console.log('   Patient:', pdfPatientData.name);
@@ -579,19 +574,15 @@ async function processQeegRequest(req, res) {
         try {
           // Pass notesForPdf as 5th parameter for notes to appear under Alpha:Theta Balance
           console.log('   📝 Passing notes to PDF Generator:', notesForPdf ? `"${notesForPdf}"` : '(empty)');
-          pdfGenerator = new GeminiPdfGenerator(pdfPatientData, pdfAlgorithmResults, qeegData, inputPdfPaths, notesForPdf);
+          pdfGenerator = new FullNeuroSenseGenerator(pdfPatientData, pdfAlgorithmResults, qeegData, inputPdfPaths, notesForPdf);
           console.log('✅ Gemini PDF Generator instantiated successfully');
           console.log('   📝 With notes:', notesForPdf ? 'YES' : 'NO');
         } catch (instantiateError) {
           console.error('❌ Failed to instantiate Gemini PDF Generator:', instantiateError.message);
           throw instantiateError;
         }
-      } else if (EnhancedAIPdfGenerator) {
-        console.log('🤖 Using Enhanced AI PDF Generator (Fallback)');
-        pdfGenerator = new EnhancedAIPdfGenerator(pdfPatientData, pdfAlgorithmResults, qeegData);
       } else {
-        console.log('📄 Using Standard PDF Generator (Basic fallback)');
-        pdfGenerator = new PDFReportGenerator(pdfPatientData, pdfAlgorithmResults, qeegData);
+        throw new Error('Full NeuroSense PDF generation is required');
       }
 
       // Generate the PDF
@@ -909,17 +900,10 @@ router.post('/generate-pdf', async (req, res) => {
     // === USE GEMINI PDF GENERATOR (if available) ===
     // Note: This route doesn't have access to input PDF files, so brain map images will use placeholders
     let generator;
-    if (GeminiPdfGenerator) {
-      console.log('🤖 Using Gemini AI PDF Generator (Google Gemini + PDFKit)');
-      console.log('   ℹ️  No input PDF files available - brain maps will use placeholders');
-      generator = new GeminiPdfGenerator(patientData, algorithmResults, qeegData, null, parameterNotes);
-    } else if (EnhancedAIPdfGenerator) {
-      console.log('🤖 Using Enhanced AI PDF Generator (Fallback)');
-      generator = new EnhancedAIPdfGenerator(patientData, algorithmResults, qeegData);
-    } else {
-      console.log('📄 Using Standard PDF Generator (Basic fallback)');
-      generator = new PDFReportGenerator(patientData, algorithmResults, qeegData);
-    }
+    const FullNeuroSenseGenerator = requireFullNeuroSenseGenerator();
+    console.log('🤖 Using Gemini AI PDF Generator (Google Gemini + PDFKit)');
+    console.log('   ℹ️  No input PDF files available - brain maps will use placeholders');
+    generator = new FullNeuroSenseGenerator(patientData, algorithmResults, qeegData, null, parameterNotes);
 
     // Create output filename with clinic organization
     const timestamp = Date.now();
