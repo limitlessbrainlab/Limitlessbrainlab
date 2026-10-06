@@ -113,7 +113,9 @@ export const AuthProvider = ({ children }) => {
   // 60s + on tab refocus; any change since this session started → full wipe + reload.
   // Authenticated-only so public pages are never disrupted; loop-proof (see below).
   useEffect(() => {
-    if (BYPASS_AUTH || !isAuthenticated) return;
+    // Vite dev already hot-reloads changed code; polling deployment versions locally
+    // only adds noise to performance traces. Keep the protection in production.
+    if (BYPASS_AUTH || !isAuthenticated || !import.meta.env.PROD) return;
     let stopped = false;
     let backendBaseline = null; // backend version present when this session started
     let frontendBaseline = null; // frontend version present when this session started

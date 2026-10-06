@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Upload,
   FileText,
@@ -30,7 +31,6 @@ import DatabaseService from '../../services/databaseService';
 import StorageService from '../../services/storageService';
 import { getPatientDocSignedUrl } from '../../services/patientDocuments';
 import ErrorBoundary from '../ErrorBoundary';
-import SubscriptionPopup from './SubscriptionPopup';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import NotificationService from '../../services/notificationService';
@@ -38,9 +38,13 @@ import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import useRealtimeRefetch from '../../hooks/useRealtimeRefetch';
 import { getPatientDisplayName, indexPatientsById, getReportSnapshotName, replaceNameInText } from '../../utils/patientNameResolver';
 import { buildAlgorithmDocuments, buildQeegStorageDocuments, uniqueDocumentsByUrl } from '../../utils/algorithmReportDocuments';
+import { adminReportPageQueryKey, fetchAdminReportPage, persistAdminReportPage, readPersistedAdminReportPage, REPORT_PAGE_STALE_TIME } from '../../services/adminReportPageClient';
+
+const SubscriptionPopup = lazy(() => import('./SubscriptionPopup'));
 
 const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [reports, setReports] = useState([]);
   const [clinics, setClinics] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -52,7 +56,9 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
   const [patientSortOrder, setPatientSortOrder] = useState('desc'); // 'desc' = latest first (default)
   const [reportPage, setReportPage] = useState(1);
   const [reportPageSize, setReportPageSize] = useState(15);
+  const [reportTotals, setReportTotals] = useState({ patients: 0, reports: 0 });
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -68,6 +74,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
   const [selectedPatientForDetail, setSelectedPatientForDetail] = useState(null);
   const [selectedOtherDocFile, setSelectedOtherDocFile] = useState(null);
   const [expandedPatientId, setExpandedPatientId] = useState(null);
+  const [dropdownDataLoaded, setDropdownDataLoaded] = useState(false);
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({
     defaultValues: {
@@ -170,12 +177,21 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
   };
 
   useEffect(() => {
-    loadData();
-  }, [superAdminSelectedClinic]);
+    loadData({ force: false });
+  }, [superAdminSelectedClinic, reportPage, reportPageSize, selectedClinic, selectedPatient, searchTerm, patientSortOrder]);
+
+  // A returning admin sees cached rows immediately; stale rows refresh quietly.
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadData({ force: false });
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
+  }, [superAdminSelectedClinic, reportPage, reportPageSize, selectedClinic, selectedPatient, searchTerm, patientSortOrder]);
 
   // Live updates: refetch when any report changes (admin sees all clinics).
   // Deferred arrow so `loadData` (declared below) isn't read during render (TDZ).
-  useRealtimeRefetch([{ table: 'reports' }], () => loadData(), []);
+  useRealtimeRefetch([{ table: 'reports' }], () => loadData({ force: true }), []);
 
   // Reset to page 1 when the filters/sort change
   useEffect(() => { setReportPage(1); }, [searchTerm, selectedClinic, selectedPatient, patientSortOrder]);
@@ -227,20 +243,44 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
     }
   };
 
-  const loadData = async () => {
+  const loadData = async ({ force = false } = {}) => {
+    let initialLoad = false;
     try {
       setError(null); // Clear any previous errors
-      setLoading(true);
 
-      // Fetch all data via server API (uses service role key, bypasses RLS)
-      const [reportsData, clinicDocsData, algorithmResultsData, clinicsData, patientsData, subscriptionsData] = await Promise.all([
-        fetchAdminTable('reports'),
-        fetchAdminTable('clinical_documentation'),
-        fetchAdminTable('algorithm_results'),
-        fetchAdminTable('clinics'),
-        fetchAdminTable('patients'),
-        fetchAdminTable('subscriptions')
-      ]);
+      const { data: { session } } = await supabase.auth.getSession();
+      const params = new URLSearchParams({ page: String(reportPage), pageSize: String(reportPageSize), sort: patientSortOrder });
+      const clinicId = selectedClinic || superAdminSelectedClinic;
+      if (clinicId) params.set('clinicId', clinicId);
+      if (selectedPatient) params.set('patientId', selectedPatient);
+      if (searchTerm.trim()) params.set('search', searchTerm.trim());
+      const queryKey = adminReportPageQueryKey(user?.id, params);
+      const persistedPage = !force && readPersistedAdminReportPage(user?.id, params);
+      if (persistedPage && !queryClient.getQueryData(queryKey)) {
+        queryClient.setQueryData(queryKey, persistedPage.data, { updatedAt: persistedPage.savedAt });
+      }
+      if (persistedPage && reports.length === 0) {
+        setReports(persistedPage.data.data || []);
+        setReportTotals({ patients: persistedPage.data.totalPatients || 0, reports: persistedPage.data.totalReports || 0 });
+        setLoading(false);
+      }
+      initialLoad = reports.length === 0 && !persistedPage && !queryClient.getQueryData(queryKey);
+      if (initialLoad) setLoading(true);
+      else setIsRefreshing(true);
+
+      const pageResult = await queryClient.fetchQuery({
+        queryKey,
+        staleTime: force || persistedPage ? 0 : REPORT_PAGE_STALE_TIME,
+        queryFn: () => fetchAdminReportPage(params, session?.access_token)
+      });
+      persistAdminReportPage(user?.id, params, pageResult);
+      const reportsData = pageResult.data || [];
+      const clinicDocsData = [];
+      const algorithmResultsData = [];
+      const clinicsData = [];
+      const patientsData = [];
+      const subscriptionsData = [];
+      setReportTotals({ patients: pageResult.totalPatients || 0, reports: pageResult.totalReports || 0 });
 
       // Normalize snake_case to camelCase for compatibility
       const normalizeReport = (r) => ({
@@ -392,7 +432,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
 
         return {
           ...report,
-          clinicName: clinic?.name || 'Unknown Clinic',
+          clinicName: report.clinicName || clinic?.name || 'Unknown Clinic',
           patientName: report.patientName || 'Unknown Patient',
           // Ensure file path fields are available at top level for easy access
           storagePath: report.storagePath || report.filePath || report.file_path || reportData.storagePath || reportData.filePath,
@@ -427,13 +467,26 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
 
       setClinicUsage(usageMap);
       setSubscriptions(subscriptionMap);
+
     } catch (error) {
       console.error('ERROR: Critical error loading admin patient reports:', error);
       setError(getFriendlyErrorMessage(error, 'We could not load the patient reports. Please try again.'));
       toast.error('Error loading patient reports data');
     } finally {
-      setLoading(false);
+      if (initialLoad) setLoading(false);
+      else setIsRefreshing(false);
     }
+  };
+
+  const loadDropdownData = async () => {
+    if (dropdownDataLoaded) return;
+    setDropdownDataLoaded(true);
+    const [clinicsData, patientsData, subscriptionsData] = await Promise.all([
+      fetchAdminTable('clinics'), fetchAdminTable('patients'), fetchAdminTable('subscriptions')
+    ]);
+    setClinics((clinicsData || []).map((clinic) => ({ ...clinic, reportsUsed: clinic.reportsUsed || clinic.reports_used || 0 })));
+    setPatients((patientsData || []).map((patient) => ({ ...patient, clinicId: patient.clinicId || patient.clinic_id || patient.org_id })));
+    setSubscriptions(Object.fromEntries((subscriptionsData || []).map((subscription) => [subscription.clinicId || subscription.clinic_id, subscription])));
   };
 
   // Resolve the CURRENT patient name for each report by joining on patient_id, so a
@@ -1171,7 +1224,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
     return 'PDF';
   };
 
-  if (error) {
+  if (error && reports.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center max-w-md">
@@ -1238,16 +1291,17 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       <div className="flex items-center justify-end gap-3 mb-6">
         <button
           onClick={() => {
-            loadData();
+            loadData({ force: true });
             toast.success('Patient reports refreshed!');
           }}
-          className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg font-medium text-sm border border-gray-200 transition-colors shadow-sm"
+          disabled={isRefreshing}
+          className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg font-medium text-sm border border-gray-200 transition-colors shadow-sm disabled:opacity-60"
         >
-          <Loader2 className="h-4 w-4" />
-          <span>Refresh</span>
+          <Loader2 className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
         </button>
         <button
-          onClick={() => setShowUploadModal(true)}
+          onClick={() => { loadDropdownData(); setShowUploadModal(true); }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium text-sm transition-colors shadow-sm"
         >
           <Upload className="h-4 w-4" />
@@ -1354,6 +1408,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           
           <select
             value={selectedClinic}
+            onFocus={loadDropdownData}
             onChange={(e) => setSelectedClinic(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
           >
@@ -1365,6 +1420,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           
           <select
             value={selectedPatient}
+            onFocus={loadDropdownData}
             onChange={(e) => setSelectedPatient(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
           >
@@ -1420,15 +1476,15 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
           return patientSortOrder === 'asc' ? da - db : db - da; // default 'desc' = latest first
         });
 
-        const reportPageCount = Math.max(1, Math.ceil(patientGroups.length / reportPageSize));
+        const reportPageCount = Math.max(1, Math.ceil(reportTotals.patients / reportPageSize));
         const reportCurrentPage = Math.min(reportPage, reportPageCount);
-        const pagedGroups = patientGroups.slice((reportCurrentPage - 1) * reportPageSize, reportCurrentPage * reportPageSize);
+        const pagedGroups = patientGroups;
 
         return (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 flex items-center justify-between gap-3">
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                Patients ({patientGroups.length}) &middot; Total Reports ({filteredReports.length})
+                Patients ({reportTotals.patients}) &middot; Total Reports ({reportTotals.reports})
               </h3>
               <div className="flex items-center gap-2">
                 <label className="text-sm text-gray-500 dark:text-gray-400">Sort:</label>
@@ -1571,7 +1627,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
                     }
                   </p>
                   <button
-                    onClick={() => setShowUploadModal(true)}
+                    onClick={() => { loadDropdownData(); setShowUploadModal(true); }}
                     className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium"
                   >
                     Upload First Report
@@ -1582,7 +1638,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
               {reportPageCount > 1 && (
                 <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700">
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Showing {(reportCurrentPage - 1) * reportPageSize + 1}&ndash;{Math.min(reportCurrentPage * reportPageSize, patientGroups.length)} of {patientGroups.length} patients
+                    Showing {(reportCurrentPage - 1) * reportPageSize + 1}&ndash;{Math.min(reportCurrentPage * reportPageSize, reportTotals.patients)} of {reportTotals.patients} patients
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -1687,7 +1743,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
 
       {/* Subscription Popup - Only show for non-Super Admin users */}
       {user?.role !== 'super_admin' && (
-        <SubscriptionPopup
+        <Suspense fallback={null}><SubscriptionPopup
           isOpen={showSubscriptionPopup}
           onClose={() => setShowSubscriptionPopup(false)}
           clinicId={superAdminSelectedClinic}
@@ -1698,7 +1754,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
             email: user?.email || 'admin@neuro360.com',
             phone: user?.phone || ''
           }}
-        />
+        /></Suspense>
       )}
     </div>
   );
@@ -1882,6 +1938,8 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
         });
       }
 
+      // Reuse the API that lists the original Eyes Open/Closed uploads in storage.
+      // Older algorithm records do not always retain these URLs in their row data.
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const apiBase = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')).replace(/\/$/, '');

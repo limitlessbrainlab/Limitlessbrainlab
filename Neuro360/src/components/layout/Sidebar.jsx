@@ -48,6 +48,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import AccessControlService, { SUBSCRIPTION_TIERS } from '../../services/accessControlService';
+import { queryClient } from '../../lib/queryClient';
+import { prefetchDefaultAdminReportPage } from '../../services/adminReportPageClient';
 
 // Dr. Shweta's Daily Quotes & Affirmations
 const drShwetaQuotes = [
@@ -110,6 +112,10 @@ const drRolandQuotes = [
 
 // Combined quotes for daily rotation
 const allCoachQuotes = [...drShwetaQuotes, ...drRolandQuotes];
+const preloadAdminReports = (userId) => {
+  void import('../admin/PatientReports');
+  void prefetchDefaultAdminReportPage(queryClient, userId).catch(() => {});
+};
 
 const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
   const location = useLocation();
@@ -118,6 +124,12 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
   const [dailyQuote, setDailyQuote] = useState(null);
   const [userTier, setUserTier] = useState('FREE');
   const [expandedMenus, setExpandedMenus] = useState({});
+
+  // Warm the default admin report page as soon as the authenticated app shell is
+  // ready, so normal navigation does not begin its network request on click.
+  useEffect(() => {
+    if (user?.role === 'super_admin' && user?.id) preloadAdminReports(user.id);
+  }, [user?.id, user?.role]);
 
   // Auto-expand parent menu when a child route is active
   useEffect(() => {
@@ -592,6 +604,7 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) => {
                       console.error('Navigation error:', error);
                     }
                   }}
+                  onMouseEnter={item.id === 'reports' && user?.role === 'super_admin' ? () => preloadAdminReports(user.id) : undefined}
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
                   {!collapsed && (

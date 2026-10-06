@@ -7,7 +7,6 @@ class DatabaseService {
   constructor() {
     this.useSupabase = true;
     this.supabaseService = SupabaseService;
-    this.checkSupabaseAvailability();
   }
 
   async checkSupabaseAvailability() {

@@ -45,7 +45,7 @@ export async function clearAppDataCachesKeepSession() {
   try {
     const stale = ['reports', 'clinics'];
     Object.keys(localStorage).forEach((k) => {
-      if (/^(dbCache_|patients_|patient_reports_|clinic_)/.test(k) || stale.includes(k)) {
+      if (/^(dbCache_|patients_|patient_reports_|patient_portal_v1:|admin_report_page_|clinic_)/.test(k) || stale.includes(k)) {
         localStorage.removeItem(k);
       }
     });

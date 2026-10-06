@@ -117,6 +117,7 @@ const Events = lazy(() => import('../../pages/Events'));
 import MyBookings from './MyBookings';
 import ProfileGate from './ProfileGate';
 import { getCareProtocol } from '../../utils/careProtocolLookup';
+import { readPatientPortalCache, writePatientPortalCache } from '../../services/patientPortalCache';
 
 const CARE_PROGRAM_YOGA_NIDRA_URL = 'https://drive.google.com/file/d/1G7M7EiWU7tHzFkb0Gy6KIPNwUt1p3pn8/preview';
 const getGuideThumbnailUrl = (url) => {
@@ -431,6 +432,14 @@ const PatientDashboard = () => {
     ],
     // appointments now loaded dynamically from booking service
   });
+
+  useEffect(() => {
+    if (!user?.id || !patientDbId) return;
+    writePatientPortalCache(user.id, {
+      patientData, patientReports, algorithmResults, careProgramScores,
+      patientDbId, patientClinicId,
+    });
+  }, [user?.id, patientData, patientReports, algorithmResults, careProgramScores, patientDbId, patientClinicId]);
 
   // Tabs that require a completed NeuroSense report to access
   const lockedTabIds = [
@@ -1482,7 +1491,18 @@ const PatientDashboard = () => {
       }
 
       try {
-        setLoading(true);
+        const cached = readPatientPortalCache(user.id);
+        if (cached) {
+          setPatientData(cached.patientData);
+          setPatientReports(cached.patientReports || []);
+          setAlgorithmResults(cached.algorithmResults || null);
+          setCareProgramScores(cached.careProgramScores || null);
+          setPatientDbId(cached.patientDbId || null);
+          setPatientClinicId(cached.patientClinicId || null);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
 
         // Import DatabaseService
         const DatabaseService = (await import('../../services/databaseService')).default;
@@ -8581,7 +8601,7 @@ const PatientDashboard = () => {
         {/* Video Previews Section */}
         {(() => {
           const driveEmbed = (id) => `https://drive.google.com/file/d/${id}/preview`;
-          const YOGA_NIDRA_URL = driveEmbed('1G7M7EiWU7tHzFkb0Gy6KIPNwUt1p3pn8');
+          const YOGA_NIDRA_URL = driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB');
           const meditationVideos = [
             {
               num: 0, featured: true,

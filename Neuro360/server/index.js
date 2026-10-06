@@ -20,12 +20,27 @@ const { setupMiddleware, setupRateLimiters, protectedRoutes, setupErrorHandling,
 const { authMiddleware, optionalAuth } = require('./middleware/authMiddleware');
 const { requireRole, requireOwnership } = require('./middleware/rbac');
 const logger = require('./services/logger');
+const { parseReportPage } = require('./services/adminReportPage');
 
 // Initialize Supabase client for server-side operations.
 // Routed per-request (prod vs staging by origin) via dbRouter; returns the plain
 // prod client when staging env vars are not configured (no behavior change).
 const { createRoutedClient } = require('./dbRouter');
 const supabase = createRoutedClient();
+const adminRoleCache = new Map();
+const ADMIN_ROLE_CACHE_TTL_MS = 30_000;
+const MAX_ADMIN_ROLE_CACHE_ENTRIES = 500;
+
+const getAdminRole = async (userId, fallbackRole) => {
+  if (fallbackRole === 'super_admin') return fallbackRole;
+  const cached = adminRoleCache.get(userId);
+  if (cached?.expiresAt > Date.now()) return cached.role;
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+  const role = profile?.role || fallbackRole;
+  if (adminRoleCache.size >= MAX_ADMIN_ROLE_CACHE_ENTRIES) adminRoleCache.delete(adminRoleCache.keys().next().value);
+  adminRoleCache.set(userId, { role, expiresAt: Date.now() + ADMIN_ROLE_CACHE_TTL_MS });
+  return role;
+};
 
 // Notification de-duplication. Claims a key the first time and returns true (send);
 // returns false if the key was already claimed (skip). Backed by the
@@ -7824,6 +7839,32 @@ app.post('/api/send-coaching-link', async (req, res) => {
       success: false,
       message: 'Failed to send coaching link email'
     });
+  }
+});
+
+app.get('/api/admin/reports/page', authMiddleware, async (req, res) => {
+  try {
+    const roleStartedAt = performance.now();
+    const role = supabase && req.user?.id ? await getAdminRole(req.user.id, req.user.role) : req.user?.role;
+    const roleDurationMs = performance.now() - roleStartedAt;
+    if (role !== 'super_admin') return res.status(403).json({ success: false, message: 'Super admin role required' });
+
+    const { page, pageSize } = parseReportPage(req.query);
+    const reportStartedAt = performance.now();
+    const { data, error } = await supabase.rpc('admin_report_page', {
+      p_page: page, p_page_size: pageSize, p_clinic_id: req.query.clinicId || null,
+      p_patient_id: req.query.patientId || null, p_search: req.query.search || null,
+      p_ascending: req.query.sort === 'asc'
+    });
+    const reportDurationMs = performance.now() - reportStartedAt;
+    if (error) return res.status(500).json({ success: false, message: error.message });
+    const firstRow = data?.[0];
+    res.setHeader('Server-Timing', `auth;dur=${Math.round(req.authDurationMs || 0)}, role;dur=${Math.round(roleDurationMs)}, reports;dur=${Math.round(reportDurationMs)}`);
+    res.json({ success: true, data: (data || []).flatMap((row) => row.reports || []),
+      totalPatients: Number(firstRow?.total_patients || 0), totalReports: Number(firstRow?.total_reports || 0), page, pageSize });
+  } catch (error) {
+    console.error('Admin report page fetch error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

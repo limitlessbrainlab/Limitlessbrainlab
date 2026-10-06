@@ -30,6 +30,7 @@ const WebsitePayments = lazy(() => import('./WebsitePayments'));
 const PatientSubscriptions = lazy(() => import('./PatientSubscriptions'));
 const PricingManagement = lazy(() => import('./PricingManagement'));
 const BrainCoursesManagement = lazy(() => import('./BrainCoursesManagement'));
+const PREWARM_TABS = ['reports', 'clinics', 'payments', 'patient-subscriptions', 'analytics', 'algorithm-processor'];
 
 const SuperAdminPanel = () => {
 
@@ -49,6 +50,31 @@ const SuperAdminPanel = () => {
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts.length > 1 ? pathParts[1] : 'dashboard';
   const urlClinic = searchParams.get('clinic') || null;
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set([activeTab]));
+  const [prewarmedTabs, setPrewarmedTabs] = useState(() => new Set());
+  const renderedTabs = new Set([...visitedTabs, ...prewarmedTabs, activeTab]);
+
+  // Keep an already visited panel mounted. Its local data and UI state remain
+  // available when navigating back instead of starting its loader again.
+  useEffect(() => {
+    setVisitedTabs((tabs) => tabs.has(activeTab) ? tabs : new Set([...tabs, activeTab]));
+  }, [activeTab]);
+
+  // Warm the agreed high-traffic admin screens one at a time after the shell is
+  // ready. Mounted hidden panels retain their data for an instant first visit.
+  useEffect(() => {
+    if (loading || user?.role !== 'super_admin') return;
+    let index = 0;
+    let timer;
+    const warmNext = () => {
+      const tab = PREWARM_TABS[index++];
+      if (!tab) return;
+      setPrewarmedTabs((tabs) => tabs.has(tab) ? tabs : new Set([...tabs, tab]));
+      if (index < PREWARM_TABS.length) timer = window.setTimeout(warmNext, 750);
+    };
+    timer = window.setTimeout(warmNext, 750);
+    return () => window.clearTimeout(timer);
+  }, [loading, user?.role]);
 
   useEffect(() => {
     try {
@@ -118,7 +144,7 @@ const SuperAdminPanel = () => {
     }
   };
 
-  const renderContent = () => {
+  const renderContent = (tab) => {
     try {
       
       // Clear any previous errors when switching tabs
@@ -126,7 +152,7 @@ const SuperAdminPanel = () => {
         setError(null);
       }
       
-      switch (activeTab) {
+      switch (tab) {
         case 'dashboard':
           return <AdminDashboard analytics={analytics} />;
         case 'activities':
@@ -289,7 +315,11 @@ const SuperAdminPanel = () => {
         )}
         
         <Suspense fallback={<div className="flex items-center justify-center min-h-[300px]"><div className="w-8 h-8 border-4 border-[#323956] border-t-transparent rounded-full animate-spin" /></div>}>
-          {renderContent()}
+          {[...renderedTabs].map((tab) => (
+            <div key={tab} className={tab === activeTab ? 'block' : 'hidden'}>
+              {renderContent(tab)}
+            </div>
+          ))}
         </Suspense>
       </div>
     </DashboardLayout>

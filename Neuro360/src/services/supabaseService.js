@@ -42,9 +42,6 @@ class SupabaseService {
     if (!this.hasValidConfig) {
       console.warn('WARNING: Supabase is not configured. Running in demo mode.');
       console.warn('To enable Supabase, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables.');
-    } else {
-      this.testConnection();
-      this.initializeTables();
     }
   }
 
