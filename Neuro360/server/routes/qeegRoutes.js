@@ -29,11 +29,13 @@ try {
 
 // NEW: Gemini PDF Generator - Uses Gemini AI for content generation
 let GeminiPdfGenerator = null;
+let geminiPdfGeneratorLoadError = null;
 try {
   GeminiPdfGenerator = require('../services/geminiPdfGenerator');
   console.log('✅ Gemini PDF Generator loaded successfully');
   console.log('   Generator available:', !!GeminiPdfGenerator);
 } catch (error) {
+  geminiPdfGeneratorLoadError = error;
   console.error('❌ CRITICAL: Gemini PDF Generator failed to load!');
   console.error('   Error:', error.message);
   console.error('   Stack:', error.stack);
@@ -43,7 +45,8 @@ const router = express.Router();
 
 const requireFullNeuroSenseGenerator = () => {
   if (GeminiPdfGenerator) return GeminiPdfGenerator;
-  throw Object.assign(new Error('Full NeuroSense PDF generator is unavailable. Please try again after the report service is restored.'), { status: 503 });
+  const cause = geminiPdfGeneratorLoadError?.message ? ` ${geminiPdfGeneratorLoadError.message}` : '';
+  throw Object.assign(new Error(`Full NeuroSense PDF generator is unavailable.${cause}`), { status: 503 });
 };
 
 // Configure multer for file uploads

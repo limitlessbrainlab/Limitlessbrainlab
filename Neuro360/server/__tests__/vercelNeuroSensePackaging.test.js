@@ -14,6 +14,7 @@ test('Vercel NeuroSense endpoint statically includes the full report route', () 
 
 test('live NeuroSense processing never substitutes the short PDF fallback', () => {
   assert.match(routeSource, /Full NeuroSense PDF generator is unavailable/);
+  assert.match(routeSource, /geminiPdfGeneratorLoadError/);
   assert.doesNotMatch(routeSource, /else if \(EnhancedAIPdfGenerator\) \{/);
 });
 
