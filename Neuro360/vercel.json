@@ -15,7 +15,7 @@
   "functions": {
     "api/process-neurosense-report.js": {
       "maxDuration": 800,
-      "includeFiles": "{server/assets/**,public/assets/**,server/services/pdfLogo*.js}"
+      "includeFiles": "{server/assets/**,public/assets/**,server/services/pdfLogo*.js,server/node_modules/pdf-to-img/**,server/node_modules/pdfjs-dist/**,server/node_modules/@napi-rs/canvas*/**}"
     },
     "api/generate-performance-report.js": {
       "maxDuration": 800

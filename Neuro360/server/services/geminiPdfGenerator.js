@@ -1448,11 +1448,7 @@ class GeminiPdfGenerator {
     ];
 
     // Map sub-parameter scores from patient data for pill bar indicator
-    const allSubParams = [];
-    const reportParams = this.geminiReportData?.parameters || [];
-    reportParams.forEach(p => {
-      (p.subparameters || p.metrics || []).forEach(sub => allSubParams.push(sub));
-    });
+    const allSubParams = this.algorithmResults.parameters.flatMap(p => p.metrics || p.subparameters || p.subParameters || []);
 
     // Title-to-subparam name mapping
     const titleToSubParam = {
