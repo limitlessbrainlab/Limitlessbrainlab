@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const apiSource = fs.readFileSync(path.resolve(__dirname, '../../api/process-neurosense-report.js'), 'utf8');
 const routeSource = fs.readFileSync(path.resolve(__dirname, '../routes/qeegRoutes.js'), 'utf8');
+const generatorSource = fs.readFileSync(path.resolve(__dirname, '../services/geminiPdfGenerator.js'), 'utf8');
 
 test('Vercel NeuroSense endpoint statically includes the full report route', () => {
   assert.match(apiSource, /import router from ['"]\.\.\/server\/routes\/qeegRoutes\.js['"];/);
@@ -20,4 +21,9 @@ test('Vercel report upload uses the authenticated request client and never retur
   assert.match(apiSource, /req\.supabaseClient = supabase;/);
   assert.match(routeSource, /req\.supabaseClient \|\| undefined/);
   assert.doesNotMatch(routeSource, /pdfUrl = `\/uploads\/\$\{pdfFilename\}`/);
+});
+
+test('full report loading does not require the unused native chart module', () => {
+  assert.doesNotMatch(generatorSource.slice(0, generatorSource.indexOf('class GeminiPdfGenerator')), /ChartJSNodeCanvas/);
+  assert.match(generatorSource, /async generateRadarChart\(\) \{\s*const \{ ChartJSNodeCanvas \} = require\('chartjs-node-canvas'\);/);
 });

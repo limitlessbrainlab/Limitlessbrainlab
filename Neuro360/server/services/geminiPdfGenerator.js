@@ -2,7 +2,6 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const GeminiService = require('./geminiService');
-const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const {
   generateBrainMarkersPage,
   generateParameterDetailPage,
@@ -3138,6 +3137,7 @@ class GeminiPdfGenerator {
    * Returns Buffer containing PNG image
    */
   async generateRadarChart() {
+    const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
     try {
       console.log('\n📊 Generating radar chart for 7 brain parameters...');
 
