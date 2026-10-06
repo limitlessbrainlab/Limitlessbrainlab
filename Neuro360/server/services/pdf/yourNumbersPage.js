@@ -10,6 +10,7 @@
 const { FONTS, LAYOUT } = require('./pdfStyles');
 const fs = require('fs');
 const path = require('path');
+const pdfToImg = require('pdf-to-img');
 const { extractReliabilityAssessment } = require('./brainMapComparisonPage');
 
 // Image paths
@@ -31,16 +32,6 @@ const REF_GRAY = '#000000';
 async function extractPageImage(pdfPath) {
   try {
     console.log('   Extracting page 2 from: ' + path.basename(pdfPath));
-
-    // Dynamic imports
-    var pdfToImg;
-    try {
-      pdfToImg = await import('pdf-to-img');
-      console.log('   pdf-to-img loaded successfully');
-    } catch (e) {
-      console.error('   pdf-to-img unavailable:', e.message);
-      return null;
-    }
 
     // Convert PDF pages with scale for good quality
     console.log('   Loading PDF document...');

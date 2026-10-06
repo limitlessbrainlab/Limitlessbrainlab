@@ -1452,9 +1452,7 @@ class GeminiPdfGenerator {
     const allSubParams = [];
     const reportParams = this.geminiReportData?.parameters || [];
     reportParams.forEach(p => {
-      if (p.subparameters) {
-        p.subparameters.forEach(sub => allSubParams.push(sub));
-      }
+      (p.subparameters || p.metrics || []).forEach(sub => allSubParams.push(sub));
     });
 
     // Title-to-subparam name mapping
