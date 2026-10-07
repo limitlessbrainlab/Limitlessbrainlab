@@ -8592,12 +8592,12 @@ const PatientDashboard = () => {
             { num: 10, title: 'NEURO DEPRESSION HEALING MEDITATION',   embedUrl: driveEmbed('1xkTyCTbZ2WMmi3Ose_76xck1bq6Z0GBb'), thumb: '/meditation-thumbs/thumb-10.webp' },
             { num: 11, title: 'NEURO DEEP SLEEP MEDITATION',           embedUrl: driveEmbed('1AZNpbXzRT_XU9mNIU1pKuZVutUi3fNn9'), thumb: '/meditation-thumbs/thumb-11.webp' },
             { num: 12, title: 'THETA MEDITATION — MANIFESTATION MAGIC', embedUrl: driveEmbed('1mNaSY-9eaTFXmCrVzmicziwP07QMsrbw'), thumb: 'https://drive.google.com/thumbnail?id=1HQ81VwcKHHsKpgCJE8fZkNz-L7qg-gjK&sz=w1000', isFree: true },
-            { num: 13, title: 'DELTA MEDITATION — SLEEP AND REPAIR', embedUrl: driveEmbed('1DZtRbvhhJz8dskMwIrSc6WkW4Ik-MJ21'), thumb: 'https://drive.google.com/thumbnail?id=1pbhPW7nJZOLTXRhxzvEgADbfOTD_4rRu&sz=w1000', isFree: true },
-            { num: 14, title: 'BETA MEDITATION — FOCUS & ATTENTION', embedUrl: driveEmbed('1Y584iFTo4jc_HdqwfK7oqaBMv6mMOqfm'), thumb: 'https://drive.google.com/thumbnail?id=1MdqqjcYi4hi4Jq2R2QWG4AyboCCEEsgi&sz=w1000', isFree: true },
-            { num: 15, title: 'ALPHA MEDITATION — RELAXATION AND CALM', embedUrl: driveEmbed('1zUDQF-fKTVpFS8v1CwHKiCpO0-MnqAra'), thumb: 'https://drive.google.com/thumbnail?id=1JQBI68OvyWr-OXNdg8HqKpQfyLTCEmMW&sz=w1000', isFree: true },
-            { num: 16, title: 'Ultimate Yoga Nidra', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/yoga-nidra.webp', isFree: true },
-            { num: 17, title: 'Advanced Yoga Nidra', embedUrl: driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB'), thumb: 'https://drive.google.com/thumbnail?id=1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB&sz=w1000', isFree: true },
-            { num: 18, title: 'Super Yoga Nidra', embedUrl: driveEmbed('1zH2JjSQz41jG0s_I2yiH0zawBT2XYUXm'), thumb: 'https://drive.google.com/thumbnail?id=1zH2JjSQz41jG0s_I2yiH0zawBT2XYUXm&sz=w1000', isFree: true },
+            { num: 13, title: 'DELTA MEDITATION — SLEEP AND REPAIR', embedUrl: driveEmbed('1DZtRbvhhJz8dskMwIrSc6WkW4Ik-MJ21'), thumb: '/meditation-thumbs/thumb-13.jpg', isFree: true },
+            { num: 14, title: 'BETA MEDITATION — FOCUS & ATTENTION', embedUrl: driveEmbed('1Y584iFTo4jc_HdqwfK7oqaBMv6mMOqfm'), thumb: '/meditation-thumbs/thumb-14.jpg', isFree: true },
+            { num: 15, title: 'ALPHA MEDITATION — RELAXATION AND CALM', embedUrl: driveEmbed('1zUDQF-fKTVpFS8v1CwHKiCpO0-MnqAra'), thumb: '/meditation-thumbs/thumb-15.jpg', isFree: true },
+            { num: 16, title: 'Ultimate Yoga Nidra', embedUrl: YOGA_NIDRA_URL, thumb: '/meditation-thumbs/thumb-16.png', isFree: true },
+            { num: 17, title: 'Advanced Yoga Nidra', embedUrl: driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB'), thumb: '/meditation-thumbs/thumb-17.png', isFree: true },
+            { num: 18, title: 'Super Yoga Nidra', embedUrl: driveEmbed('1zH2JjSQz41jG0s_I2yiH0zawBT2XYUXm'), thumb: '/meditation-thumbs/thumb-18.png', isFree: true },
           ];
           const featured = meditationVideos[0];
           const rest = meditationVideos.slice(1);
