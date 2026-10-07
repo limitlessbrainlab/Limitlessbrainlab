@@ -8571,7 +8571,7 @@ const PatientDashboard = () => {
         {/* Video Previews Section */}
         {(() => {
           const driveEmbed = (id) => `https://drive.google.com/file/d/${id}/preview`;
-          const YOGA_NIDRA_URL = driveEmbed('1Q6FU41CNB3hMzZUcTUkYCJ9UGXxXc2pB');
+          const YOGA_NIDRA_URL = driveEmbed('1G7M7EiWU7tHzFkb0Gy6KIPNwUt1p3pn8');
           const meditationVideos = [
             {
               num: 0, featured: true,
