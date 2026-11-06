@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { X, Camera, User, Mail, Building, Shield, Save, Upload, CheckCircle, Phone, MapPin, Lock, Eye, EyeOff } from 'lucide-react';
+import { X, Camera, User, Mail, Building, Shield, Save, CheckCircle, Phone, MapPin } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import StorageService from '../../services/storageService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
@@ -15,25 +14,26 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
     clinicName: user?.clinicName || '',
     phone: user?.phone || '',
     address: user?.address || '',
-    avatar: user?.avatar || '',
-    currentPassword: '',
-    password: '',
-    confirmPassword: ''
+    avatar: user?.avatar || ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const fileInputRef = useRef(null);
   const pictureViewerRef = useRef(null);
   const [avatarUnavailable, setAvatarUnavailable] = useState(false);
 
   React.useEffect(() => { setAvatarUnavailable(false); }, [formData.avatar, isOpen]);
 
-  // Update form data when user changes or modal opens
+  React.useEffect(() => {
+    setIsEditing(false);
+    setSelectedFile(null);
+    setShowSuccess(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [isOpen]);
+
+  // Update form data when user changes or modal opens.
   React.useEffect(() => {
     if (user) {
       setFormData({
@@ -42,10 +42,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
         clinicName: user.clinicName || '',
         phone: user.phone || '',
         address: user.address || '',
-        avatar: user.avatar || '',
-        currentPassword: '',
-        password: '',
-        confirmPassword: ''
+        avatar: user.avatar || ''
       });
     }
   }, [user, isOpen]);
@@ -61,21 +58,22 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        alert('Choose a JPG, PNG, WebP, or GIF image smaller than 5 MB.');
+        e.target.value = '';
+        return;
+      }
       try {
         setUploadingAvatar(true);
 
-        // Store file for later upload on save
+        const preview = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
         setSelectedFile(file);
-
-        // Show preview immediately using FileReader
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setFormData(prev => ({
-            ...prev,
-            avatar: e.target.result // Temporary preview (base64)
-          }));
-        };
-        reader.readAsDataURL(file);
+        setFormData(prev => ({ ...prev, avatar: preview }));
 
       } catch (error) {
         console.error('AVATAR: Error selecting file:', error);
@@ -87,6 +85,11 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
   };
 
   const handleSave = async () => {
+    if (isLoading || uploadingAvatar) return;
+    if (!formData.name.trim() || !formData.clinicName.trim()) {
+      alert('Enter your name and clinic/partner name.');
+      return;
+    }
     try {
       setIsLoading(true);
 
@@ -103,7 +106,6 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
             reader.readAsDataURL(selectedFile);
           });
 
-          const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
           const response = await fetch(`${API_URL}/upload-avatar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -129,82 +131,16 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
           setIsLoading(false);
           return;
         }
-      } else {
       }
 
-      // Validate password change only if user wants to change password (all three fields filled)
-      if (formData.currentPassword && formData.password && formData.confirmPassword) {
-        // Verify current password matches the one in database
-        if (user?.password && formData.currentPassword !== user.password) {
-          alert('Current password is incorrect!');
-          setIsLoading(false);
-          return;
-        }
+      const { email, ...dataToSave } = { ...formData, avatar: avatarUrl };
 
-        // Check if passwords match
-        if (formData.password !== formData.confirmPassword) {
-          alert('New passwords do not match!');
-          setIsLoading(false);
-          return;
-        }
-
-        // Check password length
-        if (formData.password.length < 6) {
-          alert('New password must be at least 6 characters long!');
-          setIsLoading(false);
-          return;
-        }
-
-        // Check if new password is different from current
-        if (formData.password === formData.currentPassword) {
-          alert('New password must be different from current password!');
-          setIsLoading(false);
-          return;
-        }
-
-      }
-
-      // Prepare data to send
-      const dataToSave = { ...formData, avatar: avatarUrl };
-
-      // Email is the login identity and is read-only here — never write it
-      delete dataToSave.email;
-
-      // Remove password fields if not changing password
-      if (!formData.password) {
-        delete dataToSave.currentPassword;
-        delete dataToSave.password;
-        delete dataToSave.confirmPassword;
-      } else {
-        // Remove currentPassword and confirmPassword, only send new password
-        delete dataToSave.currentPassword;
-        delete dataToSave.confirmPassword;
-      }
-
-      // Update user data including profile picture and password
+      // Persist the profile before reporting success.
       const result = await updateUser(dataToSave);
 
       if (result.success) {
         setShowSuccess(true);
         setSelectedFile(null); // Clear selected file after successful save
-
-        // Email the user their updated credentials (email + new plaintext password),
-        // with a CC copy to the internal address, whenever they changed their password.
-        if (formData.password) {
-          try {
-            await fetch(`${API_URL}/send-password-email`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: user?.email,
-                password: formData.password,
-                name: user?.name || user?.clinicName || user?.contactPerson || 'User'
-              })
-            });
-          } catch (emailErr) {
-            console.warn('Password email sending failed:', emailErr.message);
-          }
-        }
 
         // Call the callback to update parent component with new profile data
         if (onProfileUpdate) {
@@ -278,6 +214,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Profile Settings</h2>
             <button
               onClick={onClose}
+              disabled={isLoading}
               aria-label="Close profile settings"
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
@@ -305,7 +242,8 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
               {isEditing && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
+                  aria-label="Change profile picture"
+                  disabled={uploadingAvatar || isLoading}
                   className="absolute -bottom-2 -right-2 p-2 bg-[#323956] dark:bg-blue-600 text-white rounded-full shadow-lg hover:bg-[#323956] dark:hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
                   {uploadingAvatar ? (
@@ -328,7 +266,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={handleAvatarUpload}
               className="hidden"
             />
@@ -353,7 +291,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              disabled={!isEditing}
+              disabled={!isEditing || isLoading}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-800"
             />
           </div>
@@ -385,7 +323,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
                 name="clinicName"
                 value={formData.clinicName}
                 onChange={handleInputChange}
-                disabled={!isEditing}
+                disabled={!isEditing || isLoading}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-800"
               />
             </div>
@@ -401,7 +339,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
               name="phone"
               value={formData.phone}
               onChange={handleInputChange}
-              disabled={!isEditing}
+              disabled={!isEditing || isLoading}
               placeholder="Enter phone number"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-800"
             />
@@ -416,95 +354,13 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
               name="address"
               value={formData.address}
               onChange={handleInputChange}
-              disabled={!isEditing}
+              disabled={!isEditing || isLoading}
               placeholder="Enter clinic address"
               rows="3"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-800 resize-none"
             />
           </div>
 
-          {/* Password change disabled per request — patients cannot change their
-              password from the profile modal. Kept as a comment for easy re-enable.
-          {isEditing && (
-            <>
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Change Password (Optional)</h3>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Lock className="h-4 w-4 inline mr-2" />
-                  Current Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showCurrentPassword ? "text" : "password"}
-                    name="currentPassword"
-                    value={formData.currentPassword}
-                    onChange={handleInputChange}
-                    placeholder="Enter current password to change"
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Lock className="h-4 w-4 inline mr-2" />
-                  New Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? "text" : "password"}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    placeholder="Enter new password"
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Lock className="h-4 w-4 inline mr-2" />
-                  Confirm New Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    placeholder="Confirm new password"
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-          */}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -535,7 +391,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
           </div>
         )}
 
-        {/* Actions block hidden — Edit Profile disabled so the header profile popup is view-only
+        {user?.role === 'clinic_admin' && (
         <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex space-x-3">
           {!isEditing ? (
             <button
@@ -548,14 +404,20 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
           ) : (
             <>
               <button
-                onClick={() => setIsEditing(false)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setSelectedFile(null);
+                  setFormData({ name: user.name || '', email: user.email || '', clinicName: user.clinicName || '', phone: user.phone || '', address: user.address || '', avatar: user.avatar || '' });
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                disabled={isLoading}
                 className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                disabled={isLoading}
+                disabled={isLoading || uploadingAvatar || showSuccess}
                 className="flex-1 flex items-center justify-center px-4 py-2 bg-[#323956] dark:bg-blue-600 text-white rounded-lg hover:bg-[#323956] dark:hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 {isLoading ? (
@@ -570,7 +432,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
             </>
           )}
         </div>
-        */}
+        )}
       </div>
       <dialog
         ref={pictureViewerRef}

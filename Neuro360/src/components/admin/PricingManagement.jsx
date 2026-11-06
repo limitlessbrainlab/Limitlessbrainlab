@@ -84,13 +84,6 @@ const PricingManagement = () => {
       return next;
     });
   };
-  const handleUsdChange = (val) => {
-    setFormData(prev => {
-      const next = { ...prev, price_usd: val };
-      if (usdRate && val !== '' && !isNaN(val)) next.price_inr = Math.round(Number(val) * usdRate);
-      return next;
-    });
-  };
 
   const loadPackages = async () => {
     setLoading(true);
@@ -400,27 +393,7 @@ const PricingManagement = () => {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price USD</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">USD</span>
-                    <input
-                      type="number"
-                      value={formData.price_usd}
-                      onChange={e => handleUsdChange(e.target.value)}
-                      min="0"
-                      className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#323956] focus:border-transparent"
-                    />
-                  </div>
-                </div>
               </div>
-
-              {/* Live conversion rate indicator — editing either field auto-updates the other */}
-              <p className="text-xs text-gray-500 -mt-2">
-                {rateStatus === 'loading'
-                  ? 'Loading live exchange rate…'
-                  : `Auto-converts at ${rateStatus === 'live' ? 'live' : 'fallback'} rate: USD 1 = ${'₹'}${usdRate?.toFixed(2)}`}
-              </p>
 
               {/* Per-report price preview */}
               {formData.reports > 0 && formData.price_inr > 0 && (
@@ -428,11 +401,6 @@ const PricingManagement = () => {
                   <p className="text-xs text-gray-500">Per Report Cost</p>
                   <p className="text-lg font-bold text-[#323956]">
                     {'\u20b9'}{Math.round(formData.price_inr / formData.reports).toLocaleString()}
-                    {formData.price_usd > 0 && (
-                      <span className="text-sm text-gray-500 ml-2">
-                        (USD {Math.round(formData.price_usd / formData.reports)})
-                      </span>
-                    )}
                   </p>
                 </div>
               )}
@@ -515,9 +483,6 @@ const PackageRow = ({ pkg, onEdit, onDelete, onToggle }) => (
     <div className="flex items-center gap-6">
       <div className="text-right">
         <p className="font-bold text-gray-900">{'\u20b9'}{Number(pkg.price_inr).toLocaleString()}</p>
-        {pkg.price_usd > 0 && (
-          <p className="text-xs text-gray-500">USD {Number(pkg.price_usd).toLocaleString()}</p>
-        )}
         <p className="text-xs text-gray-400">
           {'\u20b9'}{Math.round(pkg.price_inr / pkg.reports).toLocaleString()}/report
         </p>

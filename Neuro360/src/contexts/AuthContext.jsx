@@ -723,13 +723,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = async (userData) => {
     try {
-      setLoading(true);
-
-      // Snapshot current state so we can roll back if the DB write fails
-      const previousUser = user;
-      const previousUserStorage = localStorage.getItem('user');
-
-      // Update local state immediately for better UX
+      // Publish profile changes only after the database accepts them.
       const updatedUser = { ...user, ...userData };
 
       // If avatar is being updated, also add to profile_image and avatar_url for consistency
@@ -738,11 +732,6 @@ export const AuthProvider = ({ children }) => {
         updatedUser.avatar_url = userData.avatar;
         updatedUser.profileImage = userData.avatar;
       }
-
-      setUser(updatedUser);
-
-      // Update localStorage
-      localStorage.setItem('user', JSON.stringify(updatedUser));
 
       // SUCCESS: CRITICAL: Update Supabase Auth password FIRST if password is being changed
       if (userData.password && supabase) {
@@ -766,21 +755,14 @@ export const AuthProvider = ({ children }) => {
           // Update super admin in database
           await DatabaseService.update('superAdmins', user.id, userData);
         } else if (user?.role === 'clinic_admin') {
-          // Map clinicName to name for database
           const clinicData = { ...userData };
-          if (clinicData.clinicName) {
-            clinicData.name = clinicData.clinicName;
-            delete clinicData.clinicName;
-          }
-          // Map name (contact person) to contact_person for database
-          if (clinicData.name && !clinicData.contact_person) {
-            clinicData.contact_person = clinicData.name;
-          }
-          // Map avatar to logo_url (clinics table doesn't have avatar field)
-          if (clinicData.avatar) {
-            clinicData.logo_url = clinicData.avatar;
-            delete clinicData.avatar;
-          }
+          // The profile name belongs to the contact; clinicName is the organization.
+          if ('name' in userData) clinicData.contact_person = userData.name;
+          delete clinicData.name;
+          if ('clinicName' in userData) clinicData.name = userData.clinicName;
+          delete clinicData.clinicName;
+          if ('avatar' in userData) clinicData.logo_url = userData.avatar;
+          delete clinicData.avatar;
           // Update clinic admin in database
           const updateResult = await DatabaseService.update('clinics', user.id, clinicData);
         } else {
@@ -822,27 +804,19 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (dbError) {
         console.error('ERROR: Database update failed:', dbError);
-        // Roll back the optimistic update so the UI reflects reality instead of
-        // showing a fake success (e.g. when an RLS policy rejects the write).
-        setUser(previousUser);
-        if (previousUserStorage !== null) {
-          localStorage.setItem('user', previousUserStorage);
-        } else {
-          localStorage.removeItem('user');
-        }
         const message = getFriendlyErrorMessage(dbError, 'We could not save your changes. Please try again.');
         toast.error(message);
         return { success: false, error: message };
       }
 
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
       toast.success('Profile updated successfully!');
       return { success: true };
     } catch (error) {
       console.error('Profile update failed:', error);
       toast.error(getFriendlyErrorMessage(error, 'We could not update your profile. Please try again.'));
       return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
     }
   };
 
