@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
@@ -67,61 +67,32 @@ const ClinicManagement = ({ onUpdate }) => {
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm({ defaultValues: { countryCode: '+91' } });
 
-  // Delete clinic function
-  const deleteClinic = async (clinic, index) => {
+  const [deletingClinicId, setDeletingClinicId] = useState(null);
+  const deletionInFlight = useRef(false);
 
+  const deleteClinic = async (clinic) => {
+    if (user?.role !== 'super_admin' || !clinic?.id || deletionInFlight.current) return;
+    if (!window.confirm(`Delete account for "${clinic.name || clinic.email}"?\n\nThis removes login access and hides the account. Patient, report and billing history will be kept. Open sessions will close on their next access check. This cannot be undone here.`)) return;
+    deletionInFlight.current = true;
+    setDeletingClinicId(clinic.id);
     try {
-      const clinicName = clinic?.name || `Clinic ${index + 1}`;
-
-      if (!clinic?.id) {
-        console.error('ERROR: No clinic ID provided');
-        toast.error('Cannot delete: No clinic ID found');
-        return;
-      }
-
-
-      // Show confirmation dialog
-      const confirmDelete = window.confirm(`Delete "${clinicName}"?\n\nThis action cannot be undone.`);
-
-      if (!confirmDelete) {
-        return;
-      }
-
-
-      // Show loading toast
-      const loadingToast = toast.loading('Deleting clinic...');
-
-      try {
-        // Use DatabaseService.delete to delete the clinic directly
-        const deleteResult = await DatabaseService.delete('clinics', clinic.id);
-
-        // Dismiss loading toast
-        toast.dismiss(loadingToast);
-
-        toast.success(`${clinicName} deleted successfully`);
-
-        // Reload clinics to refresh the list
-        await loadClinics();
-
-        // Trigger refresh to ensure UI is in sync
-        if (onUpdate) {
-          onUpdate();
-        }
-      } catch (deleteError) {
-        // Dismiss loading toast
-        toast.dismiss(loadingToast);
-        throw deleteError;
-      }
-
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Please sign in again as Super Admin.');
+      const base = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')).replace(/\/$/, '').replace(/\/api$/, '');
+      const response = await fetch(`${base}/api/admin/clinics/${encodeURIComponent(clinic.id)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Account removal failed');
+      setClinics(current => current.filter(item => item.id !== clinic.id));
+      toast.success('Account removed. Patient and report history has been kept.');
+      await loadClinics();
+      onUpdate?.();
     } catch (error) {
-      console.error('Delete error:', error);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-      console.error('Clinic data:', clinic);
-      console.error('Index:', index);
-
-      // Show detailed error message
-      toast.error(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
+      toast.error(getFriendlyErrorMessage(error, 'Unable to remove the account. Please try again.'));
+    } finally {
+      deletionInFlight.current = false;
+      setDeletingClinicId(null);
     }
   };
 
@@ -132,7 +103,7 @@ const ClinicManagement = ({ onUpdate }) => {
         setLoading(true);
 
         // Load clinics with proper error handling
-        await loadClinics(true); // Skip the legacy demo-data cleanup scan on mount — it re-fetches the whole clinics table on every load (~1.4s) for a one-time chore that's long done.
+        await loadClinics();
 
 
       } catch (error) {
@@ -149,10 +120,10 @@ const ClinicManagement = ({ onUpdate }) => {
     }, 100);
     // Silent re-fetch so the table reflects clinic-side changes (approvals,
     // credit purchases) without a manual reload — same 30s cadence as the
-    // PendingClinicsNotification poll it sits next to. loadClinics(true)
+    // PendingClinicsNotification poll it sits next to. loadClinics()
     // doesn't touch the loading spinner, so rows update in place.
     const refreshInterval = setInterval(() => {
-      loadClinics(true).catch(err => console.warn('Clinic list refresh failed:', err?.message));
+      loadClinics().catch(err => console.warn('Clinic list refresh failed:', err?.message));
     }, 60000);
     // Cleanup function
     return () => {
@@ -173,102 +144,6 @@ const ClinicManagement = ({ onUpdate }) => {
       }
     }
   }, [clinics, searchParams]);
-
-  const cleanupDemoData = async () => {
-    try {
-      
-      // Get current clinic data safely
-      let clinicsData = [];
-      try {
-        clinicsData = await DatabaseService.get('clinics') || [];
-      } catch (error) {
-        console.warn('Could not get clinic data for cleanup:', error);
-        return; // Exit safely if we can't get data
-      }
-      
-      
-      // Skip cleanup if no data
-      if (!Array.isArray(clinicsData) || clinicsData.length === 0) {
-        return;
-      }
-      
-      // Identify demo/test clinics
-      const demoClinicIndicators = [
-        'demo',
-        'test',
-        'sample',
-        'clinic@demo.com',
-        'demo@',
-        '@demo.com',
-        'example.com'
-      ];
-      
-      const realClinics = clinicsData.filter(clinic => {
-        // Ensure clinic has required properties
-        if (!clinic || typeof clinic !== 'object') {
-          return true; // Keep non-object entries (shouldn't happen, but be safe)
-        }
-        
-        const name = String(clinic.name || '').toLowerCase();
-        const email = String(clinic.email || '').toLowerCase();
-        
-        // Check if clinic name or email contains demo indicators
-        const isDemo = demoClinicIndicators.some(indicator => 
-          name.includes(indicator) || email.includes(indicator)
-        );
-        
-        if (isDemo) {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      // If we found demo clinics to remove, update the database
-      if (realClinics.length < clinicsData.length) {
-        
-        try {
-          // Only update if component is still mounted
-          if (!isMounted) return;
-          
-          // Clear and repopulate with real clinics only
-          localStorage.setItem('clinics', JSON.stringify(realClinics));
-          
-          // Also update database if available
-          if (DatabaseService.usedatabase) {
-            // Remove demo clinics from database
-            for (const clinic of clinicsData) {
-              if (!clinic || !clinic.id) continue; // Skip invalid entries
-              
-              const name = String(clinic.name || '').toLowerCase();
-              const email = String(clinic.email || '').toLowerCase();
-              
-              const isDemo = demoClinicIndicators.some(indicator => 
-                name.includes(indicator) || email.includes(indicator)
-              );
-              
-              if (isDemo) {
-                try {
-                  await DatabaseService.delete('clinics', clinic.id);
-                } catch (error) {
-                  console.warn(`Failed to delete demo clinic ${clinic.id} from database:`, error);
-                }
-              }
-            }
-          }
-          
-        } catch (storageError) {
-          console.error('Failed to update storage after cleanup:', storageError);
-          throw storageError; // Re-throw to let caller handle
-        }
-      } else {
-      }
-      
-    } catch (error) {
-      console.error('ERROR: Demo data cleanup failed:', error);
-      throw error; // Re-throw to let caller handle
-    }
-  };
 
   const migrateLocalStorageTodatabase = async () => {
     try {
@@ -307,7 +182,7 @@ const ClinicManagement = ({ onUpdate }) => {
     }
   };
 
-  const loadClinics = async (skipCleanup = false) => {
+  const loadClinics = async () => {
     try {
       
       // Don't clear state immediately - wait until we have new data
@@ -315,15 +190,6 @@ const ClinicManagement = ({ onUpdate }) => {
       
       // Try to migrate localStorage data to database if needed
       await migrateLocalStorageTodatabase();
-      
-      // Clean demo data after migration (with error protection) - only if explicitly requested
-      if (!skipCleanup) {
-        try {
-          await cleanupDemoData();
-        } catch (cleanupError) {
-          console.warn('Demo cleanup failed, continuing with normal load:', cleanupError);
-        }
-      }
       
       // SuperAdmin can see ALL clinics - fetch from database or localStorage
       let clinicsData = [];
@@ -372,7 +238,8 @@ const ClinicManagement = ({ onUpdate }) => {
       // Filter out invalid clinic objects
       clinicsData = clinicsData.filter(clinic => 
         clinic && 
-        typeof clinic === 'object' && 
+        typeof clinic === 'object' &&
+        !clinic.deletedAt && !clinic.deleted_at &&
         (clinic.name || clinic.email || clinic.id)
       );
       
@@ -689,49 +556,6 @@ const ClinicManagement = ({ onUpdate }) => {
     } catch (error) {
       toast.error('Error updating clinic status');
       console.error('Error in handleDeactivateClinic:', error);
-    }
-  };
-
-  const handleDeleteClinic = async (clinicId) => {
-    
-    // Force an alert to ensure the function is being called
-    alert(`Delete function called for clinic ID: ${clinicId}`);
-    
-    if (!clinicId) {
-      console.error('ERROR: No clinic ID provided for deletion');
-      alert('ERROR: No clinic ID found');
-      toast.error('Cannot delete: No clinic ID found');
-      return;
-    }
-    
-    const confirmed = window.confirm(`Are you sure you want to delete clinic with ID: ${clinicId}?\n\nThis action cannot be undone.`);
-    
-    if (confirmed) {
-      try {
-        
-        // First, let's manually check localStorage before deletion
-        const currentData = JSON.parse(localStorage.getItem('clinics') || '[]');
-        
-        const result = await DatabaseService.delete('clinics', clinicId);
-        
-        // Check localStorage after deletion
-        const afterData = JSON.parse(localStorage.getItem('clinics') || '[]');
-        
-        toast.success('Clinic deleted successfully!');
-        await loadClinics();
-        onUpdate?.();
-      } catch (error) {
-        console.error('ERROR: Error during delete operation:', error);
-        console.error('Error details:', { 
-          message: error.message, 
-          stack: error.stack,
-          clinicId: clinicId 
-        });
-        alert(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
-        toast.error(getFriendlyErrorMessage(error, 'Failed to delete the clinic. Please try again.'));
-      }
-    } else {
-      alert('Delete cancelled by user');
     }
   };
 
@@ -1128,7 +952,7 @@ Please manually share these credentials with the clinic.`;
               onClick={() => {
                 setError(null);
                 setLoading(true);
-                loadClinics(false);
+                loadClinics();
               }}
               className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
             >
@@ -1244,7 +1068,7 @@ Please manually share these credentials with the clinic.`;
                 onClick={async () => {
                   setLoading(true);
                   try {
-                    await loadClinics(false);
+                    await loadClinics();
                     toast.success('Clinic data refreshed successfully!');
                   } catch (error) {
                     console.error('Refresh failed:', error);
@@ -1475,6 +1299,18 @@ Please manually share these credentials with the clinic.`;
                   >
                     {clinic.isActive ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
                   </button>
+                  {user?.role === 'super_admin' && (
+                    <button
+                      type="button"
+                      onClick={() => deleteClinic(clinic)}
+                      disabled={deletingClinicId !== null}
+                      title="Delete Account"
+                      aria-label={`Delete account for ${clinic.name || clinic.email}`}
+                      className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1750,6 +1586,18 @@ Please manually share these credentials with the clinic.`;
                           >
                             {clinic.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                           </button>
+                  {user?.role === 'super_admin' && (
+                    <button
+                      type="button"
+                      onClick={() => deleteClinic(clinic)}
+                      disabled={deletingClinicId !== null}
+                      title="Delete Account"
+                      aria-label={`Delete account for ${clinic.name || clinic.email}`}
+                      className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                         </div>
                       </td>
                     </tr>

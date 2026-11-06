@@ -28,6 +28,10 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const fileInputRef = useRef(null);
+  const pictureViewerRef = useRef(null);
+  const [avatarUnavailable, setAvatarUnavailable] = useState(false);
+
+  React.useEffect(() => { setAvatarUnavailable(false); }, [formData.avatar, isOpen]);
 
   // Update form data when user changes or modal opens
   React.useEffect(() => {
@@ -274,6 +278,7 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Profile Settings</h2>
             <button
               onClick={onClose}
+              aria-label="Close profile settings"
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
@@ -286,10 +291,11 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
           <div className="flex flex-col items-center space-y-4">
             <div className="relative">
               <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg ${getRoleColor()}`}>
-                {formData.avatar ? (
+                {formData.avatar && !avatarUnavailable ? (
                   <img
                     src={formData.avatar}
                     alt="Profile"
+                    onError={() => setAvatarUnavailable(true)}
                     className="w-24 h-24 rounded-2xl object-cover"
                   />
                 ) : (
@@ -310,6 +316,15 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
                 </button>
               )}
             </div>
+            {formData.avatar && !avatarUnavailable && (
+              <button
+                type="button"
+                onClick={() => pictureViewerRef.current?.showModal()}
+                className="text-sm font-medium text-blue-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+              >
+                View profile picture
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -557,6 +572,31 @@ const ProfileModal = ({ isOpen, onClose, onProfileUpdate }) => {
         </div>
         */}
       </div>
+      <dialog
+        ref={pictureViewerRef}
+        aria-label="Profile picture"
+        className="m-auto w-[92vw] max-w-4xl max-h-[90vh] rounded-xl bg-white dark:bg-gray-800 p-4 shadow-2xl backdrop:bg-black/80"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-900 dark:text-white">Profile picture</h3>
+          <button
+            type="button"
+            autoFocus
+            aria-label="Close profile picture"
+            onClick={() => pictureViewerRef.current?.close()}
+            className="p-2 rounded-lg text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {avatarUnavailable ? (
+          <p role="status" className="text-gray-700 dark:text-gray-200">Unable to load the profile picture.</p>
+        ) : formData.avatar && (
+          <img src={formData.avatar} alt={`${user?.name || 'User'}'s full profile picture`}
+            onError={() => setAvatarUnavailable(true)}
+            className="w-full h-[70vh] object-contain" />
+        )}
+      </dialog>
     </div>
   );
 };

@@ -123,6 +123,8 @@ export const authService = {
 
         if (clinicByEmail) {
 
+          if (clinicByEmail.deletedAt || clinicByEmail.deleted_at) throw new Error('This account has been removed. Please contact support.');
+
           const isActive = clinicByEmail.isActivated || clinicByEmail.is_active;
           const subscriptionStatus = clinicByEmail.subscriptionStatus || clinicByEmail.subscription_status;
 
@@ -282,13 +284,12 @@ export const authService = {
       // We catch that so we can still check superAdmins (email may be in both tables).
       let result = null;
       let clinicPasswordFailed = false;
-      let clinicPendingError = null;
+      let clinicAccessError = null;
 
       const swallowClinicErrors = (err) => {
         if (err.message === 'Invalid email or password') { clinicPasswordFailed = true; return null; }
-        // If account is pending, save the error but don't throw yet —
-        // the same email may also be a super admin and we must check that first.
-        if (err.message && err.message.includes('pending')) { clinicPendingError = err; return null; }
+        // A pending/removed clinic must not block a separate admin or patient with the same email.
+        if (err.message && (err.message.includes('pending') || err.message.includes('account has been removed'))) { clinicAccessError = err; return null; }
         throw err;
       };
 
@@ -351,8 +352,8 @@ export const authService = {
       }
 
 
-      // Re-throw pending activation error now that superAdmin check is done
-      if (clinicPendingError) throw clinicPendingError;
+      // Re-throw the clinic access error only after checking other identities
+      if (clinicAccessError) throw clinicAccessError;
 
       // If email was found in clinics but password was wrong, and it's not a superAdmin,
       // fail fast — don't try Supabase Auth with a locally-stored clinic password
@@ -437,6 +438,8 @@ export const authService = {
       }
 
       if (clinic) {
+
+        if (clinic.deletedAt || clinic.deleted_at) throw new Error('This account has been removed. Please contact support.');
 
         // Check if clinic is activated
         const isActive = clinic.isActivated || clinic.is_active;

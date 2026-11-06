@@ -61,7 +61,7 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
         .order('created_at', { ascending: false });
       if (error) throw error;
       // camelCase aliases to match what DatabaseService.get used to return
-      setPendingClinics((rows || []).map(c => ({
+      setPendingClinics((rows || []).filter(c => !c.deleted_at).map(c => ({
         ...c,
         isActive: c.is_active,
         subscriptionStatus: c.subscription_status,

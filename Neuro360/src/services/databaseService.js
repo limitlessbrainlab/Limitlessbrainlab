@@ -89,6 +89,7 @@ class DatabaseService {
           logo_url: clinic.logo_url,  // Keep snake_case for compatibility
           avatar: clinic.logo_url,  // Map logo_url to avatar
           isActive: clinic.is_active,
+          deletedAt: clinic.deleted_at,
           is_active: clinic.is_active,  // Keep snake_case for compatibility
           isActivated: clinic.is_active,  // Legacy compatibility
           reportsUsed: clinic.reports_used,
