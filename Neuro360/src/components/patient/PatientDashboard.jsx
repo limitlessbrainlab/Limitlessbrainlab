@@ -113,6 +113,7 @@ const WalletPage = lazy(() => import('../../pages/Wallet'));
 const OpeningPage = lazy(() => import('../../pages/OpeningPage'));
 const InteractiveBrain = lazy(() => import('../../pages/InteractiveBrain'));
 const BrainCourses = lazy(() => import('../../pages/BrainCourses'));
+const Cera = lazy(() => import('../../pages/Cera'));
 const Events = lazy(() => import('../../pages/Events'));
 import MyBookings from './MyBookings';
 import ProfileGate from './ProfileGate';
@@ -1965,6 +1966,7 @@ const PatientDashboard = () => {
     { id: 'brain-coach', label: 'Book a Coach', icon: UserCheck },
     { id: 'neurofeedback', label: 'Home Neurofeedback', icon: Radio },
     { id: 'photobiomodulation', label: 'Photobiomodulation', icon: Sun },
+    { id: 'cera', label: 'Cera', icon: Sparkles },
     // { id: 'five-pillars', label: '5 Pillars of Mastery', icon: Award }, // hidden from sidebar per request
     { id: 'brain-courses', label: 'Brain Courses', icon: GraduationCap },
     // { id: 'events', label: 'Events', icon: Calendar }, // hidden — not active yet
@@ -10346,7 +10348,7 @@ const PatientDashboard = () => {
     'activity', 'notifications', 'reports', 'resources', 'journey',
     'movers', 'care-program', 'neurocoaching', 'ans-reset', 'frequencies', 'supplements',
     'nootropics', 'five-pillars', 'brain-coach', 'neurofeedback',
-    'photobiomodulation', 'brain-courses', 'events', 'wallet',
+    'photobiomodulation', 'cera', 'brain-courses', 'events', 'wallet',
     'neurosense-overview', 'interactive-brain'
   ];
 
@@ -10439,6 +10441,8 @@ const PatientDashboard = () => {
         return <FivePillars />;
       case 'brain-coach':
         return <BrainCoach />;
+      case 'cera':
+        return <Cera />;
       case 'my-sessions':
         return <MyBookings showTitle={true} compact={false} />;
       case 'neurofeedback':
