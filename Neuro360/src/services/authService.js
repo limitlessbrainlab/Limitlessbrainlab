@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import DatabaseService from './databaseService';
 import { generatePatientUID } from '../utils/patientUidGenerator';
 import { hashPassword, comparePassword } from '../utils/passwordUtils';
+import credentialRpc from './credentialRpc';
 import { getOriginUrl, resolveEnv, canonicalUrlForEnv, sameEnv } from '../utils/environment';
 
 // Import shared Supabase service to avoid multiple client instances
@@ -111,10 +112,21 @@ export const authService = {
       // Helper: check clinics table
       const checkClinicsTable = async () => {
         let clinics;
+        let credentialVerified = false; // true when the DATABASE verified the password (RPC path)
         try {
-          // Filter by email server-side (was a full-table scan). Case-insensitive to
-          // match the previous client-side .trim().toLowerCase() comparison.
-          clinics = await DatabaseService.get('clinics', { throwOnError: true, email: normalizedEmail }) || [];
+          // RPC path: the database checks the credentials and returns only the rows
+          // that matched, WITHOUT any credential columns — the browser never sees
+          // password data. Falls back to the legacy read+compare path when the RPC
+          // is not deployed on this database yet.
+          const rpcRows = await credentialRpc.verifyClinicLogin(normalizedEmail, password);
+          if (rpcRows !== null) {
+            clinics = rpcRows;
+            credentialVerified = true;
+          } else {
+            // Filter by email server-side (was a full-table scan). Case-insensitive to
+            // match the previous client-side .trim().toLowerCase() comparison.
+            clinics = await DatabaseService.get('clinics', { throwOnError: true, email: normalizedEmail }) || [];
+          }
         } catch (readErr) {
           console.error('ALERT: clinics read failed during login:', readErr?.message);
           throw new Error(SERVER_UNREACHABLE);
@@ -137,9 +149,15 @@ export const authService = {
             throw new Error('Your account has been deactivated. Please contact support at info@limitlessbrainlab.com.');
           }
 
-          const clinicPasswordMatch = await comparePassword(password, clinicByEmail.password);
-          if (!clinicPasswordMatch) {
-            throw new Error('Invalid email or password');
+          if (credentialVerified) {
+            // Password already verified inside the database on the RPC path —
+            // the row was only returned because the credentials matched, and it
+            // carries no credential fields.
+          } else {
+            const clinicPasswordMatch = await comparePassword(password, clinicByEmail.password);
+            if (!clinicPasswordMatch) {
+              throw new Error('Invalid email or password');
+            }
           }
 
           // Environment scoping: an account created on one environment (production vs
@@ -176,27 +194,52 @@ export const authService = {
 
       // Helper: check patients table
       const checkPatientsTable = async () => {
-        const { data: patients, error: patientsError } = await supabase
-          .from('patients')
-          .select('*')
-          .eq('email', normalizedEmail)
-          // Newest row first: with duplicate-email rows, the Supabase-Auth
-          // fallback below picks patients[0], which must match the
-          // resolvePatientForUser newest-row rule
-          .order('created_at', { ascending: false });
-
-        if (patientsError) {
-          console.error('ALERT: patients read failed during login:', patientsError?.message);
+        let patients = null;
+        let credentialVerified = false; // true when the DATABASE verified the password (RPC path)
+        try {
+          // RPC path: database verifies credentials, returns matched rows WITHOUT
+          // credential columns (newest first). Falls back to the legacy read+compare
+          // path when the RPC is not deployed on this database yet.
+          const rpcRows = await credentialRpc.verifyPatientLogin(normalizedEmail, password);
+          if (rpcRows !== null) {
+            patients = rpcRows;
+            credentialVerified = true;
+          }
+        } catch (rpcErr) {
+          console.error('ALERT: patients RPC login failed:', rpcErr?.message);
           throw new Error(SERVER_UNREACHABLE);
+        }
+
+        if (patients === null) {
+          const { data: patientsData, error: patientsError } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('email', normalizedEmail)
+            // Newest row first: with duplicate-email rows, the Supabase-Auth
+            // fallback below picks patients[0], which must match the
+            // resolvePatientForUser newest-row rule
+            .order('created_at', { ascending: false });
+
+          if (patientsError) {
+            console.error('ALERT: patients read failed during login:', patientsError?.message);
+            throw new Error(SERVER_UNREACHABLE);
+          }
+          patients = patientsData;
         }
 
         if (patients && patients.length > 0) {
           let patient = null;
           let patientHasSupabaseSession = false;
-          for (const p of patients) {
-            if (await comparePassword(password, p.password)) {
-              patient = p;
-              break;
+          if (credentialVerified) {
+            // Database already verified the credentials; rows arrive newest-first
+            // (same ordering rule as the legacy path below).
+            patient = patients[0];
+          } else {
+            for (const p of patients) {
+              if (await comparePassword(password, p.password)) {
+                patient = p;
+                break;
+              }
             }
           }
 
@@ -219,10 +262,14 @@ export const authService = {
               patient = patients[0];
               patientHasSupabaseSession = Boolean(authData.session?.access_token);
               try {
-                await supabase
-                  .from('patients')
-                  .update({ password: await hashPassword(password) })
-                  .eq('id', patient.id);
+                const healed = await credentialRpc.healPatientPassword(patient.id, password);
+                if (healed === null) {
+                  // RPC not deployed (pre-migration DB) — legacy browser-side write
+                  await supabase
+                    .from('patients')
+                    .update({ password: await hashPassword(password) })
+                    .eq('id', patient.id);
+                }
               } catch (healErr) {
                 console.warn('WARNING: could not self-heal patient password hash:', healErr?.message);
               }
@@ -520,10 +567,9 @@ export const authService = {
           address: address || '',
           city: city || '',
           clinic_type: clinicType || clinic_type || 'lbl_partner',
-          password: hashedPwd,
-          // Kept in plaintext so the approval email can show the SAME password the
-          // clinic chose here (bcrypt hash above is not reversible). Deliberate product decision.
-          plain_password: String(password || '').trim(),
+          // Credentials are NOT embedded in the insert payload: they are stored
+          // via the database right after the row is created (claim RPC), so the
+          // browser never needs column access to the credential fields.
           logo_url: null,
           is_active: false, // Pending approval
           reports_used: 0,
@@ -537,6 +583,28 @@ export const authService = {
         };
 
         const savedClinic = await DatabaseService.add('clinics', clinicData);
+
+        // Store the login credentials on the just-created row (hash + plaintext
+        // for the approval email). Guarded by the database: only succeeds while
+        // the row is brand-new and still has no password.
+        try {
+          const claimed = await credentialRpc.claimCredentials('clinics', normalizedEmail, password);
+          if (claimed === null) {
+            // RPC not deployed (pre-migration DB) — legacy embedded write.
+            await DatabaseService.update('clinics', savedClinic.id, {
+              password: hashedPwd,
+              plain_password: String(password || '').trim()
+            });
+          }
+        } catch (claimErr) {
+          console.error('ALERT: credential claim failed during clinic registration:', claimErr?.message);
+          // Roll back the half-created account rather than leave a row that
+          // can never log in.
+          try { await DatabaseService.delete('clinics', savedClinic.id); } catch (delErr) {
+            console.error('WARNING: could not roll back clinic registration:', delErr?.message);
+          }
+          throw new Error('Could not set up your login credentials. Please try registering again.');
+        }
 
         // Send confirmation email to clinic via backend API
         try {
@@ -593,7 +661,8 @@ export const authService = {
         const patientData = {
           full_name: name.trim(),
           email: normalizedEmail,
-          password: hashedPatientPwd,
+          // Credentials stored via claim RPC right after the insert (see the
+          // clinic registration path) — never embedded in the browser payload.
           date_of_birth: dateOfBirth || null,
           gender: gender || null,
           phone: phone || null,
@@ -610,6 +679,20 @@ export const authService = {
         };
 
         const savedPatient = await DatabaseService.add('patients', patientData);
+
+        try {
+          const claimed = await credentialRpc.claimCredentials('patients', normalizedEmail, password);
+          if (claimed === null) {
+            // RPC not deployed (pre-migration DB) — legacy embedded write.
+            await DatabaseService.update('patients', savedPatient.id, { password: hashedPatientPwd });
+          }
+        } catch (claimErr) {
+          console.error('ALERT: credential claim failed during patient registration:', claimErr?.message);
+          try { await DatabaseService.delete('patients', savedPatient.id); } catch (delErr) {
+            console.error('WARNING: could not roll back patient registration:', delErr?.message);
+          }
+          throw new Error('Could not set up your login credentials. Please try registering again.');
+        }
 
         // Send welcome email to patient via backend API
         try {
@@ -664,7 +747,8 @@ export const authService = {
           first_name: name.trim().split(' ')[0] || '',
           last_name: name.trim().split(' ').slice(1).join(' ') || '',
           email: normalizedEmail,
-          password: hashedAdminPwd,
+          // Credentials stored via claim RPC right after the insert — never
+          // embedded in the browser payload.
           phone: phone || null,
           avatar: null,
           role: 'super_admin',
@@ -675,6 +759,20 @@ export const authService = {
         };
 
         const savedSuperAdmin = await DatabaseService.add('superAdmins', superAdminData);
+
+        try {
+          const claimed = await credentialRpc.claimCredentials('profiles', normalizedEmail, password);
+          if (claimed === null) {
+            // RPC not deployed (pre-migration DB) — legacy embedded write.
+            await DatabaseService.update('superAdmins', savedSuperAdmin.id, { password: hashedAdminPwd });
+          }
+        } catch (claimErr) {
+          console.error('ALERT: credential claim failed during super admin registration:', claimErr?.message);
+          try { await DatabaseService.delete('superAdmins', savedSuperAdmin.id); } catch (delErr) {
+            console.error('WARNING: could not roll back super admin registration:', delErr?.message);
+          }
+          throw new Error('Could not set up your login credentials. Please try registering again.');
+        }
 
         // Send welcome email to super admin via backend API
         try {

@@ -3,7 +3,6 @@ import { CheckCircle, XCircle, Bell, ArrowLeft, Clock, Mail } from 'lucide-react
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import NotificationService from '../../services/notificationService';
-import { hashPassword, comparePassword } from '../../utils/passwordUtils';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -69,8 +68,7 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
         clinicName: c.clinic_name,
         clinicType: c.clinic_type,
         countryCode: c.country_code,
-        createdAt: c.created_at,
-        plainPassword: c.plain_password
+        createdAt: c.created_at
       })));
 
       // Super admins are now active immediately, no pending approval needed
@@ -85,11 +83,9 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
       setLoading(true);
       setSelectedItem(clinic);
 
-      // Prefer the password the clinic chose at registration (stored in plain_password),
-      // so the approval email shows THEIR password and it keeps working at login.
-      const existingPlain = String(clinic.plain_password || clinic.plainPassword || '').trim();
-
-      // Update clinic data
+      // Update clinic data — status/trial fields only. Login credentials are
+      // synced and emailed by the backend (which owns the credential columns);
+      // the browser never reads or relays plaintext passwords.
       const updatedClinic = {
         ...clinic,
         is_active: true,
@@ -107,54 +103,29 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
         updated_at: new Date().toISOString()
       };
 
-      let emailPassword;
-      if (existingPlain) {
-        // Email the clinic's own plaintext password, and RE-HASH it into the
-        // password column so the stored bcrypt hash is guaranteed to match the
-        // exact plaintext we email — clinics have no self-heal fallback, so any
-        // drift between hash and plaintext is a permanent "invalid password"
-        // lockout. This is the key login-works guarantee.
-        emailPassword = existingPlain;
-        updatedClinic.password = await hashPassword(existingPlain);
-        updatedClinic.plain_password = existingPlain;
-      } else {
-        // Legacy fallback: no stored plaintext (clinic registered before this change) —
-        // issue a fresh password and store both hash + plaintext.
-        const generatePassword = () => {
-          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$';
-          let password = '';
-          for (let i = 0; i < 12; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
-          }
-          return password;
-        };
-        emailPassword = generatePassword();
-        updatedClinic.password = await hashPassword(emailPassword);
-        updatedClinic.plain_password = emailPassword;
-      }
-
       // Save updated clinic
-      const savedClinic = await DatabaseService.update('clinics', clinic.id, updatedClinic);
+      await DatabaseService.update('clinics', clinic.id, updatedClinic);
 
-      // Read-back guard: only email a password the persisted hash actually verifies
-      // against — never send credentials that can't log in.
-      const persistedOk = await comparePassword(emailPassword, savedClinic?.password);
-      if (!persistedOk) {
-        throw new Error(`Approval saved, but the stored password for "${clinic.name}" failed verification — credentials email NOT sent. Reset the clinic's password and retry.`);
-      }
-
-      // Send approval email with credentials
+      // Send approval email with credentials. The backend resolves the clinic's
+      // stored plaintext password (or issues and syncs a fresh one when none is
+      // stored) using its service-role access, guaranteeing the emailed password
+      // matches the stored hash — the same guarantee the old client-side re-hash
+      // provided, but server-side.
       let emailSent = false;
       let emailFailReason = '';
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const emailHeaders = { 'Content-Type': 'application/json' };
+        if (sessionData?.session?.access_token) {
+          emailHeaders['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+        }
         const emailResponse = await fetch(`${API_BASE_URL}/clinic-credentials`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: emailHeaders,
           body: JSON.stringify({
             clinicName: clinic.name || clinic.clinic_name,
             email: (clinic.email || '').trim().toLowerCase(),
-            contactPerson: clinic.contact_person || clinic.name,
-            password: emailPassword
+            contactPerson: clinic.contact_person || clinic.name
           })
         });
         const emailResult = await emailResponse.json();

@@ -21,6 +21,7 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
+import credentialRpc from '../../services/credentialRpc';
 import StorageService from '../../services/storageService';
 import { supabase } from '../../lib/supabaseClient';
 import { uploadPatientDocument, getPatientDocSignedUrl, deletePatientDocument } from '../../services/patientDocuments';
@@ -365,8 +366,8 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         occupation: data.occupation?.trim() || '',
         handedness: data.handedness || '',
         referred_by: data.referredBy === 'Others' ? (data.referredByOther?.trim() || 'Others') : (data.referredBy || ''),
-        password: pwd,
-        plain_password: data.password, // Plaintext kept so credential/email-update emails can re-show the current password
+        // Credentials stored via the claim RPC right after the insert — never
+        // embedded in the browser payload.
         medical_history: {
           ...(data.notes ? { notes: data.notes } : {}),
           ...(!data.dateOfBirth && data.age ? { age: parseInt(data.age) } : {})
@@ -380,9 +381,10 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
       // unique constraint can still be hit by concurrent adds or stale UID
       // counters, so regenerate the UID and retry a few times before failing.
       let inserted = false;
+      let savedPatient = null;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
-          await DatabaseService.add('patients', patientData);
+          savedPatient = await DatabaseService.add('patients', patientData);
           inserted = true;
           break;
         } catch (insertError) {
@@ -399,6 +401,21 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
       }
       if (!inserted) {
         throw new Error('Could not generate a unique patient ID. Please try again.');
+      }
+
+      // Store the login credentials on the just-created row (database-side hash).
+      // Guarded: only succeeds while the row is brand-new and still passwordless.
+      try {
+        const claimed = await credentialRpc.claimCredentials('patients', sanitizedEmail, data.password);
+        if (claimed === null) {
+          // RPC not deployed (pre-migration DB) — legacy embedded write.
+          await DatabaseService.update('patients', savedPatient.id, { password: pwd });
+        }
+      } catch (claimErr) {
+        // Non-fatal: the patient also has a Supabase Auth user (created above),
+        // so login still works through the auth fallback. Flag it for the clinic.
+        console.warn('WARNING: credential claim failed during patient creation:', claimErr?.message);
+        toast.info('Patient created. If their password does not work at login, reset it from the patient list.');
       }
 
       // Send welcome email in background (don't block the UI). Tied to verified
@@ -468,11 +485,17 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         date_of_birth: data.dateOfBirth || null
       };
 
-      // Only overwrite the bcrypt password column when a new password was entered.
-      // Keep the plaintext copy in sync so future email-update emails can re-show it.
+      // Only overwrite credentials when a new password was entered — written by
+      // the database via RPC (ownership gate: this clinic owns the patient).
       if (passwordChanged) {
-        patientData.password = await hashPassword(data.password);
-        patientData.plain_password = data.password;
+        const clinicIdForPatient = selectedPatient?.clinic_id || selectedPatient?.org_id || clinicId;
+        const setResult = await credentialRpc.setPatientPasswordByClinic(
+          clinicIdForPatient, selectedPatient.id, data.password);
+        if (setResult === null) {
+          // RPC not deployed (pre-migration DB) — legacy embedded write.
+          patientData.password = await hashPassword(data.password);
+          patientData.plain_password = data.password;
+        }
       }
 
       // Bump on email OR password change so the patient's open session is force-logged-out
@@ -497,8 +520,9 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
           body: JSON.stringify({
             patientName: data.name,
             newEmail: data.email,
-            // On an email-only edit, send the stored current plaintext so the email still shows it.
-            password: passwordChanged ? data.password : (selectedPatient?.plain_password || null),
+            // On an email-only edit the endpoint resolves the stored plaintext
+            // server-side (the browser can no longer read credential columns).
+            password: passwordChanged ? data.password : null,
             emailChanged,
             passwordChanged,
             clinicName: user?.clinicName || user?.name || 'Your Clinic',

@@ -5569,19 +5569,89 @@ app.get('/api/test-gemini', async (req, res) => {
 });
 
 // Clinic Credentials Email API endpoint
-app.post('/api/clinic-credentials', async (req, res) => {
+// ------------------------------------------------------------
+// Credential helpers — after the 057 column lockdown the browser can
+// no longer read/write the credential columns, so the backend owns
+// them via its service-role access.
+// ------------------------------------------------------------
+
+// Verify the caller is a super admin (profiles row with role super_admin).
+const callerIsSuperAdmin = async (req) => {
+  const email = String(req.user?.email || '').trim().toLowerCase();
+  if (!email || !supabase) return false;
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .eq('role', 'super_admin')
+    .limit(1);
+  return Boolean(data?.length);
+};
+
+// Resolve a clinic's login password for credential emails:
+//   1) an explicitly provided password wins (admin typed one),
+//   2) else the stored plaintext,
+//   3) else a fresh one is generated.
+// Always re-hashes and persists hash + plaintext together so the emailed
+// password provably matches the stored hash — the same guarantee the old
+// client-side re-hash provided, now server-side.
+async function resolveClinicCredential(explicitPassword, email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  const { data: rows, error } = await supabase
+    .from('clinics')
+    .select('id, password, plain_password')
+    .eq('email', normalized)
+    .limit(1);
+  if (error) throw error;
+  const row = rows?.[0];
+  if (!row) return null;
+
+  let plain = explicitPassword
+    ? String(explicitPassword).trim()
+    : String(row.plain_password || '').trim();
+
+  if (!plain) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$';
+    plain = Array.from({ length: 12 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+  }
+
+  const hashed = await bcrypt.hash(plain, 10);
+  const update = { password: hashed, plain_password: plain };
+  // An explicit password is an admin-driven reset — bump credentials_updated_at
+  // to force-log-out open sessions (matches the old reset flows). A silent sync
+  // during approval does not bump (same as the previous approval behavior).
+  if (explicitPassword) update.credentials_updated_at = new Date().toISOString();
+
+  const { error: updErr } = await supabase.from('clinics').update(update).eq('id', row.id);
+  if (updErr) throw updErr;
+  return plain;
+}
+
+app.post('/api/clinic-credentials', authMiddleware, async (req, res) => {
   try {
     const { clinicName, contactPerson } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
-    const password = String(req.body.password || '').trim();
     // Login link always points to production, regardless of the origin that sent the request.
     const loginBase = APP_URL;
 
-    if (!email || !password) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: 'Email is required'
       });
+    }
+
+    // Only super admins may trigger credential emails.
+    if (!(await callerIsSuperAdmin(req))) {
+      return res.status(403).json({ success: false, message: 'Super admin access required' });
+    }
+
+    // Resolve the login password server-side — the browser can no longer read
+    // credential columns (057 lockdown). The resolved password is guaranteed to
+    // match the stored hash.
+    const password = await resolveClinicCredential(req.body.password || null, email);
+    if (!password) {
+      return res.status(404).json({ success: false, message: 'No clinic account found for this email' });
     }
 
     const mailOptions = {
@@ -7449,11 +7519,25 @@ app.post('/api/send-email-update-notification', async (req, res) => {
     const transporter = emailTransporter;
     const fromEmail = EMAIL_FROM;
 
-    // Always show the plain-text password when one is provided. When the password was
-    // changed this edit it's the new one; on an email-only edit the caller passes the
-    // stored current password so the recipient still sees it. Only fall back to the
+    // The browser may no longer read credential columns — on an email-only edit,
+    // resolve the patient's stored plaintext server-side (newest row wins, same
+    // rule as the patient login fallback).
+    let effectivePassword = password ? String(password) : '';
+    if (!effectivePassword && !passwordChanged && supabase) {
+      const { data: prow } = await supabase
+        .from('patients')
+        .select('plain_password')
+        .eq('email', String(newEmail).trim().toLowerCase())
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (prow?.[0]?.plain_password) effectivePassword = String(prow[0].plain_password);
+    }
+
+    // Always show the plain-text password when one is available. When the password was
+    // changed this edit it's the new one; on an email-only edit it's the stored current
+    // password so the recipient still sees it. Only fall back to the
     // "unchanged" note when no plaintext is available (e.g. legacy patients).
-    const hasPassword = !!password;
+    const hasPassword = !!effectivePassword;
     const passwordLabel = passwordChanged ? 'New Password' : 'Current Password';
     const loginUrl = `${APP_URL}/patient/login`;
 
@@ -7497,7 +7581,7 @@ app.post('/api/send-email-update-notification', async (req, res) => {
                 <div style="background: white; border-radius: 8px; padding: 12px 15px; border-left: 4px solid #10b981;">
                   ${hasPassword
                     ? `<p style="color: #888; margin: 0; font-size: 11px; text-transform: uppercase;">${passwordLabel}</p>
-                  <p style="color: #323956; margin: 4px 0 0; font-size: 15px; font-weight: 600; font-family: monospace;">${escapeHtml(password)}</p>`
+                  <p style="color: #323956; margin: 4px 0 0; font-size: 15px; font-weight: 600; font-family: monospace;">${escapeHtml(effectivePassword)}</p>`
                     : `<p style="color: #888; margin: 0; font-size: 11px; text-transform: uppercase;">Password</p>
                   <p style="color: #323956; margin: 4px 0 0; font-size: 14px; font-weight: 500;">Unchanged — keep using your existing password.</p>`}
                 </div>
@@ -8964,16 +9048,28 @@ app.post('/api/send-partner-email-update', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Required fields missing' });
     }
 
+    // The browser may no longer read credential columns — when no password was
+    // supplied (email-only change), resolve the clinic's stored plaintext here.
+    let effectivePassword = password ? String(password).trim() : '';
+    if (!effectivePassword && supabase) {
+      const { data: rows } = await supabase
+        .from('clinics')
+        .select('plain_password')
+        .eq('email', String(newEmail).trim().toLowerCase())
+        .limit(1);
+      if (rows?.[0]?.plain_password) effectivePassword = String(rows[0].plain_password).trim();
+    }
+
     // Notify BOTH the previous and the updated address so whoever holds either
     // inbox sees the change. De-duplicate in case old === new.
     const recipients = [...new Set([newEmail, oldEmail].filter(Boolean))];
 
     // Only render a password block when a plain-text password is available.
-    const passwordBlock = password
+    const passwordBlock = effectivePassword
       ? `
               <div style="background: white; border-radius: 8px; padding: 13px 15px; border-left: 4px solid #2E5BA8; margin-top: 12px;">
                 <p style="color: #888; margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Password</p>
-                <p style="color: #1E3A5F; margin: 5px 0 0; font-size: 14px; font-weight: 600; font-family: monospace;">${escapeHtml(password)}</p>
+                <p style="color: #1E3A5F; margin: 5px 0 0; font-size: 14px; font-weight: 600; font-family: monospace;">${escapeHtml(effectivePassword)}</p>
               </div>`
       : '';
 

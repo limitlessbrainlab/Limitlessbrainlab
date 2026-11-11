@@ -31,6 +31,7 @@ import {
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
+import credentialRpc from '../../services/credentialRpc';
 import { supabase } from '../../lib/supabaseClient';
 import { hashPassword, isHashed } from '../../utils/passwordUtils';
 import { getOriginUrl, resolveEnv, canonicalUrlForEnv } from '../../utils/environment';
@@ -339,14 +340,33 @@ const ClinicManagement = ({ onUpdate }) => {
         registrationMethod: 'super_admin_created', // Track how this was created
         origin_url: getOriginUrl(), // Environment (prod/staging) this clinic was created from — login is scoped to it
         // contract_agreed not saved — column not yet in DB
-        // Use single password field for authentication
-        password: await hashPassword(password), // Encrypted password for login
-        plain_password: password, // Plaintext kept so credentials email can re-show it (deliberate)
-        // Remove confirmPassword from stored data
+        // Use single password field for authentication — stored via the
+        // credential-claim RPC right after the row is created, never embedded
+        // in the browser payload.
         confirmPassword: undefined
       };
 
-      await DatabaseService.add('clinics', clinicData);
+      const savedClinic = await DatabaseService.add('clinics', clinicData);
+
+      // Store the login credentials on the just-created row. Guarded by the
+      // database: only succeeds while the row is brand-new and passwordless.
+      try {
+        const claimed = await credentialRpc.claimCredentials('clinics', clinicData.email, password);
+        if (claimed === null) {
+          // RPC not deployed (pre-migration DB) — legacy embedded write.
+          await DatabaseService.update('clinics', savedClinic.id, {
+            password: await hashPassword(password),
+            plain_password: password
+          });
+        }
+      } catch (claimErr) {
+        console.error('ALERT: credential claim failed during admin clinic creation:', claimErr?.message);
+        try { await DatabaseService.delete('clinics', savedClinic.id); } catch (delErr) {
+          console.error('WARNING: could not roll back clinic creation:', delErr?.message);
+        }
+        toast.error('Clinic creation failed: could not set up login credentials. Please try again.');
+        return;
+      }
 
       // Close modal and reset form immediately after successful creation
       setShowModal(false);
@@ -419,27 +439,24 @@ const ClinicManagement = ({ onUpdate }) => {
       const emailChanged = (selectedClinic?.email || '').trim().toLowerCase() !== normalizedEmail;
 
       // Resolve the plaintext password to show in the email-update mail. Priority:
-      //  1) a password the admin just typed,
-      //  2) the clinic's stored plaintext,
-      //  3) (legacy clinics with neither, only when the email actually changed) a freshly
-      //     generated one — bcrypt hashes can't be reversed, so we can't recover their old
-      //     password; issue a new one so the email always carries working credentials. The
-      //     email change already force-logs-out the clinic, so they sign in with this one.
-      let passwordForEmail = editPassword || selectedClinic?.plain_password || '';
-      let hashedPassword = editPassword ? await hashPassword(editPassword) : undefined;
-      let plainToStore = editPassword || undefined;
+      //  1) a password the admin just typed (verified + stored via RPC below),
+      //  2) the clinic's stored plaintext — resolved server-side by the email
+      //     endpoint (the browser can no longer read credential columns).
+      const passwordForEmail = editPassword || null;
 
-      if (emailChanged && !passwordForEmail) {
-        const generateSecurePassword = () => {
-          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$';
-          let pwd = '';
-          for (let i = 0; i < 12; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
-          return pwd;
-        };
-        const generated = generateSecurePassword();
-        passwordForEmail = generated;
-        hashedPassword = await hashPassword(generated);
-        plainToStore = generated;
+      // Password change (if any) is written by the database via RPC — the admin's
+      // Supabase session authorizes it and credential columns never appear in the
+      // browser payload.
+      if (editPassword) {
+        const setResult = await credentialRpc.setClinicPassword(selectedClinic.id, editPassword);
+        if (setResult === null) {
+          // RPC not deployed (pre-migration DB) — legacy embedded write.
+          await DatabaseService.update('clinics', selectedClinic.id, {
+            password: await hashPassword(editPassword),
+            plain_password: editPassword,
+            credentials_updated_at: new Date().toISOString()
+          });
+        }
       }
 
       // Keep country code and phone separate
@@ -456,24 +473,27 @@ const ClinicManagement = ({ onUpdate }) => {
         contact_person: data.contactPerson || undefined, // Snake_case for Supabase
         country_code: data.countryCode || '+91', // Snake_case for Supabase
         // contract_agreed not saved — column not yet in DB
-        password: hashedPassword || undefined,
-        // Keep plaintext in sync so the credential emails always show the real current password
-        plain_password: plainToStore,
-        passwordResetAt: hashedPassword ? new Date().toISOString() : undefined,
-        // Bump on email OR password change so the clinic's open session is force-logged-out
-        credentials_updated_at: (emailChanged || hashedPassword) ? new Date().toISOString() : undefined
+        // Bump on email change so the clinic's open session is force-logged-out
+        // (password changes bump inside set_clinic_password)
+        credentials_updated_at: emailChanged ? new Date().toISOString() : undefined
       };
 
 
       await DatabaseService.update('clinics', selectedClinic.id, updateData);
 
       // Send "email updated" notification to BOTH the previous and new address if
-      // the email changed. Include the current plain-text password (the one just
-      // set if it was changed, otherwise the stored plaintext).
+      // the email changed. The endpoint resolves the current plaintext server-side
+      // when the browser does not supply one.
       if (emailChanged && normalizedEmail) {
+        // Attach the admin session so the backend can verify the caller.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const updateHeaders = { 'Content-Type': 'application/json' };
+        if (sessionData?.session?.access_token) {
+          updateHeaders['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+        }
         fetch(`${getBaseUrl()}/api/send-partner-email-update`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: updateHeaders,
           body: JSON.stringify({
             partnerName: data.name,
             oldEmail: selectedClinic?.email || '',
@@ -795,15 +815,19 @@ const ClinicManagement = ({ onUpdate }) => {
         return;
       }
       const password = newPassword.trim();
-      const hashedPassword = await hashPassword(password);
-      await DatabaseService.update('clinics', selectedClinic.id, {
-        password: hashedPassword,
-        // Keep plaintext in sync so the credential emails always show the real current password
-        plain_password: password,
-        passwordResetAt: new Date().toISOString(),
-        // Bump so the clinic's open session is force-logged-out after a password reset
-        credentials_updated_at: new Date().toISOString()
-      });
+      // Password written by the database via RPC (admin session authorizes it);
+      // plaintext kept in sync server-side so credential emails keep working.
+      const setResult = await credentialRpc.setClinicPassword(selectedClinic.id, password);
+      if (setResult === null) {
+        // RPC not deployed (pre-migration DB) — legacy embedded write.
+        await DatabaseService.update('clinics', selectedClinic.id, {
+          password: await hashPassword(password),
+          // Keep plaintext in sync so the credential emails always show the real current password
+          plain_password: password,
+          // Bump so the clinic's open session is force-logged-out after a password reset
+          credentials_updated_at: new Date().toISOString()
+        });
+      }
 
       // Try to send email with credentials (no activation OTP — not used)
       try {
