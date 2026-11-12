@@ -20,6 +20,7 @@ Module._load = function (request, parent, isMain) {
     createClient(url) {
       configuredUrl = url;
       return {
+        rpc: async (name,args) => { assert.equal(name,'register_document_owner'); assert.equal(args.p_patient_id,'test-patient'); return {}; },
         storage: {
           from() {
             return {
@@ -38,7 +39,7 @@ Module._load = function (request, parent, isMain) {
   fs.writeFileSync(file, 'pdf');
   try {
     const SupabaseStorage = require('../services/supabaseStorage');
-    const result = await SupabaseStorage.uploadFile(file, 'neurosense-reports', 'reports/test.pdf');
+    const result = await SupabaseStorage.uploadFile(file, 'neurosense-reports', 'reports/test.pdf', 'application/pdf', undefined, 'test-patient');
     assert.equal(configuredUrl, process.env.VITE_SUPABASE_URL);
     assert.equal(result.url, 'https://files.example/reports/test.pdf');
     console.log('supabaseStorageVercelEnv.test.js: ok');

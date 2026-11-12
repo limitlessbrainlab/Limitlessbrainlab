@@ -1,3 +1,4 @@
+import checkoutCatalog from '../../server/config/checkoutCatalog.json';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Brain, ShieldCheck, Users, Truck, ArrowDown, Menu, X, MapPin, Instagram, Linkedin, Youtube, Facebook, Heart, Droplets, Stethoscope, Dna, FlaskConical, Activity, CheckCircle } from 'lucide-react';
@@ -50,12 +51,13 @@ const Landing = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          assessmentName: 'Brain Fitness Score™',
+          assessmentId: 'landing_brain_fitness',
+          assessmentName: checkoutCatalog.legacyAssessments.landing_brain_fitness.title,
           customerEmail: bfsPaymentEmail,
           customerName: bfsPaymentName.toUpperCase(),
           currency: 'USD',
-          amount: 2.99,
-          assessmentLink: 'https://form.jotform.com/232184893262057',
+          amount: checkoutCatalog.legacyAssessments.landing_brain_fitness.USD,
+          assessmentLink: checkoutCatalog.legacyAssessments.landing_brain_fitness.link,
           source: 'landing',
           successUrl: `${window.location.origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${window.location.origin}/?payment=cancelled`

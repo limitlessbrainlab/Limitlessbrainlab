@@ -1,3 +1,5 @@
+import portalIdentity from '../server/utils/verifiedPortalUser.js';
+const { verifiedPortalUser } = portalIdentity;
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
 import claudeReportData from '../server/services/claudeReportData.js';
@@ -17,10 +19,8 @@ function serverClient() {
 async function requireSuperAdmin(req, supabase) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
-  const { data } = await supabase.auth.getUser(token);
-  if (!data?.user) return null;
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-  return profile?.role === 'super_admin' ? data.user : null;
+  const user = await verifiedPortalUser(supabase, token);
+  return user?.role === 'super_admin' ? user : null;
 }
 
 async function claimJob(supabase, idempotencyKey, body, userId) {
@@ -112,6 +112,8 @@ export default async function handler(req, res) {
     const { error: uploadError } = await supabase.storage.from('neurosense-reports')
       .upload(fileName, pdf, { contentType: 'application/pdf', upsert: false });
     if (uploadError) throw uploadError;
+    const { error: ownerError } = await supabase.rpc('register_document_owner', { p_bucket:'neurosense-reports', p_path:fileName, p_patient_id:body.patientId });
+    if (ownerError) { await supabase.storage.from('neurosense-reports').remove([fileName]); throw ownerError; }
     const { data: publicData } = supabase.storage.from('neurosense-reports').getPublicUrl(fileName);
     const pdfUrl = publicData.publicUrl;
 

@@ -1,7 +1,7 @@
+import { PUBLIC_COLUMNS } from './publicColumns.js';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import DatabaseService from './databaseService';
-import { generatePatientUID } from '../utils/patientUidGenerator';
 import { hashPassword, comparePassword } from '../utils/passwordUtils';
 import credentialRpc from './credentialRpc';
 import { getOriginUrl, resolveEnv, canonicalUrlForEnv, sameEnv } from '../utils/environment';
@@ -79,15 +79,20 @@ export const authService = {
     // friendly-error mapper on this text).
     const SERVER_UNREACHABLE = 'Network error: unable to reach the server. Please check your connection and try again.';
     const establishPatientSession = async () => {
-      const firstAttempt = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-      if (!firstAttempt.error && firstAttempt.data?.session?.access_token) return true;
       try {
         const repair = await fetch(`${API_BASE_URL}/ensure-patient-auth`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: normalizedEmail, password })
         });
         if (!repair.ok) return false;
         const retry = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-        return !retry.error && Boolean(retry.data?.session?.access_token);
+        if (retry.error || !retry.data?.session?.access_token) return false;
+        const binding = await fetch(`${API_BASE_URL}/ensure-patient-auth`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${retry.data.session.access_token}` },
+          body: JSON.stringify({ email: normalizedEmail, password })
+        });
+        if (!binding.ok) return false;
+        const result = await binding.json();
+        return result.success === true && result.bound === true;
       } catch (error) {
         console.warn('WARNING: patient Supabase session repair failed:', error?.message);
         return false;
@@ -169,9 +174,31 @@ export const authService = {
             throw new Error(`This account was created on ${target}. Please log in there.`);
           }
 
+          let clinicSession;
+          try {
+            const response = await fetch(`${API_BASE_URL}/clinic-session`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: normalizedEmail, password })
+            });
+            if (!response.ok) throw new Error('Clinic session request failed');
+            const exchange = await response.json();
+            if (!exchange.token_hash || !exchange.auth_user_id || exchange.clinic_id !== clinicByEmail.id) {
+              throw new Error('Clinic session identity mismatch');
+            }
+            const { data, error } = await supabase.auth.verifyOtp({ token_hash: exchange.token_hash, type: 'magiclink' });
+            if (error || !data?.session?.access_token || data.user?.id !== exchange.auth_user_id ||
+                data.user?.app_metadata?.role !== 'clinic_admin' || data.user?.app_metadata?.clinic_id !== clinicByEmail.id) {
+              throw new Error('Clinic session exchange failed');
+            }
+            clinicSession = data.session;
+          } catch (error) {
+            try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* Preserve the login error. */ }
+            throw new Error('Unable to establish a secure clinic session. Please try again.');
+          }
+
           return {
             success: true,
-            token: `local_token_${Date.now()}`,
+            token: clinicSession.access_token,
             user: {
               id: clinicByEmail.id,
               email: clinicByEmail.email,
@@ -286,9 +313,11 @@ export const authService = {
             }
 
             // Patient login requires a Supabase session for protected purchases.
+            // Rebind only after current local credential proof, even when native Auth still accepts an old password.
+            patientHasSupabaseSession = await establishPatientSession();
             if (!patientHasSupabaseSession) {
-              patientHasSupabaseSession = await establishPatientSession();
-              if (!patientHasSupabaseSession) console.warn('WARNING: patient Supabase session was not created');
+              await supabase.auth.signOut({ scope: 'local' });
+              throw new Error('Unable to establish a secure patient session. Please try again.');
             }
 
             // Login activity is informational only; it must never change subscription access.
@@ -298,9 +327,11 @@ export const authService = {
               .eq('id', patient.id);
             if (loginActivityError) console.warn('WARNING: could not record patient login:', loginActivityError.message);
 
+            const { data: { session: patientSession } } = await supabase.auth.getSession();
+            if (!patientSession?.access_token) throw new Error('Unable to establish a secure patient session. Please try again.');
             return {
               success: true,
-              token: `patient_token_${Date.now()}`,
+              token: patientSession.access_token,
               user: {
                 id: patient.id,
                 email: patient.email,
@@ -350,54 +381,24 @@ export const authService = {
 
       if (result) return result;
 
-      // PRIORITY 2: Check super admins — always check even if clinic password failed
-      // (same email may be registered as both a clinic applicant and a super admin)
-      let superAdmins;
-      try {
-        // Filter the profiles table by email server-side (was a full-table scan of
-        // every patient/clinic/admin row). Case-insensitive email match.
-        superAdmins = await DatabaseService.get('superAdmins', { throwOnError: true, email: normalizedEmail }) || [];
-      } catch (readErr) {
-        console.error('ALERT: superAdmins read failed during login:', readErr?.message);
-        throw new Error(SERVER_UNREACHABLE);
-      }
-      const superAdminProfile = superAdmins.find(a => (a.email || '').trim().toLowerCase() === normalizedEmail && a.role === 'super_admin');
-
-      if (superAdminProfile) {
-        let adminPasswordMatch = false;
-
-        if (supabase) {
-          // production super-admins live in Supabase Auth. Always authenticate here so a
-          // real Supabase session is created — every downstream validator (AuthContext
-          // reload, backend authMiddleware) requires that session/JWT. A populated
-          // profiles.password must NOT downgrade login to a session-less local check.
-          const { error } = await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password
-          });
-          adminPasswordMatch = !error;
-        } else if (superAdminProfile.password) {
-          // Legacy fallback only when Supabase is unavailable.
-          adminPasswordMatch = await comparePassword(password, superAdminProfile.password);
+      // Authenticate before reading a profile: anonymous users cannot enumerate admins.
+      const { data: adminAuth, error: adminAuthError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+      if (!adminAuthError && adminAuth?.session?.access_token && adminAuth.user?.id) {
+        const { data: profile, error: profileError } = await supabase.from('profiles')
+          .select(PUBLIC_COLUMNS.profiles).eq('id', adminAuth.user.id).maybeSingle();
+        if (profileError) {
+          await supabase.auth.signOut({ scope: 'local' });
+          throw new Error(SERVER_UNREACHABLE);
         }
-
-        if (!adminPasswordMatch) {
-          throw new Error('Invalid email or password');
+        if (profile?.role === 'super_admin' && profile.id === adminAuth.user.id) {
+          return {
+            success: true, token: adminAuth.session.access_token,
+            user: { id: profile.id, email: profile.email, name: profile.full_name || 'Super Admin',
+              role: 'super_admin', avatar: profile.avatar_url || null, isActivated: true }
+          };
         }
-        return {
-          success: true,
-          token: `admin_token_${Date.now()}`,
-          user: {
-            id: superAdminProfile.id,
-            email: superAdminProfile.email,
-            name: superAdminProfile.full_name || superAdminProfile.name || 'Super Admin',
-            role: 'super_admin',
-            avatar: superAdminProfile.avatar_url || null,
-            isActivated: true
-          }
-        };
+        await supabase.auth.signOut({ scope: 'local' });
       }
-
 
       // Re-throw the clinic access error only after checking other identities
       if (clinicAccessError) throw clinicAccessError;
@@ -416,404 +417,40 @@ export const authService = {
     }
   },
 
-  // TEMPORARY: Local authentication only (bypass Supabase)
+  // Keep legacy callers on the same verified login path.
   async localAuthenticationOnly(email, password) {
-    try {
-
-      // Check super admins from database
-      const superAdmins = await DatabaseService.get('superAdmins') || [];
-
-      let superAdmin = null;
-      for (const admin of superAdmins) {
-        if (admin.email === email && await comparePassword(password, admin.password)) {
-          superAdmin = admin;
-          break;
-        }
-      }
-
-      if (superAdmin) {
-        return {
-          success: true,
-          token: `local_token_${Date.now()}`,
-          user: {
-            id: superAdmin.id,
-            email: superAdmin.email,
-            name: superAdmin.name,
-            role: 'super_admin',
-            avatar: superAdmin.avatar,
-            isActivated: true
-          }
-        };
-      }
-
-      // Check clinics
-      let clinics = [];
-
-      try {
-        clinics = await DatabaseService.get('clinics') || [];
-      } catch (clinicFetchError) {
-        console.error('ALERT: Error fetching clinics:', clinicFetchError);
-        clinics = [];
-      }
-
-      if (clinics.length > 0) {
-
-        clinics.forEach((c, index) => {
-          console.log(`DEBUG: Clinic ${index + 1}:`, {
-            id: c.id,
-            name: c.name,
-            email: c.email,
-            hasPassword: !!c.password,
-            passwordLength: c.password ? c.password.length : 0,
-            actualPassword: c.password || 'NONE',
-            isActive: c.is_active || c.isActive,
-            subscriptionStatus: c.subscription_status || c.subscriptionStatus,
-            allFields: Object.keys(c)
-          });
-        });
-      } else {
-      }
-
-
-      // Find clinic matching email and password
-      let clinic = null;
-      for (const c of clinics) {
-        if (c.email === email && await comparePassword(password, c.password)) {
-          clinic = c;
-          break;
-        }
-      }
-
-      if (clinic) {
-
-        if (clinic.deletedAt || clinic.deleted_at) throw new Error('This account has been removed. Please contact support.');
-
-        // Check if clinic is activated
-        const isActive = clinic.isActivated || clinic.is_active;
-        const subscriptionStatus = clinic.subscriptionStatus || clinic.subscription_status;
-
-        if (subscriptionStatus === 'pending_approval') {
-          throw new Error('Your clinic registration is pending approval. You will be notified once approved.');
-        }
-
-        if (!isActive) {
-          throw new Error('Your account has been deactivated. Please contact support at info@limitlessbrainlab.com.');
-        }
-
-        return {
-          success: true,
-          token: `local_token_${Date.now()}`,
-          user: {
-            id: clinic.id,
-            email: clinic.email,
-            name: clinic.name,
-            role: 'clinic_admin',
-            avatar: clinic.avatar || clinic.logoUrl,
-            isActivated: isActive
-          }
-        };
-      }
-
-      throw new Error('Invalid email or password');
-    } catch (error) {
-      console.error('ALERT: Local authentication failed:', error.message);
-      throw new Error('Invalid email or password');
-    }
+    return this.loginWithEmail({ email, password });
   },
 
   async registerWithEmail({ name, email, password, confirmPassword, userType = 'patient', dateOfBirth, gender, phone, countryCode, address, city, clinicName, clinicType, clinic_type }) {
+    if (!['patient', 'clinic'].includes(userType)) throw new Error('Invalid user type selected');
+    if (password !== confirmPassword) throw new Error('Passwords do not match');
+    const response = await fetch(`${API_BASE_URL}/register-account`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, userType, dateOfBirth, gender, phone, countryCode, address, city, clinicName, clinicType, clinic_type })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success || !result.account?.id) throw new Error(result.message || 'Registration failed');
+    const account = result.account;
     try {
-
-      // Input validation
-      if (!name || name.trim().length < 2) {
-        throw new Error('Name must be at least 2 characters long');
-      }
-      if (!email || !email.includes('@')) {
-        throw new Error('Please enter a valid email address');
-      }
-      if (!password || password.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
-      }
-      if (password !== confirmPassword) {
-        throw new Error('Passwords do not match');
-      }
-      if (!['patient', 'clinic', 'super_admin'].includes(userType)) {
-        throw new Error('Invalid user type selected');
-      }
-
-      const normalizedEmail = email.trim().toLowerCase();
-
-      // Check if email already exists in local database
-      const existingClinics = await DatabaseService.get('clinics') || [];
-      const existingPatients = await DatabaseService.get('patients') || [];
-      const existingSuperAdmins = await DatabaseService.get('superAdmins') || [];
-
-      if (existingClinics.some(c => c.email === normalizedEmail) ||
-          existingPatients.some(p => p.email === normalizedEmail) ||
-          existingSuperAdmins.some(sa => sa.email === normalizedEmail)) {
-        throw new Error('An account with this email already exists. Please try logging in instead.');
-      }
-
-      // Handle CLINIC registration - Save directly to clinics table
-      if (userType === 'clinic') {
-
-        const hashedPwd = await hashPassword(password);
-        const clinicData = {
-          name: name.trim(),
-          email: normalizedEmail,
-          contact_person: name.trim(),
-          country_code: countryCode || '+91',
-          phone: phone || '',
-          address: address || '',
-          city: city || '',
-          clinic_type: clinicType || clinic_type || 'lbl_partner',
-          // Credentials are NOT embedded in the insert payload: they are stored
-          // via the database right after the row is created (claim RPC), so the
-          // browser never needs column access to the credential fields.
-          logo_url: null,
-          is_active: false, // Pending approval
-          reports_used: 0,
-          reports_allowed: 0, // Will be set after approval
-          subscription_status: 'pending_approval',
-          subscription_tier: 'free',
-          trial_start_date: null,
-          trial_end_date: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const savedClinic = await DatabaseService.add('clinics', clinicData);
-
-        // Store the login credentials on the just-created row (hash + plaintext
-        // for the approval email). Guarded by the database: only succeeds while
-        // the row is brand-new and still has no password.
-        try {
-          const claimed = await credentialRpc.claimCredentials('clinics', normalizedEmail, password);
-          if (claimed === null) {
-            // RPC not deployed (pre-migration DB) — legacy embedded write.
-            await DatabaseService.update('clinics', savedClinic.id, {
-              password: hashedPwd,
-              plain_password: String(password || '').trim()
-            });
-          }
-        } catch (claimErr) {
-          console.error('ALERT: credential claim failed during clinic registration:', claimErr?.message);
-          // Roll back the half-created account rather than leave a row that
-          // can never log in.
-          try { await DatabaseService.delete('clinics', savedClinic.id); } catch (delErr) {
-            console.error('WARNING: could not roll back clinic registration:', delErr?.message);
-          }
-          throw new Error('Could not set up your login credentials. Please try registering again.');
-        }
-
-        // Send confirmation email to clinic via backend API
-        try {
-          const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-          const emailResponse = await fetch(`${API_BASE_URL}/registration-confirmation`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: clinicData.contact_person || clinicData.name,
-              email: clinicData.email,
-              clinicName: clinicData.name,
-              type: 'clinic'
-            })
-          });
-          const emailResult = await emailResponse.json();
-          if (emailResult.success) {
-          }
-        } catch (emailError) {
-          console.error('WARNING: Failed to send confirmation email:', emailError);
-          // Don't fail registration if email fails
-        }
-
-        return {
-          success: true,
-          needsActivation: true,
-          message: 'Clinic registration submitted successfully! A confirmation email has been sent to your email address. Your account is pending activation by our administrator.',
-          user: {
-            id: savedClinic?.id || 'pending',
-            email: clinicData.email,
-            name: clinicData.name,
-            role: 'clinic_admin'
-          }
-        };
-      }
-
-      // Handle PATIENT registration - Save directly to patients table
-      if (userType === 'patient') {
-
-        // Validate clinic if provided
-        let registeredClinic = null;
-        if (clinicName && clinicName.trim()) {
-          const clinics = await DatabaseService.get('clinics') || [];
-          registeredClinic = clinics.find(c =>
-            c.name?.toLowerCase() === clinicName.trim().toLowerCase() &&
-            (c.is_active || c.isActive)
-          );
-
-          if (!registeredClinic) {
-            throw new Error('This clinic is not available in Limitless Brain Lab. Please check the clinic name or contact support.');
-          }
-        }
-
-        const hashedPatientPwd = await hashPassword(password);
-        const patientData = {
-          full_name: name.trim(),
-          email: normalizedEmail,
-          // Credentials stored via claim RPC right after the insert (see the
-          // clinic registration path) — never embedded in the browser payload.
-          date_of_birth: dateOfBirth || null,
-          gender: gender || null,
-          phone: phone || null,
-          country_code: countryCode || null,
-          address: address || null,
-          clinic_id: registeredClinic?.id || null,
-          clinic_name: registeredClinic?.name || clinicName || null,
-          medical_history: null,
-          improvement_focus: ['cognitive_enhancement'],
-          brain_fitness_score: null,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const savedPatient = await DatabaseService.add('patients', patientData);
-
-        try {
-          const claimed = await credentialRpc.claimCredentials('patients', normalizedEmail, password);
-          if (claimed === null) {
-            // RPC not deployed (pre-migration DB) — legacy embedded write.
-            await DatabaseService.update('patients', savedPatient.id, { password: hashedPatientPwd });
-          }
-        } catch (claimErr) {
-          console.error('ALERT: credential claim failed during patient registration:', claimErr?.message);
-          try { await DatabaseService.delete('patients', savedPatient.id); } catch (delErr) {
-            console.error('WARNING: could not roll back patient registration:', delErr?.message);
-          }
-          throw new Error('Could not set up your login credentials. Please try registering again.');
-        }
-
-        // Send welcome email to patient via backend API
-        try {
-          const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-          const emailResponse = await fetch(`${API_BASE_URL}/registration-confirmation`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: patientData.full_name,
-              email: patientData.email,
-              clinicName: null,
-              type: 'patient'
-            })
-          });
-          const emailResult = await emailResponse.json();
-          if (emailResult.success) {
-          }
-        } catch (emailError) {
-          console.error('WARNING: Failed to send welcome email:', emailError);
-          // Don't fail registration if email fails
-        }
-
-        // Return the same shape as a patient login (token + full user) so
-        // AuthContext.register logs the new patient straight in. Without a
-        // token, AuthContext treated the successful registration as
-        // "Registration completed but login failed" and stranded the user
-        // with an error even though the account existed.
-        return {
-          success: true,
-          message: 'Registration successful! A confirmation email has been sent.',
-          token: savedPatient?.id ? `patient_token_${Date.now()}` : undefined,
-          user: {
-            id: savedPatient?.id || 'pending',
-            email: patientData.email,
-            name: patientData.full_name,
-            phone: patientData.phone || null,
-            role: 'patient',
-            clinicId: patientData.clinic_id || null,
-            patientId: savedPatient?.id || null,
-            isActivated: true,
-            credentialsUpdatedAt: null
-          }
-        };
-      }
-
-      // Handle SUPER ADMIN registration - Save to superAdmins table (Active immediately)
-      if (userType === 'super_admin') {
-
-        const hashedAdminPwd = await hashPassword(password);
-        const superAdminData = {
-          full_name: name.trim(),
-          first_name: name.trim().split(' ')[0] || '',
-          last_name: name.trim().split(' ').slice(1).join(' ') || '',
-          email: normalizedEmail,
-          // Credentials stored via claim RPC right after the insert — never
-          // embedded in the browser payload.
-          phone: phone || null,
-          avatar: null,
-          role: 'super_admin',
-          is_active: true,   // Active immediately
-          is_email_verified: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const savedSuperAdmin = await DatabaseService.add('superAdmins', superAdminData);
-
-        try {
-          const claimed = await credentialRpc.claimCredentials('profiles', normalizedEmail, password);
-          if (claimed === null) {
-            // RPC not deployed (pre-migration DB) — legacy embedded write.
-            await DatabaseService.update('superAdmins', savedSuperAdmin.id, { password: hashedAdminPwd });
-          }
-        } catch (claimErr) {
-          console.error('ALERT: credential claim failed during super admin registration:', claimErr?.message);
-          try { await DatabaseService.delete('superAdmins', savedSuperAdmin.id); } catch (delErr) {
-            console.error('WARNING: could not roll back super admin registration:', delErr?.message);
-          }
-          throw new Error('Could not set up your login credentials. Please try registering again.');
-        }
-
-        // Send welcome email to super admin via backend API
-        try {
-          const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-          const emailResponse = await fetch(`${API_BASE_URL}/registration-confirmation`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: superAdminData.name,
-              email: superAdminData.email,
-              clinicName: null,
-              type: 'super_admin'
-            })
-          });
-          const emailResult = await emailResponse.json();
-          if (emailResult.success) {
-          }
-        } catch (emailError) {
-          console.error('WARNING: Failed to send welcome email:', emailError);
-          // Don't fail registration if email fails
-        }
-
-        return {
-          success: true,
-          needsActivation: false, // No activation needed
-          message: 'Super Administrator registration successful! A confirmation email has been sent. You can now login with your credentials.',
-          user: {
-            id: savedSuperAdmin?.id || 'pending',
-            email: superAdminData.email,
-            name: superAdminData.full_name,
-            role: 'super_admin'
-          }
-        };
-      }
-
-      // If we reach here, it means an unsupported userType was provided
-      throw new Error('Unsupported user type: ' + userType);
-
+      await fetch(`${API_BASE_URL}/registration-confirmation`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: account.name || account.full_name, email: account.email,
+          clinicName: userType === 'clinic' ? account.name : null, type: userType })
+      });
     } catch (error) {
-      console.error('ERROR: Registration error:', error.message);
-      throw new Error(error.message || 'Registration failed');
+      console.warn('Registration confirmation email failed');
+    }
+    if (userType === 'clinic') return {
+      success: true, needsActivation: true,
+      message: 'Clinic registration submitted successfully! Your account is pending activation by our administrator.',
+      user: { id: account.id, email: account.email, name: account.name, role: 'clinic_admin' }
+    };
+    // The account exists even if automatic sign-in fails; never invent a session token.
+    try {
+      return await this.loginWithEmail({ email: account.email, password, userType: 'patient' });
+    } catch {
+      throw new Error('Your account was created, but automatic sign-in failed. Please log in to continue.');
     }
   },
 

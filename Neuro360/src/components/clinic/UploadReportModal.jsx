@@ -121,10 +121,6 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
       const trialEnd = clinic.trialEndDate || clinic.trial_end_date;
       const status = clinic.subscriptionStatus || clinic.subscription_status;
       if (trialEnd && status === 'trial' && new Date() > new Date(trialEnd)) {
-        await DatabaseService.update('clinics', clinicId, {
-          subscriptionStatus: 'expired',
-          isActive: false
-        });
         return { limitReached: true, reason: 'trial_expired' };
       }
 
@@ -140,32 +136,6 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
     }
   };
 
-  const handleSubscription = async (subscriptionData) => {
-    try {
-      // Save subscription to database
-      await DatabaseService.add('subscriptions', subscriptionData);
-      
-      // Update clinic's subscription status
-      await DatabaseService.update('clinics', subscriptionData.clinicId, {
-        subscriptionStatus: 'active',
-        reportsAllowed: subscriptionData.reportsAllowed
-      });
-      
-      // Reload usage data from the source of truth
-      const clinic = await DatabaseService.findById('clinics', clinicId);
-      if (clinic) {
-        setClinicUsage({
-          used: Number(clinic.reportsUsed ?? clinic.reports_used ?? 0),
-          allowed: Number(clinic.reportsAllowed ?? clinic.reports_allowed ?? 0)
-        });
-      }
-
-      toast.success('Subscription updated successfully!');
-    } catch (error) {
-      console.error('Error updating subscription:', error);
-      toast.error('Failed to update subscription');
-    }
-  };
 
   const onSubmit = async (data) => {
     // Check if clinic has reached report limit
@@ -240,7 +210,7 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
 
       // Upload file to the PRIVATE patients_documents bucket via the backend
       // (service-role key). Returns the storage path; no public URL.
-      const uploadData = await uploadPatientDocument(file, filePath);
+      const uploadData = await uploadPatientDocument(file, filePath, patient.id);
 
       setUploadProgress(60);
 
@@ -253,7 +223,7 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
         const sanitizedFileName2 = file2.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const filePath2 = `${sanitizedClinic}/${sanitizedPatient}/${docType}_EyesClosed_${sanitizedFileName2}`;
 
-        uploadData2 = await uploadPatientDocument(file2, filePath2);
+        uploadData2 = await uploadPatientDocument(file2, filePath2, patient.id);
       }
 
       setUploadProgress(70);
@@ -644,7 +614,6 @@ const UploadReportModal = ({ clinicId, patient, onUpload, onClose }) => {
         onClose={() => setShowSubscriptionPopup(false)}
         clinicId={clinicId}
         currentUsage={clinicUsage?.used ?? 0}
-        onSubscribe={handleSubscription}
         clinicInfo={{
           name: user?.clinicName || user?.name || 'Clinic',
           email: user?.email || '',

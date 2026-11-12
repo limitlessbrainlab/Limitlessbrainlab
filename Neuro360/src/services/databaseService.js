@@ -1,3 +1,4 @@
+import { PUBLIC_COLUMNS } from './publicColumns.js';
 import { v4 as uuidv4 } from 'uuid';
 import SupabaseService from './supabaseService';
 import { comparePassword } from '../utils/passwordUtils';
@@ -71,9 +72,6 @@ class DatabaseService {
           id: clinic.id,
           name: clinic.name,
           email: clinic.email,
-          password: clinic.password,  // SUCCESS: CRITICAL: Include password for login authentication
-          plain_password: clinic.plain_password,  // Plaintext retained so credential emails can re-show the current password
-          plainPassword: clinic.plain_password,   // camelCase alias for compatibility
           contactPerson: clinic.contact_person,
           contact_person: clinic.contact_person,  // Keep snake_case for compatibility
           clinicName: clinic.clinic_name,
@@ -532,30 +530,6 @@ class DatabaseService {
     return null;
   }
 
-  // Patient authentication
-  async createPatientAuth(email, password, metadata = {}) {
-    const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
-    const baseUrl = apiUrl.replace(/\/api\/?$/, '');
-
-    const response = await fetch(`${baseUrl}/api/create-patient-auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, metadata })
-    });
-
-    const result = await response.json();
-
-    // If user already exists, treat as success
-    if (!response.ok || !result.success) {
-      if (result.message && result.message.includes('already been registered')) {
-        return { user: null, existing: true };
-      }
-      throw new Error(result.message || 'Failed to create patient auth');
-    }
-
-    return { user: result.user, existing: result.existing || false };
-  }
-
   // Clinic specific methods
   async createClinic(clinicData) {
     try {
@@ -565,8 +539,6 @@ class DatabaseService {
       const clinicRecord = {
         name: clinicData.name || clinicData.clinicName,
         email: (clinicData.email || '').trim().toLowerCase(),
-        password: clinicData.password || '', // ✅ PASSWORD FIELD ADDED - Required for clinic login
-        plain_password: clinicData.plain_password || clinicData.plainPassword || null, // Kept so credential emails can re-show the clinic's own password
         contact_person: clinicData.contact_person || clinicData.contactPerson || clinicData.name,
         country_code: clinicData.country_code || clinicData.countryCode || '+91', // ✅ COUNTRY CODE - Save separately
         phone: clinicData.phone || '',
@@ -596,7 +568,7 @@ class DatabaseService {
       const { data: clinic, error } = await this.supabaseService.supabase
         .from('clinics')
         .insert(clinicRecord)
-        .select()
+        .select(PUBLIC_COLUMNS.clinics)
         .single();
 
       if (error) {
@@ -610,8 +582,6 @@ class DatabaseService {
         id: clinic.id,
         name: clinic.name,
         email: clinic.email,
-        password: clinic.password, // Persisted hash — callers verify it against the plaintext before emailing credentials
-        plain_password: clinic.plain_password,
         phone: clinic.phone,
         address: clinic.address,
         logoUrl: clinic.logo_url,

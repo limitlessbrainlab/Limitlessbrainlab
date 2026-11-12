@@ -1,3 +1,4 @@
+const { verifiedPortalUser } = require('../utils/verifiedPortalUser');
 const express = require('express');
 const { createRoutedClient } = require('../dbRouter');
 
@@ -7,12 +8,9 @@ function createClinicAccountsRouter(db = createRoutedClient()) {
     try {
       const token = req.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1];
       if (!token) return res.status(401).json({ message: 'Authentication required' });
-      const { data: auth, error: authError } = await db.auth.getUser(token);
-      if (authError || !auth?.user) return res.status(401).json({ message: 'Invalid or expired session' });
-      // Authorization must come from the database, never editable user metadata.
-      const { data: profile, error: roleError } = await db.from('profiles').select('role').eq('id', auth.user.id).maybeSingle();
-      if (roleError) throw roleError;
-      if (profile?.role !== 'super_admin') return res.status(403).json({ message: 'Super admin access required' });
+      const user = await verifiedPortalUser(db, token);
+      if (!user) return res.status(401).json({ message: 'Invalid or expired session' });
+      if (user.role !== 'super_admin') return res.status(403).json({ message: 'Super admin access required' });
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
         return res.status(400).json({ message: 'Invalid clinic ID' });
       }

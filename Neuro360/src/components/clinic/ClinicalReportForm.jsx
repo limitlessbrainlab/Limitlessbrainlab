@@ -299,7 +299,7 @@ const ClinicalReportForm = ({ patient, onClose, onSave }) => {
 
           // Upload to the PRIVATE patients_documents bucket via the backend
           // (service-role key). Returns the storage path; no public URL.
-          const data = await uploadPatientDocument(fileObj.file, filePath);
+          const data = await uploadPatientDocument(fileObj.file, filePath, patient.id);
 
           newUploadedDocuments.push({
             type: fileObj.type,

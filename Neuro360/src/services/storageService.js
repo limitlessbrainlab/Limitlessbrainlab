@@ -1,3 +1,4 @@
+import { getPatientDocSignedUrl, uploadPatientDocument, resolveReportUrl, deletePatientDocument } from './patientDocuments';
 import { supabase } from '../lib/supabaseClient';
 
 class StorageService {
@@ -76,25 +77,7 @@ class StorageService {
         contentType = 'application/octet-stream';
       }
 
-      // Upload to Supabase Storage (with dynamic bucket)
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, file, {
-          contentType: contentType,
-          upsert: false,
-          metadata: {
-            originalName: fileName,
-            uploadedAt: new Date().toISOString(),
-            clinicName: clinicName,
-            patientName: patientName,
-            ...metadata
-          }
-        });
-
-      if (error) {
-        throw new Error(`Upload failed: ${error.message}`);
-      }
-
+      const data = await uploadPatientDocument(file, filePath, metadata.patientId || metadata.patient_id, bucketName);
 
       // Get public URL (or signed URL for private buckets)
       const url = await this.getSignedUrl(data.path, 3600, bucketName);
@@ -134,24 +117,11 @@ class StorageService {
         bucket = 'edf-files';
       }
 
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(path, expiresIn);
-
-      if (error) {
-        // If failed, try alternate bucket
-        if (bucket === 'edf-files') {
-          const retry = await supabase.storage
-            .from(this.reportsBucket)
-            .createSignedUrl(path, expiresIn);
-          if (!retry.error && retry.data?.signedUrl) {
-            return retry.data.signedUrl;
-          }
-        }
-        throw new Error(`Failed to generate signed URL: ${error.message}`);
+      try { return await getPatientDocSignedUrl(bucket, path, expiresIn); }
+      catch (error) {
+        if (bucketName || bucket !== 'edf-files') throw error;
+        return await getPatientDocSignedUrl(this.reportsBucket, path, expiresIn);
       }
-
-      return data.signedUrl;
     } catch (error) {
       console.error('Error generating signed URL:', error);
       throw new Error(`Failed to generate signed URL: ${error.message}`);
@@ -174,13 +144,7 @@ class StorageService {
    */
   async deleteFile(path) {
     try {
-      const { error } = await supabase.storage
-        .from(this.reportsBucket)
-        .remove([path]);
-
-      if (error) {
-        throw new Error(`Failed to delete file: ${error.message}`);
-      }
+      await deletePatientDocument(this.reportsBucket, path);
 
       return { success: true, message: 'File deleted successfully' };
     } catch (error) {
@@ -193,44 +157,10 @@ class StorageService {
    * Download file from storage (tries multiple buckets and methods)
    */
   async downloadFile(path) {
-    const bucketsToTry = [this.reportsBucket, 'edf-files'];
-
-    for (const bucket of bucketsToTry) {
-      // Method 1: Direct download
-      try {
-        const { data, error } = await supabase.storage.from(bucket).download(path);
-        if (!error && data) {
-          return data;
-        }
-      } catch (err) { /* try next */ }
-
-      // Method 2: Signed URL
-      try {
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from(bucket).createSignedUrl(path, 300);
-        if (!signedError && signedData?.signedUrl) {
-          const response = await fetch(signedData.signedUrl);
-          if (response.ok) {
-            const blob = await response.blob();
-            return blob;
-          }
-        }
-      } catch (err) { /* try next */ }
-
-      // Method 3: Public URL
-      try {
-        const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
-        if (publicData?.publicUrl) {
-          const response = await fetch(publicData.publicUrl);
-          if (response.ok) {
-            const blob = await response.blob();
-            return blob;
-          }
-        }
-      } catch (err) { /* try next */ }
-    }
-
-    throw new Error('File not found in storage. It may have been deleted or not uploaded correctly.');
+    const url = /^https?:\/\//i.test(path) ? await resolveReportUrl(path) : await this.getSignedUrl(path, 300);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Document download failed');
+    return response.blob();
   }
 
   /**

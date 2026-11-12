@@ -1,3 +1,7 @@
+import patientAccess from '../server/utils/patientAccess.js';
+const { requirePatientAccess } = patientAccess;
+import portalIdentity from '../server/utils/verifiedPortalUser.js';
+const { verifiedPortalUser } = portalIdentity;
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,10 +20,8 @@ function serverClient() {
 }
 
 async function requireSuperAdmin(token, supabase) {
-  const { data } = await supabase.auth.getUser(token);
-  if (!data?.user) return null;
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-  return profile?.role === 'super_admin' ? data.user : null;
+  const user = await verifiedPortalUser(supabase, token);
+  return user?.role === 'super_admin' ? user : null;
 }
 
 function safeName(name) {
@@ -62,13 +64,20 @@ async function processReport(req, res, supabase, user) {
     return json(res, 400, { message: 'Eyes-open, eyes-closed and patient data are required' });
   }
 
+  const patient = await requirePatientAccess(user, fields.patientId, fields.clinicId, supabase);
+
   const [eyesOpen, eyesClosed] = await Promise.all([
     downloadInput(supabase, user.id, inputs.eyesOpen.path, 'eyesOpen', inputs.eyesOpen.name),
     downloadInput(supabase, user.id, inputs.eyesClosed.path, 'eyesClosed', inputs.eyesClosed.name),
   ]);
+  for (const input of [inputs.eyesOpen, inputs.eyesClosed]) {
+    const { error } = await supabase.rpc('register_document_owner', { p_bucket:BUCKET, p_path:input.path, p_patient_id:patient.id });
+    if (error) throw error;
+  }
   req.body = fields;
   req.files = { eyesOpen: [eyesOpen], eyesClosed: [eyesClosed] };
   req.supabaseClient = supabase;
+  req.user = user;
 
   try {
     await router.processQeegRequest(req, res);

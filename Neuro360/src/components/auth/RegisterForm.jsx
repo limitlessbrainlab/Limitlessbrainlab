@@ -230,6 +230,25 @@ const RegisterForm = () => {
             </div>
           )}
 
+          {isPatient && (
+            <>
+              <div className="field-wrapper">
+                <label htmlFor="dateOfBirth" className="field-label">Date of birth *</label>
+                <input id="dateOfBirth" type="date" className="auth-input" max={new Date().toISOString().slice(0, 10)}
+                  {...register('dateOfBirth', { required: 'Date of birth is required' })} />
+                {errors.dateOfBirth && <p className="error-message">{errors.dateOfBirth.message}</p>}
+              </div>
+              <div className="field-wrapper">
+                <label htmlFor="gender" className="field-label">Gender *</label>
+                <select id="gender" className="auth-input" defaultValue="" {...register('gender', { required: 'Gender is required' })}>
+                  <option value="" disabled>Select gender</option>
+                  <option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
+                </select>
+                {errors.gender && <p className="error-message">{errors.gender.message}</p>}
+              </div>
+            </>
+          )}
+
           {/* Email Field */}
           <div className="field-wrapper animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <label htmlFor="email" className="field-label">

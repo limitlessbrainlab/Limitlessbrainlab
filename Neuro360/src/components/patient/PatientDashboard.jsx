@@ -1,3 +1,7 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
+import checkoutCatalog from '../../../server/config/checkoutCatalog.json';
+import StripeService from '../../services/stripeService';
+import { PUBLIC_COLUMNS } from '../../services/publicColumns.js';
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -128,18 +132,13 @@ const getGuideThumbnailUrl = (url) => {
   return null;
 };
 
-const LEGACY_ASSESSMENTS = {
-  brain_fitness: { title: 'Brain Fitness Score', link: 'https://form.jotform.com/233250136675151', price: 2.99 },
-  brain_burnout: { title: 'Brain Burnout Score', link: 'https://form.jotform.com/260117244562148', price: 2.99 },
-  brain_age: { title: 'Neuro Age Estimator', link: 'https://form.jotform.com/252245065792056', price: 2.99 },
-  dementia_index: { title: 'Dementia Probability Index', link: 'https://form.jotform.com/260034749079159', price: 2.99 },
-  assessment_bundle: {
-    title: 'Complete Brain Assessment Bundle',
-    link: 'https://form.jotform.com/233250136675151,https://form.jotform.com/260117244562148,https://form.jotform.com/252245065792056,https://form.jotform.com/260034749079159',
-    price: 19.99,
-    bundleIds: ['brain_fitness', 'brain_burnout', 'brain_age', 'dementia_index']
-  }
-};
+const LEGACY_ASSESSMENTS = Object.fromEntries(
+  ['brain_fitness', 'brain_burnout', 'brain_age', 'dementia_index', 'assessment_bundle'].map(id => {
+    const product = checkoutCatalog.legacyAssessments[id];
+    return [id, { title: product.title, link: product.link, price: product.USD,
+      ...(id === 'assessment_bundle' ? { bundleIds: ['brain_fitness', 'brain_burnout', 'brain_age', 'dementia_index'] } : {}) }];
+  })
+);
 
 const ASSESSMENT_CARD_STYLES = [
   { icon: Brain, color: 'from-blue-500 to-blue-600' },
@@ -687,7 +686,7 @@ const PatientDashboard = () => {
 
       const response = await fetch(`${API_URL}/create-assessment-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           assessmentId,
           assessmentName: assessmentTitle,
@@ -726,24 +725,26 @@ const PatientDashboard = () => {
     const sessionId = urlParams.get('session_id');
 
     if (paymentStatus === 'success' && assessmentId) {
+      if (!user?.email) return;
       if (!LEGACY_ASSESSMENTS[assessmentId] && assessmentsLoading) return;
 
       const assessmentDetails = getAssessmentDetails(assessmentId);
 
-      // Save payment directly to database
+      // Confirm the paid session and refresh server-granted access.
       const savePatientPayment = async () => {
         try {
-          // Check if already saved (prevent duplicates on page refresh)
-          if (sessionId) {
-            const { data: existing } = await supabase
-              .from('patient_payments')
-              .select('id')
-              .eq('stripe_session_id', sessionId)
-              .limit(1);
-            if (existing && existing.length > 0) {
-              return;
-            }
-          }
+          const verification = await StripeService.verifyPaymentSuccess(sessionId, { email: user.email, type: 'assessment', itemId: assessmentId });
+          await fetchPurchasedAssessments();
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setPaymentSuccessDetails({
+            name: assessmentDetails.name,
+            amount: `${verification.currency} ${Number(verification.amount).toFixed(2)}`,
+            takeUrl: verification.takeUrl,
+            email: user?.email || '',
+            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            transactionId: sessionId || 'N/A'
+          });
+          setShowPaymentSuccessPopup(true);
 
           // Fetch clinic_id from patients table directly (patientClinicId may not be set yet after redirect)
           let clinicIdForPayment = patientClinicId || null;
@@ -753,7 +754,7 @@ const PatientDashboard = () => {
             if (user?.id) {
               const { data: patientRow } = await supabase
                 .from('patients')
-                .select('*')
+                .select(PUBLIC_COLUMNS.patients)
                 .eq('id', user.id)
                 .limit(1)
                 .single();
@@ -766,7 +767,7 @@ const PatientDashboard = () => {
             if (!clinicIdForPayment && user?.email) {
               const { data: patientsByEmail } = await supabase
                 .from('patients')
-                .select('*')
+                .select(PUBLIC_COLUMNS.patients)
                 .eq('email', user.email.toLowerCase())
                 .order('created_at', { ascending: false })
                 .limit(1);
@@ -777,67 +778,6 @@ const PatientDashboard = () => {
             }
           }
 
-          // Save to patient_payments
-          const { error: ppError } = await supabase
-            .from('patient_payments')
-            .insert({
-              clinic_id: clinicIdForPayment,
-              patient_id: user.id || null,
-              patient_email: user.email.toLowerCase(),
-              patient_name: user.name || user.user_metadata?.full_name || '',
-              amount: assessmentDetails.price,
-              currency: 'USD',
-              status: 'completed',
-              type: 'assessment',
-              item_name: assessmentDetails.name,
-              assessment_id: assessmentId,
-              assessment_link: assessmentDetails.link,
-              stripe_session_id: sessionId || null,
-              source: 'About the Brain',
-              created_at: new Date().toISOString()
-            });
-
-          if (ppError) {
-            console.error('patient_payments save error:', ppError);
-          } else {
-          }
-
-          // Also save to assessment_purchases for button state
-          const { error: apError } = await supabase
-            .from('assessment_purchases')
-            .insert({
-              patient_email: user.email.toLowerCase(),
-              assessment_id: assessmentId,
-              assessment_name: assessmentDetails.name,
-              assessment_link: assessmentDetails.link,
-              stripe_session_id: sessionId || null,
-              amount_paid: assessmentDetails.price,
-              currency: 'USD',
-              status: 'completed',
-              purchased_at: new Date().toISOString()
-            });
-
-          if (apError) {
-          }
-
-          // Handle bundle — mark all included assessments as purchased.
-          if (assessmentDetails.bundleIds.length > 0) {
-            // Insert all bundle items in parallel (was sequential awaits).
-            await Promise.all(assessmentDetails.bundleIds.map((bId) => {
-              const bundleDetails = getAssessmentDetails(bId);
-              return supabase.from('assessment_purchases').insert({
-                patient_email: user.email.toLowerCase(),
-                assessment_id: bId,
-                assessment_name: bundleDetails.name,
-                assessment_link: bundleDetails.link,
-                stripe_session_id: sessionId ? `${sessionId}_${bId}` : null,
-                amount_paid: 0,
-                currency: 'USD',
-                status: 'completed',
-                purchased_at: new Date().toISOString()
-              }).catch(err => console.warn(`Bundle item ${bId} save skipped:`, err.message));
-            }));
-          }
           // Send JotForm link email to patient
           try {
             const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
@@ -898,22 +838,12 @@ const PatientDashboard = () => {
           }
 
         } catch (err) {
-          console.error('Error saving payment data:', err);
+          console.error('Error confirming payment:', err);
+          toast.error('Payment confirmation failed. Please reload to retry.');
         }
       };
 
-      setPaymentSuccessDetails({
-        name: assessmentDetails.name,
-        amount: assessmentDetails.amountLabel,
-        email: user?.email || '',
-        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-        transactionId: sessionId || 'N/A'
-      });
-      setShowPaymentSuccessPopup(true);
-
       savePatientPayment();
-      window.history.replaceState({}, document.title, window.location.pathname);
-      fetchPurchasedAssessments();
     } else if (paymentStatus === 'cancelled') {
       toast.error('Payment was cancelled');
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -2160,7 +2090,7 @@ const PatientDashboard = () => {
       try {
         const res = await fetch(`${API_BASE}/create-assessment-checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await StripeService.getCheckoutHeaders(),
           body: JSON.stringify({
             assessmentId: bcSelectedService.id,
             assessmentName: bcSelectedService.title,
@@ -2299,7 +2229,7 @@ const PatientDashboard = () => {
                 const bundle = bcBundles.find(b => b.title?.toLowerCase().includes('neurosense bundle')) || {
                   id: 'neurosense-bundle', title: 'Neurosense Bundle',
                   description: 'All 4 assessments bundle',
-                  originalPrice: { usd: 89.95 }, salePrice: { usd: 19.99 },
+                  originalPrice: { usd: 89.95 }, salePrice: { usd: checkoutCatalog.legacyAssessments['neurosense-bundle'].USD },
                   link: bcServices.map(s => s.link).filter(Boolean).join(',')
                 };
                 setBcSelectedService(bundle);
@@ -4043,7 +3973,7 @@ const PatientDashboard = () => {
 
                           if (downloadUrl) {
                             // Fetch the file as blob to force download
-                            const response = await fetch(downloadUrl);
+                            const response = await fetch(await resolveReportUrl(downloadUrl));
                             const blob = await response.blob();
 
                             // Create blob URL
@@ -4335,7 +4265,7 @@ const PatientDashboard = () => {
 
                         if (downloadUrl) {
                           // Fetch the file as blob to force download
-                          const response = await fetch(downloadUrl);
+                          const response = await fetch(await resolveReportUrl(downloadUrl));
 
                           if (!response.ok) {
                             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -8199,7 +8129,7 @@ const PatientDashboard = () => {
         const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
         const response = await fetch(`${API_URL}/create-meditation-checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await StripeService.getCheckoutHeaders(),
           body: JSON.stringify({
             packId: selectedMedPack.id,
             packName: selectedMedPack.name,
@@ -8263,7 +8193,6 @@ const PatientDashboard = () => {
       }
 
       const { packId: pId, sessionId: sId } = JSON.parse(pending);
-      localStorage.removeItem('pendingMedPayment');
 
       const medPackNames = {
         gamma: 'Gamma Meditation Music', solfeggio_852: '852Hz Solfeggio Music', solfeggio_963: '963Hz Solfeggio Music'
@@ -8272,62 +8201,38 @@ const PatientDashboard = () => {
       const packName = medPackNames[pId] || 'Meditation Pack';
       const amount = medPackPrices[pId] || 25;
 
-      // Show success popup immediately and optimistically unlock the pack
-      setPurchasedMedPackId(pId);
-      setPurchasedPacks(prev => [...new Set([...prev, pId])]);
-      setMedPaymentSuccessDetails({
-        name: packName, amount: `USD ${amount}`, email: user?.email || '',
-        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        transactionId: sId || 'N/A'
-      });
-      setShowMedPaymentSuccessPopup(true);
-
-      // Save payment data in background
+      // Confirm payment before displaying a receipt.
       const saveMedPayment = async () => {
         try {
-          // Check duplicate
-          if (sId) {
-            const { data: existing } = await supabase.from('patient_payments').select('id').eq('stripe_session_id', sId).limit(1);
-            if (existing && existing.length > 0) return;
-          }
+          const verification = await StripeService.verifyPaymentSuccess(sId, { email: user.email, type: 'meditation', itemId: pId });
+          await fetchPurchasedPacks();
+          localStorage.removeItem('pendingMedPayment');
+          // Show the receipt only after server confirmation.
+          setPurchasedMedPackId(pId);
+          setMedPaymentSuccessDetails({
+            name: packName, amount: `${verification.currency} ${Number(verification.amount).toFixed(2)}`, email: user?.email || '',
+            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            transactionId: sId || 'N/A'
+          });
+          setShowMedPaymentSuccessPopup(true);
 
           // Get clinic info
           let clinicIdForPayment = null;
           let clinicNameForEmail = '';
           let patientRecord = null;
           if (user?.id) {
-            const { data: p } = await supabase.from('patients').select('*').eq('id', user.id).limit(1).single();
+            const { data: p } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('id', user.id).limit(1).single();
             if (p) { patientRecord = p; clinicIdForPayment = p.clinic_id || p.org_id || null; }
           }
           if (!patientRecord && user?.email) {
-            const { data: ps } = await supabase.from('patients').select('*').eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
+            const { data: ps } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
             if (ps && ps.length > 0) { patientRecord = ps[0]; clinicIdForPayment = ps[0].clinic_id || ps[0].org_id || null; }
           }
           if (clinicIdForPayment) {
             const { data: c } = await supabase.from('clinics').select('name').eq('id', clinicIdForPayment).single();
             clinicNameForEmail = c?.name || '';
           }
-
-          // Save to patient_payments
-          await supabase.from('patient_payments').insert({
-            clinic_id: clinicIdForPayment, patient_id: user.id || null,
-            patient_email: user.email.toLowerCase(),
-            patient_name: patientRecord?.full_name || patientRecord?.name || user.name || '',
-            amount, currency: 'USD', status: 'completed', type: 'meditation',
-            item_name: packName, assessment_id: pId,
-            stripe_session_id: sId || null, source: 'Meditations',
-            created_at: new Date().toISOString()
-          }).then(({ error }) => {
-            if (error) console.warn('patient_payments save error:', error.message);
-          });
-
-          // Save to meditation_purchases
-          await supabase.from('meditation_purchases').insert({
-            patient_email: user.email.toLowerCase(), meditation_id: pId,
-            stripe_session_id: sId || null, amount_paid: amount, currency: 'USD',
-            payment_status: 'completed', purchased_at: new Date().toISOString()
-          }).catch(err => console.warn('meditation_purchases save:', err.message));
 
           // Send emails
           try {
@@ -8347,7 +8252,7 @@ const PatientDashboard = () => {
 
           // Re-fetch to confirm from DB
           fetchPurchasedPacks();
-        } catch (err) { console.error('Error saving meditation payment:', err); }
+        } catch (err) { console.error('Error confirming meditation payment:', err); toast.error('Payment confirmation failed. Please reload to retry.'); }
       };
 
       saveMedPayment();
@@ -8368,7 +8273,6 @@ const PatientDashboard = () => {
         driveId: '13zc55FIM9zThAi06BKy4NC_6nVNFX1Bn',
         image: '/frequency/gamma.png',
         stripeProductId: 'prod_gamma',
-        price: 22,
         originalPrice: 49
       },
       {
@@ -8385,7 +8289,6 @@ const PatientDashboard = () => {
         driveId: '1vEFc2wuiSkRANWkTozTcH7-Wnni8KkQo',
         image: '/meditation/852_Hz_page-0001.webp',
         stripeProductId: 'prod_solfeggio_852',
-        price: 25,
         originalPrice: 49
       },
       {
@@ -8402,10 +8305,9 @@ const PatientDashboard = () => {
         driveId: '14hDaC2Ud7YwDlmX7JEHMVkLNKKmDogP7',
         image: '/meditation/963_Hz_page-0001.webp',
         stripeProductId: 'prod_solfeggio_963',
-        price: 25,
         originalPrice: 49
       }
-    ];
+    ].map(pack => ({ ...pack, price: checkoutCatalog.meditation[pack.id].USD }));
 
     // Fetch meditation data
     useEffect(() => {
@@ -10151,7 +10053,7 @@ const PatientDashboard = () => {
         if (!downloadUrl) downloadUrl = directFileUrl || null;
 
         if (downloadUrl) {
-          const response = await fetch(downloadUrl);
+          const response = await fetch(await resolveReportUrl(downloadUrl));
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const blob = await response.blob();
           const blobUrl = window.URL.createObjectURL(blob);

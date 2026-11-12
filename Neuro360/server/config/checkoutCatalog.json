@@ -1,0 +1,226 @@
+{
+  "subscriptionBaseUSD": {
+    "BASIC": 12,
+    "PRO": 24,
+    "PREMIUM": 42,
+    "ENTERPRISE": 72
+  },
+  "currencyConfig": {
+    "US": {
+      "currency": "USD",
+      "symbol": "USD ",
+      "multiplier": 1
+    },
+    "IN": {
+      "currency": "INR",
+      "symbol": "\u20b9",
+      "multiplier": 83
+    },
+    "GB": {
+      "currency": "GBP",
+      "symbol": "\u00a3",
+      "multiplier": 0.79
+    },
+    "EU": {
+      "currency": "EUR",
+      "symbol": "\u20ac",
+      "multiplier": 0.92
+    },
+    "AE": {
+      "currency": "AED",
+      "symbol": "AED ",
+      "multiplier": 3.67
+    },
+    "AU": {
+      "currency": "AUD",
+      "symbol": "A$",
+      "multiplier": 1.53
+    },
+    "CA": {
+      "currency": "CAD",
+      "symbol": "C$",
+      "multiplier": 1.36
+    },
+    "SG": {
+      "currency": "SGD",
+      "symbol": "S$",
+      "multiplier": 1.34
+    },
+    "DEFAULT": {
+      "currency": "USD",
+      "symbol": "USD ",
+      "multiplier": 1
+    }
+  },
+  "frequency": {
+    "delta": {
+      "name": "Delta",
+      "USD": 22
+    },
+    "theta": {
+      "name": "Theta",
+      "USD": 29
+    },
+    "alpha": {
+      "name": "Alpha",
+      "USD": 29
+    },
+    "beta": {
+      "name": "Beta",
+      "USD": 29
+    },
+    "solfeggio_285": {
+      "name": "285Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_396": {
+      "name": "396Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_417": {
+      "name": "417Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_528": {
+      "name": "528Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_639": {
+      "name": "639Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_741": {
+      "name": "741Hz Solfeggio",
+      "USD": 29
+    },
+    "solfeggio_852": {
+      "name": "852Hz Solfeggio",
+      "USD": 25
+    },
+    "solfeggio_963": {
+      "name": "963Hz Solfeggio",
+      "USD": 25
+    },
+    "gamma": {
+      "name": "Gamma",
+      "USD": 22
+    }
+  },
+  "meditation": {
+    "gamma": {
+      "name": "Gamma",
+      "USD": 22
+    },
+    "solfeggio_852": {
+      "name": "852Hz Solfeggio",
+      "USD": 25
+    },
+    "solfeggio_963": {
+      "name": "963Hz Solfeggio",
+      "USD": 25
+    }
+  },
+  "legacyAssessments": {
+    "brain_fitness": {
+      "title": "Brain Fitness Score",
+      "link": "https://form.jotform.com/233250136675151",
+      "USD": 2.99
+    },
+    "brain_burnout": {
+      "title": "Brain Burnout Score",
+      "link": "https://form.jotform.com/260117244562148",
+      "USD": 2.99
+    },
+    "brain_age": {
+      "title": "Neuro Age Estimator",
+      "link": "https://form.jotform.com/252245065792056",
+      "USD": 2.99
+    },
+    "dementia_index": {
+      "title": "Dementia Probability Index",
+      "link": "https://form.jotform.com/260034749079159",
+      "USD": 2.99
+    },
+    "assessment_bundle": {
+      "title": "Complete Brain Assessment Bundle",
+      "link": "https://form.jotform.com/233250136675151,https://form.jotform.com/260117244562148,https://form.jotform.com/252245065792056,https://form.jotform.com/260034749079159",
+      "USD": 19.99
+    },
+    "landing_brain_fitness": {
+      "title": "Brain Fitness Score\u2122",
+      "link": "https://form.jotform.com/232184893262057",
+      "USD": 2.99
+    },
+    "neurocoaching_foundation": {
+      "title": "Foundation Certificate",
+      "USD": 299,
+      "link": ""
+    },
+    "neurocoaching_practitioner": {
+      "title": "Certified Practitioner",
+      "USD": 599,
+      "link": ""
+    },
+    "neurocoaching_master": {
+      "title": "Master Coach Program",
+      "USD": 1199,
+      "link": ""
+    },
+    "neurosense-bundle": {
+      "title": "Neurosense Bundle",
+      "USD": 19.99,
+      "link": "",
+      "category": "bundle"
+    }
+  },
+  "legacyClinicReports": {
+    "starter": {
+      "name": "Starter Pack",
+      "reports": 10,
+      "INR": 999,
+      "USD": 12
+    },
+    "basic": {
+      "name": "Basic Pack",
+      "reports": 25,
+      "INR": 1999,
+      "USD": 24
+    },
+    "professional": {
+      "name": "Professional Pack",
+      "reports": 50,
+      "INR": 3499,
+      "USD": 42
+    },
+    "enterprise": {
+      "name": "Enterprise Pack",
+      "reports": 100,
+      "INR": 5999,
+      "USD": 72
+    }
+  },
+  "clinicReportFallbacks": {
+    "lbl_partner": {
+      "partner-5": {
+        "name": "5 Reports",
+        "reports": 5,
+        "INR": 7500,
+        "USD": 90
+      }
+    },
+    "lbl_clinic": {
+      "clinic-5": {
+        "name": "5 Reports",
+        "reports": 5,
+        "INR": 3000,
+        "USD": 36
+      },
+      "clinic-10": {
+        "name": "10 Reports",
+        "reports": 10,
+        "INR": 2500,
+        "USD": 30
+      }
+    }
+  }
+}

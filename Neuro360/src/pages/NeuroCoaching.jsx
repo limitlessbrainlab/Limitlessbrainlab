@@ -1,3 +1,4 @@
+import checkoutCatalog from '../../server/config/checkoutCatalog.json';
 import React, { useState } from 'react';
 import {
   GraduationCap, BookOpen, Award, Star, Clock, Globe,
@@ -29,6 +30,7 @@ const NeuroCoaching = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          assessmentId: `neurocoaching_${selectedPlan?.id}`,
           assessmentName: selectedPlan?.name,
           customerEmail: paymentEmail,
           customerName: paymentName.toUpperCase(),
@@ -57,7 +59,7 @@ const NeuroCoaching = () => {
       duration: '8 weeks',
       format: 'Online Self-Paced',
       price: '₹24,999',
-      priceUSD: 299,
+      priceUSD: checkoutCatalog.legacyAssessments.neurocoaching_foundation.USD,
       features: [
         'All 5 Pillars core curriculum',
         'Video lessons & workbooks',
@@ -75,7 +77,7 @@ const NeuroCoaching = () => {
       duration: '16 weeks',
       format: 'Online + Live Sessions',
       price: '₹49,999',
-      priceUSD: 599,
+      priceUSD: checkoutCatalog.legacyAssessments.neurocoaching_practitioner.USD,
       features: [
         'Everything in Foundation',
         'Live coaching sessions with Dr. Shweta',
@@ -94,7 +96,7 @@ const NeuroCoaching = () => {
       duration: '6 months',
       format: 'Hybrid (Online + In-Person)',
       price: '₹99,999',
-      priceUSD: 1199,
+      priceUSD: checkoutCatalog.legacyAssessments.neurocoaching_master.USD,
       features: [
         'Everything in Practitioner',
         'Advanced neuroscience modules',

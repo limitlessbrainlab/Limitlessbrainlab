@@ -28,7 +28,7 @@ class SupabaseStorage {
    * @param {string} destinationPath - Path within the bucket (optional)
    * @returns {Promise<{success: boolean, url: string, path: string}>}
    */
-  static async uploadFile(filePath, bucketName = 'neurosense-reports', destinationPath = null, contentType = 'application/pdf', client = supabase) {
+  static async uploadFile(filePath, bucketName = 'neurosense-reports', destinationPath = null, contentType = 'application/pdf', client = supabase, patientId = null) {
     try {
       console.log('📤 Uploading file to Supabase storage...');
       console.log('   Local file:', filePath);
@@ -38,6 +38,8 @@ class SupabaseStorage {
       if (!client) {
         throw new Error('Supabase client not initialized - check environment variables');
       }
+
+      if (!patientId) throw new Error('Patient ownership is required for document uploads');
 
       // Read the file
       const fileBuffer = fs.readFileSync(filePath);
@@ -53,12 +55,18 @@ class SupabaseStorage {
         .from(bucketName)
         .upload(storagePath, fileBuffer, {
           contentType: contentType || 'application/octet-stream',
-          upsert: true // Overwrite if file exists
+          upsert: false // Never replace an existing registered object
         });
 
       if (error) {
         console.error('❌ Supabase upload error:', error);
         throw new Error(`Failed to upload to Supabase: ${error.message}`);
+      }
+
+      const { error: ownerError } = await client.rpc('register_document_owner', { p_bucket: bucketName, p_path: storagePath, p_patient_id: patientId });
+      if (ownerError) {
+        await client.storage.from(bucketName).remove([storagePath]);
+        throw ownerError;
       }
 
       console.log('✅ File uploaded successfully to Supabase');
@@ -91,12 +99,12 @@ class SupabaseStorage {
    * @param {string} bucketName - Name of the bucket
    * @returns {Promise<{success: boolean}>}
    */
-  static async deleteFile(storagePath, bucketName = 'neurosense-reports') {
+  static async deleteFile(storagePath, bucketName = 'neurosense-reports', client = supabase) {
     try {
       console.log('🗑️  Deleting file from Supabase storage...');
       console.log('   Path:', storagePath);
 
-      const { error } = await supabase.storage
+      const { error } = await client.storage
         .from(bucketName)
         .remove([storagePath]);
 
@@ -124,12 +132,12 @@ class SupabaseStorage {
    * @param {number} expiresIn - Seconds the URL stays valid (default 300)
    * @returns {Promise<{success: boolean, signedUrl: string}>}
    */
-  static async getSignedUrl(bucketName, filePath, expiresIn = 300) {
-    if (!supabase) {
+  static async getSignedUrl(bucketName, filePath, expiresIn = 300, client = supabase) {
+    if (!client) {
       throw new Error('Supabase client not initialized - check environment variables');
     }
 
-    const { data, error } = await supabase.storage
+    const { data, error } = await client.storage
       .from(bucketName)
       .createSignedUrl(filePath, expiresIn);
 

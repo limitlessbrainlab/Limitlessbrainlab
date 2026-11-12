@@ -1,3 +1,5 @@
+import StripeService from '../services/stripeService';
+import { PUBLIC_COLUMNS } from '../services/publicColumns.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -103,42 +105,34 @@ const BrainCoach = () => {
     const numericAmount = Number(paidAmount);
     const hasAmount = Number.isFinite(numericAmount) && numericAmount > 0;
     const currencyCode = (paidCurrency || 'inr').toLowerCase();
-    const currencySymbol = currencyCode === 'inr' ? '₹' : 'USD ';
-    const formattedAmount = hasAmount
-      ? `${currencySymbol}${numericAmount.toLocaleString('en-IN')}`
-      : '—';
+
 
     {
-      // Show success popup
-      setCoachPaymentDetails({
-        coachName: coachName ? decodeURIComponent(coachName) : 'Brain Coach',
-        amount: formattedAmount,
-        email: user?.email || '',
-        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        transactionId: sessionId || 'N/A'
-      });
-      setShowCoachPaymentSuccess(true);
-
-      // Save to patient_payments
+      // Confirm payment before displaying a receipt.
       const saveCoachPayment = async () => {
         try {
-          // Check duplicate
-          if (sessionId) {
-            const { data: existing } = await supabase.from('patient_payments').select('id').eq('stripe_session_id', sessionId).limit(1);
-            if (existing && existing.length > 0) { localStorage.removeItem('pendingCoachPayment'); return; }
-          }
+          const verification = await StripeService.verifyPaymentSuccess(sessionId, { email: user.email, type: 'coaching', itemName: `Brain Coaching - ${coachName ? decodeURIComponent(coachName) : 'Session'}` });
+          // Show success popup
+          setCoachPaymentDetails({
+            coachName: coachName ? decodeURIComponent(coachName) : 'Brain Coach',
+            amount: `${verification.currency} ${Number(verification.amount).toFixed(2)}`,
+            email: user?.email || '',
+            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            transactionId: sessionId || 'N/A'
+          });
+          setShowCoachPaymentSuccess(true);
 
           // Get clinic info
           let clinicId = null;
           let clinicName = '';
           let patientRecord = null;
           if (user?.id) {
-            const { data: p } = await supabase.from('patients').select('*').eq('id', user.id).limit(1).single();
+            const { data: p } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('id', user.id).limit(1).single();
             if (p) { patientRecord = p; clinicId = p.clinic_id || p.org_id || null; }
           }
           if (!patientRecord && user?.email) {
-            const { data: ps } = await supabase.from('patients').select('*').eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
+            const { data: ps } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
             if (ps && ps.length > 0) { patientRecord = ps[0]; clinicId = ps[0].clinic_id || ps[0].org_id || null; }
           }
           if (clinicId) {
@@ -146,24 +140,6 @@ const BrainCoach = () => {
             clinicName = c?.name || '';
           }
 
-          // Save to patient_payments — only clear the pending marker on success so
-          // a failed insert is retried on the next load instead of being lost.
-          const { error: insertError } = await supabase.from('patient_payments').insert({
-            clinic_id: clinicId, patient_id: user.id || null,
-            patient_email: user.email.toLowerCase(),
-            patient_name: patientRecord?.full_name || patientRecord?.name || user.name || '',
-            amount: hasAmount ? numericAmount : null, currency: currencyCode.toUpperCase(), status: 'completed', type: 'coaching',
-            item_name: `Brain Coaching - ${coachName ? decodeURIComponent(coachName) : 'Session'}`,
-            assessment_id: coachName ? decodeURIComponent(coachName) : 'coaching',
-            stripe_session_id: sessionId || null,
-            source: 'Brain Coach',
-            created_at: new Date().toISOString()
-          });
-          if (insertError) {
-            console.error('patient_payments save error:', insertError.message);
-            return; // keep pendingCoachPayment so the next load retries
-          }
-          localStorage.removeItem('pendingCoachPayment');
 
           // Send admin notification
           const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
@@ -186,9 +162,10 @@ const BrainCoach = () => {
           }).catch(() => {});
 
           // Record the booking (Calendly no longer creates it) so it shows in the bookings list
-          await fetch(`${API_URL}/bookings`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+          const bookingResponse = await fetch(`${API_URL}/bookings`, {
+            method: 'POST', headers: await StripeService.getCheckoutHeaders(),
             body: JSON.stringify({
+              stripe_session_id: sessionId,
               patient_email: user.email.toLowerCase(),
               patient_name: patientRecord?.full_name || patientRecord?.name || user.name || 'Patient',
               coach_name: coachName ? decodeURIComponent(coachName) : 'Brain Coach',
@@ -201,11 +178,14 @@ const BrainCoach = () => {
               location: 'Online',
               notes: 'Booked via payment — session link to be shared by admin'
             })
-          }).catch(() => {});
+          });
+          const bookingResult = await bookingResponse.json();
+          if (!bookingResponse.ok || !bookingResult.success) throw new Error(bookingResult.message || 'Booking could not be confirmed');
+          localStorage.removeItem('pendingCoachPayment');
 
           // Send confirmation email to patient, and notify coach
           await fetch(`${API_URL}/send-coaching-link`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: await StripeService.getCheckoutHeaders(),
             body: JSON.stringify({
               patientName: user?.name || 'Patient', patientEmail: user?.email,
               coachName: coachName ? decodeURIComponent(coachName) : 'Brain Coach',
@@ -215,7 +195,7 @@ const BrainCoach = () => {
           }).catch(() => {});
 
           fetchPaidCoaches();
-        } catch (err) { console.error('Error saving coaching payment:', err); }
+        } catch (err) { console.error('Error confirming coaching payment:', err); toast.error('Payment confirmation failed. Please reload to retry.'); }
       };
 
       saveCoachPayment();
@@ -326,7 +306,7 @@ const BrainCoach = () => {
     if (user?.email) {
       try {
         const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-        const response = await fetch(`${API_URL}/coaching-credits/${encodeURIComponent(user.email)}`);
+        const response = await fetch(`${API_URL}/coaching-credits/${encodeURIComponent(user.email)}`, { headers: await StripeService.getCheckoutHeaders() });
         const data = await response.json();
         if (data.success) {
           setCoachingCredits(data.total);
@@ -431,6 +411,7 @@ const BrainCoach = () => {
         isOnline: coach.is_online,
         isInPerson: coach.is_in_person,
         price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
         nextSlots: coach.next_slots || ['Contact for availability'],
         bio: coach.bio,
         languages: coach.languages || ['English'],
@@ -457,7 +438,7 @@ const BrainCoach = () => {
     if (!user?.email) return;
     try {
       const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
-      const response = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}`);
+      const response = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}`, { headers: await StripeService.getCheckoutHeaders() });
       const data = await response.json();
       if (data.success && data.bookings) {
         // A coach stays "already booked" only while the session is still active.
@@ -572,6 +553,7 @@ const BrainCoach = () => {
         isOnline: coach.is_online,
         isInPerson: coach.is_in_person,
         price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
         nextSlots: coach.next_slots || ['Contact for availability'],
         bio: coach.bio,
         languages: coach.languages || ['English'],
@@ -626,6 +608,7 @@ const BrainCoach = () => {
           isOnline: coach.is_online,
           isInPerson: coach.is_in_person,
           price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
           nextSlots: coach.next_slots || ['Contact for availability'],
           bio: coach.bio,
           languages: coach.languages || ['English'],
@@ -693,6 +676,7 @@ const BrainCoach = () => {
         isOnline: coach.is_online,
         isInPerson: coach.is_in_person,
         price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
         nextSlots: coach.next_slots || ['Contact for availability'],
         bio: coach.bio,
         languages: coach.languages || ['English'],
@@ -766,6 +750,7 @@ const BrainCoach = () => {
           isOnline: coach.is_online,
           isInPerson: coach.is_in_person,
           price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
           nextSlots: coach.next_slots || ['Contact for availability'],
           bio: coach.bio,
           languages: coach.languages || ['English'],
@@ -936,14 +921,13 @@ const BrainCoach = () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
-      // Get numeric price
-      const priceStr = paymentCoach.price?.toString() || '2500';
-      const numericPrice = parseInt(priceStr.replace(/[^0-9]/g, '')) || 2500;
+      // Use the numeric catalog amount; display strings may contain decimals or extra text.
+      const numericPrice = paymentCoach.checkoutPrice;
 
       // Create Stripe checkout session
       const response = await fetch(`${API_URL}/create-coaching-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           coachId: paymentCoach.id,
           coachName: paymentCoach.name,
@@ -987,25 +971,11 @@ const BrainCoach = () => {
       const coachPriceNum = parseInt(String(coach.price ?? '').replace(/[^0-9]/g, ''), 10);
       const hasCoachPrice = Number.isFinite(coachPriceNum) && coachPriceNum > 0;
 
-      // If using free credit, deduct it
-      if (useFreeCredit && user?.email) {
-        await fetch(`${API_URL}/coaching-credits/use`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: user.email,
-            coachId: coach.id,
-            coachName: coach.name
-          })
-        });
-        setCoachingCredits(prev => Math.max(0, prev - 1));
-        toast.success('Free coaching credit used!', { icon: '🎁' });
-      }
-
       // Save booking entry to database
       // Only include coach_id if it's a valid UUID format
       const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(coach.id);
       const bookingData = {
+        credit_id: useFreeCredit ? creditDetails.find(c => c.credits_available > 0 && new Date(c.expires_at) > new Date())?.id : undefined,
         patient_email: user?.email?.toLowerCase(),
         patient_name: user?.name || 'Patient',
         coach_name: coach.name,
@@ -1026,12 +996,14 @@ const BrainCoach = () => {
 
       const bookingResponse = await fetch(`${API_URL}/bookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify(bookingData)
       });
       const bookingResult = await bookingResponse.json();
-      if (!bookingResult.success) {
-        console.error('Booking save failed:', bookingResult);
+      if (!bookingResponse.ok || !bookingResult.success) throw new Error(bookingResult.message || 'Booking could not be confirmed');
+      if (useFreeCredit) {
+        await fetchCoachingCredits();
+        toast.success('Free coaching credit used!', { icon: '🎁' });
       }
 
       // Notify admin of the new booking
@@ -1231,6 +1203,7 @@ const BrainCoach = () => {
         isOnline: coach.is_online,
         isInPerson: coach.is_in_person,
         price: coach.price_display || `₹${coach.price}/session`,
+        checkoutPrice: Number(coach.price),
         nextSlots: coach.next_slots || ['Contact for availability'],
         bio: coach.bio,
         languages: coach.languages || ['English'],
@@ -1711,10 +1684,9 @@ const BrainCoach = () => {
                   <span className="text-[10px] text-gray-500 dark:text-gray-400">Bundle Price</span>
                   <p className="text-xl font-bold text-[#323956] dark:text-blue-400 leading-none mt-0.5">
                     {(() => {
-                      const priceStr = paymentCoach.price?.toString() || '₹2500';
-                      const numericPrice = priceStr.replace(/[^0-9]/g, '');
+                      const numericPrice = paymentCoach.checkoutPrice;
                       const currencySymbol = getCurrencySymbol(patientCountry);
-                      return `${currencySymbol}${parseInt(numericPrice).toLocaleString('en-IN')}`;
+                      return `${currencySymbol}${numericPrice.toLocaleString('en-IN')}`;
                     })()}
                   </p>
                 </div>

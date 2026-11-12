@@ -1,3 +1,5 @@
+const jwt = require('jsonwebtoken');
+const validToken = jwt.sign({sub:'admin',session_id:'session'},'test-only');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const express = require('express');
@@ -12,7 +14,8 @@ test('only a verified super admin can remove access; records remain and retries 
   let exists = true;
   let writes = 0;
   const db = {
-    auth: { getUser: async token => ({ data: { user: token === 'valid' ? { id: 'admin', user_metadata: { role: 'super_admin' } } : null } }) },
+    auth: { getUser: async token => ({ data: { user: token === validToken ? { id: 'admin', user_metadata: { role: 'super_admin' } } : null } }) },
+    rpc: async () => ({data:{id:'admin',role}}),
     from(table) {
       assert.ok(['profiles', 'clinics'].includes(table), 'must not modify patient/report/billing records');
       let patch;
@@ -40,7 +43,7 @@ test('only a verified super admin can remove access; records remain and retries 
   await new Promise(resolve => server.once('listening', resolve));
   t.after(() => server.close());
   const request = (token = 'valid', target = id) => fetch(`http://127.0.0.1:${server.address().port}/api/admin/clinics/${target}`, {
-    method: 'DELETE', headers: token ? { Authorization: `Bearer ${token}` } : {}
+    method: 'DELETE', headers: token ? { Authorization: `Bearer ${token === 'valid' ? validToken : token}` } : {}
   });
   assert.equal((await request('')).status, 401);
   assert.equal((await request('invalid')).status, 401);

@@ -1,3 +1,4 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
@@ -32,7 +33,6 @@ import ClinicalReportView from './ClinicalReportView';
 import { useAuth } from '../../contexts/AuthContext';
 import { generatePatientUID } from '../../utils/patientUidGenerator';
 import { countryCodes as allCountryCodes } from '../../utils/countryCodes';
-import { hashPassword } from '../../utils/passwordUtils';
 import { getOriginUrl } from '../../utils/environment';
 
 const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted = false }) => {
@@ -321,37 +321,8 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         // Continue anyway - maybe org exists but findById failed
       }
 
-      // Run auth creation, UID generation, and password hashing in parallel
-      const [authResult, patientUID, hashedPassword] = await Promise.allSettled([
-        DatabaseService.createPatientAuth(sanitizedEmail, data.password, {
-          full_name: data.name,
-          role: 'patient',
-          org_id: clinicId
-        }),
-        generatePatientUID(clinicId),
-        hashPassword(data.password)
-      ]);
-
-      // Process auth result. The Supabase Auth user is auxiliary — patient login
-      // authenticates against the bcrypt password on the patients row created below —
-      // so a failed or duplicate auth user does NOT prevent login. Just log it.
-      if (authResult.status === 'rejected') {
-        console.warn('WARNING: Supabase Auth user creation failed (patient can still log in via the patients table):', authResult.reason);
-      }
-
-      // Get UID (use fallback if generation failed)
-      const uid = patientUID.status === 'fulfilled' ? patientUID.value : `PAT-${Date.now()}`;
-
-      // Get the bcrypt password hash. If hashing failed, abort — never fall back to
-      // storing plaintext (or any other value), which would make the emailed
-      // credentials silently mismatch what login compares against and produce a
-      // bogus "Invalid email or password" for a freshly created patient.
-      if (hashedPassword.status !== 'fulfilled' || !hashedPassword.value) {
-        console.error('ERROR: Password hashing failed during patient creation:', hashedPassword.reason);
-        toast.error('Could not securely process the password. Please try again.');
-        return;
-      }
-      const pwd = hashedPassword.value;
+      let uid;
+      try { uid = await generatePatientUID(clinicId); } catch { uid = `PAT-${Date.now()}`; }
 
       // Map fields to match database schema (without owner_user - it doesn't exist)
       const patientData = {
@@ -407,22 +378,15 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
       // Guarded: only succeeds while the row is brand-new and still passwordless.
       try {
         const claimed = await credentialRpc.claimCredentials('patients', sanitizedEmail, data.password);
-        if (claimed === null) {
-          // RPC not deployed (pre-migration DB) — legacy embedded write.
-          await DatabaseService.update('patients', savedPatient.id, { password: pwd });
-        }
+        if (claimed !== true) throw new Error('Secure credential setup is unavailable. Please try again.');
       } catch (claimErr) {
-        // Non-fatal: the patient also has a Supabase Auth user (created above),
-        // so login still works through the auth fallback. Flag it for the clinic.
-        console.warn('WARNING: credential claim failed during patient creation:', claimErr?.message);
-        toast.info('Patient created. If their password does not work at login, reset it from the patient list.');
+        try { await DatabaseService.delete('patients', savedPatient.id); } catch {
+          throw new Error('Patient credential setup failed. The patient record remains; reset its password before sharing access.');
+        }
+        throw claimErr;
       }
 
-      // Send welcome email in background (don't block the UI). Tied to verified
-      // persistence: we only reach here after the patients row was inserted with a
-      // bcrypt password (the insert loop above throws otherwise), so the emailed
-      // credentials always match what login will verify — regardless of whether the
-      // auxiliary Supabase Auth user was created.
+      // Send credentials only after the database confirms credential setup.
       {
         const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:5000');
         const baseUrl = apiUrl.replace(/\/api\/?$/, '');
@@ -491,11 +455,7 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
         const clinicIdForPatient = selectedPatient?.clinic_id || selectedPatient?.org_id || clinicId;
         const setResult = await credentialRpc.setPatientPasswordByClinic(
           clinicIdForPatient, selectedPatient.id, data.password);
-        if (setResult === null) {
-          // RPC not deployed (pre-migration DB) — legacy embedded write.
-          patientData.password = await hashPassword(data.password);
-          patientData.plain_password = data.password;
-        }
+        if (setResult !== true) throw new Error('Secure password updates are unavailable. Please try again.');
       }
 
       // Bump on email OR password change so the patient's open session is force-logged-out
@@ -601,7 +561,7 @@ const PatientManagement = ({ clinicId: propClinicId, onUpdate, creditsExhausted 
       }
 
       // Fetch the bytes and save a blob so the raw storage URL is never exposed.
-      const res = await fetch(downloadUrl);
+      const res = await fetch(await resolveReportUrl(downloadUrl));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -1292,7 +1252,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
             if (fileInfo && fileInfo.path) {
               try {
                 // Validate via a backend-minted signed URL (bucket is private)
-                const signedUrl = await getPatientDocSignedUrl(fileInfo.bucket || 'patients_documents', fileInfo.path, 60);
+                const signedUrl = await getPatientDocSignedUrl(fileInfo.bucket || 'patients_documents', fileInfo.path, 60, patientId);
                 if (signedUrl) {
                   validatedUrls[key] = fileInfo;
                 } else {
@@ -1340,7 +1300,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
     try {
       let url = null;
       if (fileInfo?.path) {
-        url = await getPatientDocSignedUrl(fileInfo.bucket || 'patients_documents', fileInfo.path);
+        url = await getPatientDocSignedUrl(fileInfo.bucket || 'patients_documents', fileInfo.path, 300, patientId);
       }
       if (!url) url = fileInfo?.url; // legacy fallback
       if (url) {
@@ -1359,7 +1319,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
       const fileInfo = savedFileUrls[fileKey];
       // Delete from storage bucket if path exists (via backend service-role key)
       if (fileInfo?.path) {
-        await deletePatientDocument(fileInfo.bucket || 'patients_documents', fileInfo.path);
+        await deletePatientDocument(fileInfo.bucket || 'patients_documents', fileInfo.path, patientId);
       }
       // Remove from local state
       const updatedUrls = { ...savedFileUrls };
@@ -1402,7 +1362,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
             // If updating existing file at a different path, delete the old one
             if (savedFileUrls[key]?.path) {
               try {
-                await deletePatientDocument(savedFileUrls[key].bucket || 'patients_documents', savedFileUrls[key].path);
+                await deletePatientDocument(savedFileUrls[key].bucket || 'patients_documents', savedFileUrls[key].path, patientId);
               } catch (delErr) {
                 console.warn(`Could not delete old file for ${key}:`, delErr);
               }
@@ -1411,7 +1371,7 @@ const ClinicalDocumentationForm = ({ patientId, patientName, patientData, clinic
             const filePath = `${sanitizedClinic}/${sanitizedPatient}/${key}_${sanitizedFileName}`;
 
             // Upload via backend (service-role key). Returns storage path only.
-            const uploadData = await uploadPatientDocument(file, filePath);
+            const uploadData = await uploadPatientDocument(file, filePath, patientId);
 
             fileUrls[key] = {
               path: uploadData.path,

@@ -1,27 +1,10 @@
 /**
- * apply-rls-lockdown.js
- * ---------------------
- * Safely resolves Supabase Security Advisor warning `rls_disabled_in_public`
- * on BOTH projects, with ZERO behavior change:
- *   - Enables RLS on every public table that lacks it
- *   - Adds an explicit allow-all policy mirroring today's effective access
- *
- * Executes SQL through the Supabase Management API using SUPABASE_ACCESS_TOKEN
- * (no service-role key or exec_sql RPC needed).
- *
- * Usage (run from the Neuro360 folder):
- *   node apply-rls-lockdown.js --audit  staging     # read-only report
- *   node apply-rls-lockdown.js --audit  prod
- *   node apply-rls-lockdown.js --apply  staging     # the fix
- *   node apply-rls-lockdown.js --apply  prod
- *   node apply-rls-lockdown.js --verify staging     # post-apply check
- *   node apply-rls-lockdown.js --audit all          # both projects
- *
- * Zero-behavior-change guarantee: tables with RLS already enabled are
- * never touched; no columns are revoked; no policies are tightened.
+ * Read-only security checks for staging/prod. RLS enabled alone is not protection.
+ * Usage: node apply-rls-lockdown.js --audit|--verify <staging|prod|all>
+ * The historical allow-all --apply path is retired. Deploy the matching app and
+ * reviewed migrations described in SECURITY_RLS_LOCKDOWN.md instead.
  */
 
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -40,7 +23,6 @@ const PROJECTS = {
   prod: 'puzdgwtprcpaaxxwkwtk',    // limitlessbrainlab's Project
 };
 
-const MIGRATION_PATH = path.join(__dirname, 'supabase', 'migrations', '055_enable_rls_zero_change.sql');
 const AUDIT_SQL = `
 SELECT
   c.relname                AS table_name,
@@ -101,35 +83,24 @@ async function verify(ref, label) {
   `);
   console.log(`   Tables with RLS disabled : ${disabled.length} ${disabled.length === 0 ? '✅' : '❌ ' + disabled.map((d) => d.table_name).join(', ')}`);
   console.log(`   zero_change_full_access policies installed: ${pol[0]?.n ?? 0}`);
-  return disabled.length === 0;
+  const credentialGrants = await runSql(ref, `
+    SELECT c.relname AS table_name, a.attname AS column_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+      AND a.attnum > 0 AND NOT a.attisdropped
+      AND a.attname IN ('password', 'plain_password', 'smtp_password')
+      AND has_column_privilege('anon', c.oid, a.attnum, 'SELECT');
+  `);
+  console.log(`   Anonymous credential SELECT grants: ${credentialGrants.length}`);
+  credentialGrants.forEach(r => console.log(`      RESTRICT: ${r.table_name}.${r.column_name}`));
+  // Passing this check is necessary, not a substitute for cross-account access tests.
+  return disabled.length === 0 && credentialGrants.length === 0;
 }
 
-async function apply(ref, label, dryRun) {
-  console.log(`\n🚀 Applying zero-change RLS lockdown — ${label} (${ref})${dryRun ? ' (DRY RUN)' : ''}`);
-  const disabled = await audit(ref, label);
-
-  if (disabled.length === 0) {
-    console.log('   Nothing to do — every public table already has RLS enabled. ✅');
-    return true;
-  }
-
-  if (dryRun) {
-    console.log('\n   Would run migration: 055_enable_rls_zero_change.sql');
-    console.log('   (enables RLS + mirrors current access with explicit policy on the tables above)');
-    return false;
-  }
-
-  const sql = fs.readFileSync(MIGRATION_PATH, 'utf8');
-  const result = await runSql(ref, sql);
-
-  // The DO block emits NOTICE lines that the API returns as messages
-  if (Array.isArray(result)) {
-    result.forEach((r) => {
-      if (r && typeof r === 'object') console.log('   ' + (r.status ?? JSON.stringify(r)));
-    });
-  }
-
-  return verify(ref, label);
+async function apply() {
+  die('The historical allow-all migration is retired. Follow SECURITY_RLS_LOCKDOWN.md for the verified application + database rollout.');
 }
 
 // ----------------------------- main -----------------------------

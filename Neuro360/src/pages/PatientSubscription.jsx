@@ -160,36 +160,6 @@ const PatientSubscription = () => {
           phone: user.phone || ''
         },
         {
-          onSuccess: async (paymentData) => {
-            // Update subscription in database
-            const updateResult = await AccessControlService.updateSubscription(
-              user.email,
-              tierId,
-              {
-                paymentId: paymentData.paymentId,
-                amount: tierData.price,
-                gateway: paymentData.gateway || tierData.gateway
-              }
-            );
-
-            if (updateResult.success) {
-              setCurrentTier(tierId);
-
-              // Show success modal
-              setSuccessPaymentData({
-                paymentId: paymentData.paymentId || `SUB-${Date.now()}`,
-                packageName: `${tierData.name} Subscription`,
-                amount: tierData.price,
-                createdAt: new Date().toISOString()
-              });
-              setSuccessPackageInfo({
-                tier: tierId,
-                tierData: tierData,
-                reportsIncluded: tierData.reports || 0
-              });
-              setShowSuccessModal(true);
-            }
-          },
           onError: (error) => {
             toast.error(getFriendlyErrorMessage(error, 'The payment could not be completed. Please try again.'));
           },

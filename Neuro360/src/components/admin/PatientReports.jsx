@@ -1,3 +1,4 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -776,9 +777,10 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       const patientEmail = selectedPatientObj?.email;
       const clinicEmail = selectedClinicObj?.email;
       if (patientEmail || clinicEmail) {
+        const { data: { session: emailSession } } = await supabase.auth.getSession();
         fetch(`${(import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api'))}/notify-patient-report`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${emailSession?.access_token || ''}` },
           body: JSON.stringify({
             patientEmail,
             patientName: selectedPatientObj?.fullName || selectedPatientObj?.full_name || selectedPatientObj?.name,
@@ -1120,7 +1122,7 @@ const PatientReports = ({ onUpdate, selectedClinic: superAdminSelectedClinic }) 
       // raw storage URL is never opened in a tab or exposed to the user.
       if (downloadUrl) {
         try {
-          const res = await fetch(downloadUrl);
+          const res = await fetch(await resolveReportUrl(downloadUrl));
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const blob = await res.blob();
           const objectUrl = URL.createObjectURL(blob);
@@ -1895,7 +1897,7 @@ const PatientDetailModal = ({ patient, reports, clinics, onClose, onDownloadRepo
               // Resolve a server-signed URL so the doc is viewable/downloadable here.
               let url = fileInfo.url;
               if (!url && fileInfo.path) {
-                url = await getPatientDocSignedUrl(fileInfo.bucket, fileInfo.path, 3600).catch(() => '');
+                url = await getPatientDocSignedUrl(fileInfo.bucket, fileInfo.path, 3600, patient.id).catch(() => '');
               }
               allDocs.push({
                 type: key,

@@ -1,3 +1,4 @@
+import { PUBLIC_COLUMNS } from '../../services/publicColumns.js';
 import React, { useState, useEffect } from 'react';
 import {
   Crown, Search, Filter, Download, RefreshCw, User, CreditCard,
@@ -89,7 +90,7 @@ const PatientSubscriptions = () => {
       const patientQuery = applyFilters(
         supabase
         .from('patients')
-        .select('*', { count: 'exact' })
+        .select(PUBLIC_COLUMNS.patients, { count: 'exact' })
         .order('updated_at', { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       );

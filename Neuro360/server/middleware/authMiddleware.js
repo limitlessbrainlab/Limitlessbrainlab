@@ -1,24 +1,18 @@
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const { createRoutedClient } = require('../dbRouter');
 
 // Routed per-request (prod vs staging by origin) so JWT verification
 // (supabase.auth.getUser) hits the same DB the request's data queries use.
 // Returns the plain prod client when staging env vars are not configured.
 const supabase = createRoutedClient();
-const verifiedTokenCache = new Map();
-const VERIFIED_TOKEN_CACHE_TTL_MS = 30_000;
-const MAX_VERIFIED_TOKENS = 500;
-
-const tokenCacheKey = (token) => crypto.createHash('sha256').update(token).digest('base64url');
-
-const rememberVerifiedUser = (key, user) => {
-  if (verifiedTokenCache.size >= MAX_VERIFIED_TOKENS) {
-    const firstKey = verifiedTokenCache.keys().next().value;
-    if (firstKey) verifiedTokenCache.delete(firstKey);
-  }
-  verifiedTokenCache.set(key, { user, expiresAt: Date.now() + VERIFIED_TOKEN_CACHE_TTL_MS });
-};
+async function resolveVerifiedUser(user, claims) {
+  if (!claims?.session_id || claims.sub !== user.id) return null;
+  const { data, error } = await supabase.rpc('resolve_portal_identity', {
+    p_user_id: user.id, p_session_id: claims.session_id
+  });
+  if (error) throw error;
+  return data;
+}
 
 /**
  * Middleware to verify JWT token and attach user to request
@@ -39,15 +33,6 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const startedAt = performance.now();
-    const cacheKey = tokenCacheKey(token);
-    const cached = verifiedTokenCache.get(cacheKey);
-    if (cached?.expiresAt > Date.now()) {
-      req.user = cached.user;
-      req.authDurationMs = performance.now() - startedAt;
-      return next();
-    }
-    if (cached) verifiedTokenCache.delete(cacheKey);
-
     // Verify signed claims locally when Supabase's cached JWKS is available.
     // `getUser()` always performs a remote Auth request and was holding up every
     // admin page request even after its data query had completed.
@@ -55,7 +40,7 @@ const authMiddleware = async (req, res, next) => {
     let user = claimsData?.claims ? {
       id: claimsData.claims.sub,
       email: claimsData.claims.email,
-      user_metadata: claimsData.claims.user_metadata
+      app_metadata: claimsData.claims.app_metadata
     } : null;
     let error = claimsError;
 
@@ -76,13 +61,8 @@ const authMiddleware = async (req, res, next) => {
     }
 
     // Attach user to request for downstream use
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: user.user_metadata?.role || 'patient'
-    };
-    // A verified token is safe to reuse briefly; the raw token is never stored.
-    rememberVerifiedUser(cacheKey, req.user);
+    req.user = await resolveVerifiedUser(user, claimsData?.claims || jwt.decode(token));
+    if (!req.user) return res.status(401).json({ success: false, error: 'Invalid or expired session', code: 'INVALID_TOKEN' });
     req.authDurationMs = performance.now() - startedAt;
 
     next();
@@ -108,11 +88,7 @@ const optionalAuth = async (req, res, next) => {
     if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (!error && user) {
-        req.user = {
-          id: user.id,
-          email: user.email,
-          role: user.user_metadata?.role || 'patient'
-        };
+        req.user = await resolveVerifiedUser(user, jwt.decode(token));
       }
     }
 

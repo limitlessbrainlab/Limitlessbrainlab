@@ -1,3 +1,6 @@
+import checkoutCatalog from '../../server/config/checkoutCatalog.json';
+import StripeService from '../services/stripeService';
+import { PUBLIC_COLUMNS } from '../services/publicColumns.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -177,7 +180,7 @@ const FrequenciesMusic = () => {
 
       const response = await fetch(`${API_URL}/create-frequency-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           packId: selectedPack.id,
           packName: selectedPack.name,
@@ -226,7 +229,6 @@ const FrequenciesMusic = () => {
     if (!user?.email) return; // wait for auth to hydrate; pending persists for next run
 
     const { packId: pId, sessionId: sId } = JSON.parse(pending);
-    localStorage.removeItem('pendingFreqPayment');
 
     // Derive the price/name from the canonical frequencyPacks source of truth so the
     // recorded amount always matches the offered (and Stripe-charged) price. Keying off a
@@ -235,31 +237,21 @@ const FrequenciesMusic = () => {
     const amount = purchasedPack?.price ?? 29;
     const packName = purchasedPack?.name || 'Frequency Pack';
 
-    // Show success popup immediately and optimistically unlock the pack
-    setPurchasedPackId(pId);
-    setPurchasedPacks(prev => [...new Set([...prev, pId])]);
-    setPaymentSuccessDetails({
-      name: packName, amount: `USD ${amount}`, email: user?.email || '',
-      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      transactionId: sId || 'N/A'
-    });
-    setShowPaymentSuccessPopup(true);
-
-    // Save payment data in background
+    // Confirm payment before displaying a receipt.
     const saveFrequencyPayment = async () => {
       try {
-        // Check duplicate
-        if (sId) {
-          const { data: existing } = await supabase
-            .from('patient_payments')
-            .select('id')
-            .eq('stripe_session_id', sId)
-            .limit(1);
-          if (existing && existing.length > 0) {
-            return;
-          }
-        }
+        const verification = await StripeService.verifyPaymentSuccess(sId, { email: user.email, type: 'frequency', itemId: pId });
+        await fetchPurchasedPacks();
+        localStorage.removeItem('pendingFreqPayment');
+        // Show the receipt only after server confirmation.
+        setPurchasedPackId(pId);
+        setPaymentSuccessDetails({
+          name: packName, amount: `${verification.currency} ${Number(verification.amount).toFixed(2)}`, email: user?.email || '',
+          date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          transactionId: sId || 'N/A'
+        });
+        setShowPaymentSuccessPopup(true);
 
           // Get clinic_id from patients table
           let clinicIdForPayment = null;
@@ -267,14 +259,14 @@ const FrequenciesMusic = () => {
           let patientRecord = null;
 
           if (user?.id) {
-            const { data: p } = await supabase.from('patients').select('*').eq('id', user.id).limit(1).single();
+            const { data: p } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('id', user.id).limit(1).single();
             if (p) {
               patientRecord = p;
               clinicIdForPayment = p.clinic_id || p.org_id || null;
             }
           }
           if (!patientRecord && user?.email) {
-            const { data: ps } = await supabase.from('patients').select('*').eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
+            const { data: ps } = await supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('email', user.email.toLowerCase()).order('created_at', { ascending: false }).limit(1);
             if (ps && ps.length > 0) {
               patientRecord = ps[0];
               clinicIdForPayment = ps[0].clinic_id || ps[0].org_id || null;
@@ -286,37 +278,6 @@ const FrequenciesMusic = () => {
           }
 
           const amt = amount;
-
-          // Save to patient_payments
-          await supabase.from('patient_payments').insert({
-            clinic_id: clinicIdForPayment,
-            patient_id: user.id || null,
-            patient_email: user.email.toLowerCase(),
-            patient_name: patientRecord?.full_name || patientRecord?.name || user.name || '',
-            amount: amt,
-            currency: 'USD',
-            status: 'completed',
-            type: 'frequency',
-            item_name: packName,
-            assessment_id: pId,
-            stripe_session_id: sId || null,
-            source: 'Frequencies',
-            created_at: new Date().toISOString()
-          }).then(({ error }) => {
-            if (error) console.warn('patient_payments save error:', error.message);
-            else console.log('SUCCESS: Frequency payment saved to patient_payments');
-          });
-
-          // Save to frequency_purchases (columns must match the live table:
-          // patient_email, frequency_id, pack_id, purchased_at). Sending extra
-          // columns like amount_paid/currency made every insert fail silently,
-          // so purchases were never recorded and the pack reverted to "Buy Now".
-          await supabase.from('frequency_purchases').insert({
-            patient_email: user.email.toLowerCase(),
-            pack_id: pId,
-            frequency_id: pId,
-            purchased_at: new Date().toISOString()
-          }).catch(err => console.warn('frequency_purchases save:', err.message));
 
           // Send emails (patient + admin)
           try {
@@ -348,7 +309,8 @@ const FrequenciesMusic = () => {
           // Re-fetch to confirm from DB
           fetchPurchasedPacks();
         } catch (err) {
-          console.error('Error saving frequency payment:', err);
+          console.error('Error confirming frequency payment:', err);
+          toast.error('Payment confirmation failed. Please reload to retry.');
         }
       };
 
@@ -390,7 +352,6 @@ const FrequenciesMusic = () => {
       color: 'from-indigo-600 to-purple-700',
       driveId: '13C0mos5wHHi1zuYFyPM8XEiv83CCax0i',
       image: '/frequency/delta.jpg',
-      price: 22,
       originalPrice: 49
     },
     {
@@ -401,7 +362,6 @@ const FrequenciesMusic = () => {
       color: 'from-purple-500 to-violet-600',
       driveId: '1vEFc2wuiSkRANWkTozTcH7-Wnni8KkQo',
       image: '/frequency/theta.png',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -412,7 +372,6 @@ const FrequenciesMusic = () => {
       color: 'from-cyan-500 to-blue-600',
       driveId: '14hDaC2Ud7YwDlmX7JEHMVkLNKKmDogP7',
       image: '/frequency/alpha.png',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -423,7 +382,6 @@ const FrequenciesMusic = () => {
       color: 'from-red-500 to-red-600',
       driveId: '1x6gj-41wpTNVv-Ng76zse1CWUoAN60N8',
       image: '/frequency/beta.png',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -435,7 +393,6 @@ const FrequenciesMusic = () => {
       color: 'from-amber-500 to-yellow-600',
       driveId: '13C0mos5wHHi1zuYFyPM8XEiv83CCax0i',
       image: '/meditation/285_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -447,7 +404,6 @@ const FrequenciesMusic = () => {
       color: 'from-slate-500 to-gray-600',
       driveId: '1vEFc2wuiSkRANWkTozTcH7-Wnni8KkQo',
       image: '/meditation/396_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -459,7 +415,6 @@ const FrequenciesMusic = () => {
       color: 'from-cyan-500 to-blue-600',
       driveId: '14hDaC2Ud7YwDlmX7JEHMVkLNKKmDogP7',
       image: '/meditation/417_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -471,7 +426,6 @@ const FrequenciesMusic = () => {
       color: 'from-rose-500 to-orange-500',
       driveId: '1x6gj-41wpTNVv-Ng76zse1CWUoAN60N8',
       image: '/meditation/528_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -483,7 +437,6 @@ const FrequenciesMusic = () => {
       color: 'from-blue-500 to-purple-600',
       driveId: '13zc55FIM9zThAi06BKy4NC_6nVNFX1Bn',
       image: '/meditation/639_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -495,7 +448,6 @@ const FrequenciesMusic = () => {
       color: 'from-teal-500 to-emerald-600',
       driveId: '13C0mos5wHHi1zuYFyPM8XEiv83CCax0i',
       image: '/meditation/741_Hz_page-0001.webp',
-      price: 29,
       originalPrice: 49
     },
     {
@@ -507,7 +459,6 @@ const FrequenciesMusic = () => {
       color: 'from-indigo-600 to-purple-700',
       driveId: '1vEFc2wuiSkRANWkTozTcH7-Wnni8KkQo',
       image: '/meditation/852_Hz_page-0001.webp',
-      price: 25,
       originalPrice: 49
     },
     {
@@ -519,7 +470,6 @@ const FrequenciesMusic = () => {
       color: 'from-orange-500 to-red-600',
       driveId: '14hDaC2Ud7YwDlmX7JEHMVkLNKKmDogP7',
       image: '/meditation/963_Hz_page-0001.webp',
-      price: 25,
       originalPrice: 49
     },
     {
@@ -531,10 +481,9 @@ const FrequenciesMusic = () => {
       color: 'from-yellow-600 to-yellow-700',
       driveId: '13zc55FIM9zThAi06BKy4NC_6nVNFX1Bn',
       image: '/frequency/gamma.png',
-      price: 22,
       originalPrice: 49
     },
-  ];
+  ].map(pack => ({ ...pack, price: checkoutCatalog.frequency[pack.id].USD }));
 
   
   

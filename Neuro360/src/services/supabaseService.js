@@ -1,3 +1,4 @@
+import { publicColumns } from './publicColumns.js';
 import { createClient } from '@supabase/supabase-js';
 
 // Get Supabase environment variables with fallbacks for development
@@ -201,7 +202,7 @@ class SupabaseService {
       try {
         let query = this.supabase
           .from(table)
-          .select(columns)
+          .select(columns === '*' ? publicColumns(table) : columns)
           .order('created_at', { ascending: false });
         if (email !== null) query = query.ilike('email', email);
         if (limit !== null) query = query.limit(limit);
@@ -230,7 +231,7 @@ class SupabaseService {
       while (hasMore) {
         const { data, error } = await this.supabase
           .from(table)
-          .select(columns)
+          .select(columns === '*' ? publicColumns(table) : columns)
           .order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
 
@@ -268,7 +269,7 @@ class SupabaseService {
     try {
       const { count, error } = await this.supabase
         .from(table)
-        .select('*', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true });
       if (error) {
         console.error(`ERROR: Error counting ${table}:`, error);
         if (throwOnError) throw error;
@@ -302,7 +303,7 @@ class SupabaseService {
       const { data, error } = await this.supabase
         .from(table)
         .insert(cleanedItem)
-        .select()
+        .select(publicColumns(table))
         .single();
 
       if (error) {
@@ -319,7 +320,7 @@ class SupabaseService {
           const { data: retryData, error: retryError } = await this.supabase
             .from(table)
             .insert(cleanedItem)
-            .select()
+            .select(publicColumns(table))
             .single();
 
           if (retryError) {
@@ -367,7 +368,7 @@ class SupabaseService {
         .from(table)
         .update(updatePayload)
         .eq('id', id)
-        .select()
+        .select(publicColumns(table))
         .single();
 
       if (error) {
@@ -394,7 +395,7 @@ class SupabaseService {
         .from(table)
         .delete()
         .eq('id', id)
-        .select();
+        .select(publicColumns(table));
 
       if (error) {
         console.error(`ERROR: Supabase DELETE Error:`, {
@@ -427,7 +428,7 @@ class SupabaseService {
     try {
       const { data, error } = await this.supabase
         .from(table)
-        .select('*')
+        .select(publicColumns(table))
         .eq('id', id);
 
       if (error) {
@@ -453,7 +454,7 @@ class SupabaseService {
     try {
       const { data, error } = await this.supabase
         .from(table)
-        .select('*')
+        .select(publicColumns(table))
         .eq(field, value);
 
       if (error) {
@@ -474,7 +475,7 @@ class SupabaseService {
     try {
       const { data, error } = await this.supabase
         .from(table)
-        .select('*')
+        .select(publicColumns(table))
         .eq(field, value)
         .limit(1)
         .single();

@@ -1,3 +1,4 @@
+import { PUBLIC_COLUMNS } from './publicColumns.js';
 // Analytics Service - Real data from Supabase
 // Handles all analytics calculations and data aggregation
 
@@ -24,8 +25,8 @@ class AnalyticsService {
         organizationsResult,
         paymentsResult
       ] = await Promise.allSettled([
-        supabase.from('clinics').select('*'),
-        supabase.from('profiles').select('*'),
+        supabase.from('clinics').select(PUBLIC_COLUMNS.clinics),
+        supabase.from('profiles').select(PUBLIC_COLUMNS.profiles),
         supabase.from('organizations').select('*'),
         supabase.from('payments').select('*') // real payments (empty until a checkout writes a row)
       ]);
@@ -153,8 +154,8 @@ class AnalyticsService {
 
       // Fetch clinic-specific data
       const [clinicResult, patientsResult] = await Promise.allSettled([
-        supabase.from('clinics').select('*').eq('id', clinicId).single(),
-        supabase.from('patients').select('*').eq('clinic_id', clinicId) // Assuming patients table has clinic_id
+        supabase.from('clinics').select(PUBLIC_COLUMNS.clinics).eq('id', clinicId).single(),
+        supabase.from('patients').select(PUBLIC_COLUMNS.patients).eq('clinic_id', clinicId) // Assuming patients table has clinic_id
       ]);
 
       const clinic = clinicResult.status === 'fulfilled' ? clinicResult.value.data : null;

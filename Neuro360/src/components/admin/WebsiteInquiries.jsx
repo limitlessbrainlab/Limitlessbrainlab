@@ -1,3 +1,4 @@
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import {
   Mail,
@@ -88,7 +89,7 @@ const WebsiteInquiries = ({ subTab = 'contact' }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/inquiries/${activeTab}`);
+      const response = await fetch(`${API_BASE_URL}/inquiries/${activeTab}`, { headers: await StripeService.getCheckoutHeaders() });
       const result = await response.json();
 
       if (result.success) {
@@ -111,7 +112,7 @@ const WebsiteInquiries = ({ subTab = 'contact' }) => {
     if (!window.confirm('Are you sure you want to delete this inquiry?')) return;
     try {
       const response = await fetch(`${API_BASE_URL}/inquiries/${activeTab}/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE', headers: await StripeService.getCheckoutHeaders()
       });
       const result = await response.json();
 

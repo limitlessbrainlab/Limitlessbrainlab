@@ -1,3 +1,5 @@
+import checkoutCatalog from '../../../server/config/checkoutCatalog.json';
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
@@ -23,15 +25,9 @@ import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
 // Fallback credit packages (used if DB fetch fails)
-const FALLBACK_PACKAGES = {
-  lbl_partner: [
-    { id: 'partner-5', reports: 5, priceINR: 7500, priceUSD: 90, label: '5 Reports' }
-  ],
-  lbl_clinic: [
-    { id: 'clinic-5', reports: 5, priceINR: 3000, priceUSD: 36, label: '5 Reports' },
-    { id: 'clinic-10', reports: 10, priceINR: 2500, priceUSD: 30, label: '10 Reports', popular: true }
-  ]
-};
+const FALLBACK_PACKAGES = Object.fromEntries(Object.entries(checkoutCatalog.clinicReportFallbacks).map(([type, packs]) => [
+  type, Object.entries(packs).map(([id, pack]) => ({ id, reports: pack.reports, priceINR: pack.INR, priceUSD: pack.USD, label: pack.name, popular: id === 'clinic-10' }))
+]));
 const LOW_CREDITS_THRESHOLD = 3;
 
 const SubscriptionTab = ({ onPaymentSuccess } = {}) => {
@@ -258,7 +254,7 @@ const SubscriptionTab = ({ onPaymentSuccess } = {}) => {
 
       const response = await fetch(`${API_URL}/create-report-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           packageId: selectedPackage.id,
           packageName: selectedPackage.label,

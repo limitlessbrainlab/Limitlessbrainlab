@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
@@ -12,6 +13,7 @@ const templateManager = require('../services/pdf/templateManager');
 const AIPdfGenerator = require('../services/aiPdfGenerator');
 const SupabaseStorage = require('../services/supabaseStorage');
 const { createRoutedClient } = require('../dbRouter');
+const { requirePatientAccess, requireClinicAccess } = require('../utils/patientAccess');
 const reportJobLock = require('../services/reportJobLock');
 const { getReportUploadDir, needsInstanceReportLock } = require('../services/reportRuntime');
 const { validateQeegInputs, canonicalQeegFileName } = require('../services/qeegInputValidation');
@@ -144,6 +146,10 @@ async function processQeegRequest(req, res) {
 
     eyesOpenFile = files.eyesOpen[0];
     eyesClosedFile = files.eyesClosed[0];
+    const authorizedPatient = await requirePatientAccess(req.user, req.body?.patientId, req.body?.clinicId, req.supabaseClient || createRoutedClient());
+    req.body.clinicId = authorizedPatient.clinic_id;
+    req.body.patientExternalId = authorizedPatient.external_id || '';
+    req.body.patientName = authorizedPatient.full_name || authorizedPatient.name || req.body.patientName;
     await validateQeegInputs(eyesOpenFile.path, eyesClosedFile.path);
 
     logProgress('FILE_UPLOAD', `Eyes Open received: ${eyesOpenFile.originalname} (${(eyesOpenFile.size / 1024).toFixed(2)} KB)`, '📁');
@@ -211,7 +217,7 @@ async function processQeegRequest(req, res) {
       const eoUploadResult = await SupabaseStorage.uploadFile(
         modifiedEyesOpenPath,
         'qeeg-uploads',
-        eoStoragePath
+        eoStoragePath, 'application/pdf', req.supabaseClient || undefined, authorizedPatient.id
       );
       logProgress('SUPABASE_UPLOAD', 'Eyes Open uploaded successfully', '✅');
       eyesOpenUrl = eoUploadResult.url;  // Store URL for response
@@ -222,7 +228,7 @@ async function processQeegRequest(req, res) {
       const ecUploadResult = await SupabaseStorage.uploadFile(
         modifiedEyesClosedPath,
         'qeeg-uploads',
-        ecStoragePath
+        ecStoragePath, 'application/pdf', req.supabaseClient || undefined, authorizedPatient.id
       );
       logProgress('SUPABASE_UPLOAD', 'Eyes Closed uploaded successfully', '✅');
       eyesClosedUrl = ecUploadResult.url;  // Store URL for response
@@ -533,7 +539,7 @@ async function processQeegRequest(req, res) {
       const timestamp = Date.now();
       const sanitizedName = (patientName || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const sanitizedClinic = (clinicName || 'general').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      pdfFilename = `neurosense-report-${sanitizedName}-${timestamp}.pdf`;
+      pdfFilename = `neurosense-report-${sanitizedName}-${timestamp}-${randomUUID()}.pdf`;
       const uploadsDir = getReportUploadDir();
       const pdfOutputPath = path.join(uploadsDir, pdfFilename);
 
@@ -619,7 +625,7 @@ async function processQeegRequest(req, res) {
           'neurosense-reports', // bucket name - All NeuroSense PDFs go here
           supabaseClinicPath, // Clinic-wise path: reports/[clinic]/[filename].pdf
           'application/pdf',
-          req.supabaseClient || undefined
+          req.supabaseClient || undefined, authorizedPatient.id
         );
 
         // Verify upload was successful and URL is valid
@@ -782,7 +788,7 @@ async function processQeegRequest(req, res) {
     }
 
     // Categorize errors for better user feedback
-    let statusCode = 500;
+    let statusCode = error.status || 500;
     let userMessage = error.message;
 
     // Check for Gemini quota error in error message
@@ -865,6 +871,8 @@ router.post('/process', reportLockMiddleware, parseQeegUploads, processQeegReque
  */
 router.post('/generate-pdf', async (req, res) => {
   try {
+    const patient = await requirePatientAccess(req.user, req.body?.patientData?.id || req.body?.patientData?.patientId, req.body?.patientData?.clinicId);
+    req.body.patientData.clinicId = patient.clinic_id;
     console.log('\n📄 === PDF Report Generation Started ===\n');
 
     const { patientData, algorithmResults, qeegData, parameterNotes } = req.body;
@@ -908,7 +916,7 @@ router.post('/generate-pdf', async (req, res) => {
     const timestamp = Date.now();
     const sanitizedName = (patientData.name || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const sanitizedClinic = (patientData.clinicName || 'general').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const filename = `neurosense-report-${sanitizedName}-${timestamp}.pdf`;
+    const filename = `neurosense-report-${sanitizedName}-${timestamp}-${randomUUID()}.pdf`;
     const outputPath = path.join(__dirname, '../uploads', filename);
 
     // Clinic-wise folder path for Supabase: reports/[clinic-name]/[filename].pdf
@@ -919,6 +927,8 @@ router.post('/generate-pdf', async (req, res) => {
 
     // Generate the PDF with AI insights
     const pdfPath = await generator.generateReport(outputPath);
+    const { error: localOwnerError } = await createRoutedClient().rpc('register_local_report_owner', { p_filename: path.basename(pdfPath), p_patient_id: patient.id });
+    if (localOwnerError) throw localOwnerError;
 
     console.log('\n✅ PDF Report Generated Successfully!');
     console.log('📄 File:', filename);
@@ -946,7 +956,7 @@ router.post('/generate-pdf', async (req, res) => {
               SupabaseStorage.uploadFile(
                 pdfPath,
                 'neurosense-reports',
-                supabaseFolderPath
+                supabaseFolderPath, 'application/pdf', req.supabaseClient || undefined, patient.id
               ),
               new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Supabase upload timeout (15s)')), 15000)
@@ -968,7 +978,7 @@ router.post('/generate-pdf', async (req, res) => {
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: error.message || 'Failed to generate PDF report',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -1017,6 +1027,8 @@ router.post('/generate-sample-pdf', async (req, res) => {
  */
 router.post('/generate-ai-pdf', async (req, res) => {
   try {
+    const patient = await requirePatientAccess(req.user, req.body?.patientData?.id || req.body?.patientData?.patientId, req.body?.patientData?.clinicId);
+    req.body.patientData.clinicId = patient.clinic_id;
     console.log('\n🤖 === AI PDF Report Generation Started ===\n');
 
     const { patientData, algorithmResults, qeegData } = req.body;
@@ -1039,13 +1051,17 @@ router.post('/generate-ai-pdf', async (req, res) => {
     // Create output filename
     const timestamp = Date.now();
     const sanitizedName = (patientData.name || 'patient').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const filename = `ai-neurosense-report-${sanitizedName}-${timestamp}.pdf`;
+    const filename = `ai-neurosense-report-${sanitizedName}-${timestamp}-${randomUUID()}.pdf`;
     const outputPath = path.join(__dirname, '../uploads', filename);
 
     console.log('📝 Generating AI PDF to:', filename);
 
     // Generate the PDF
     const result = await generator.generateReport(outputPath);
+    for (const generatedPath of [result.textOutputPath, result.outputPath].filter(Boolean)) {
+      const { error: localOwnerError } = await createRoutedClient().rpc('register_local_report_owner', { p_filename: path.basename(generatedPath), p_patient_id: patient.id });
+      if (localOwnerError) throw localOwnerError;
+    }
 
     console.log('\n✅ AI NeuroSense Report Generated Successfully!');
     console.log('📄 Text File:', path.basename(result.textOutputPath));
@@ -1082,7 +1098,7 @@ router.post('/generate-ai-pdf', async (req, res) => {
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
 
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: error.message || 'Failed to generate AI PDF report',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -1133,6 +1149,7 @@ router.post('/generate-ai-sample-pdf', async (req, res) => {
  */
 router.get('/supabase-pdfs', async (req, res) => {
   try {
+    if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin access required' });
     console.log('📋 Fetching PDFs from Supabase bucket (neurosense-reports)...');
 
     const files = await SupabaseStorage.listFiles('neurosense-reports', 'reports');
@@ -1162,7 +1179,7 @@ router.get('/supabase-pdfs', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error listing Supabase PDFs:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       error: error.message
     });
@@ -1175,6 +1192,7 @@ router.get('/supabase-pdfs', async (req, res) => {
  */
 router.get('/verify-bucket', async (req, res) => {
   try {
+    if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super admin access required' });
     console.log('🔍 Verifying neurosense-reports bucket...');
 
     const { createClient } = require('@supabase/supabase-js');
@@ -1265,7 +1283,7 @@ router.get('/verify-bucket', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error verifying bucket:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       error: error.message
     });
@@ -1446,6 +1464,7 @@ router.get('/patient-qeeg-files/:patientId', async (req, res) => {
 
     console.log(`📂 Fetching QEEG files for patient: ${patientId}`);
 
+    await requirePatientAccess(req.user, patientId);
     const qeegFiles = await SupabaseStorage.listPatientQEEGFiles(patientId);
 
     res.json({
@@ -1460,7 +1479,7 @@ router.get('/patient-qeeg-files/:patientId', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error fetching patient QEEG files:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       error: true,
       message: 'Failed to fetch QEEG files',
       details: error.message
@@ -1493,13 +1512,14 @@ router.post('/upload-clinic-logo', logoUpload.single('document'), async (req, re
     if (!file) return res.status(400).json({ error: true, message: 'No file uploaded' });
     if (!clinicId) return res.status(400).json({ error: true, message: 'clinicId is required — select a patient/clinic first' });
 
+    requireClinicAccess(req.user, clinicId);
     console.log(`🎨 Clinic logo upload for ${clinicId}: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)`);
     const clinicLogoService = require('../services/clinicLogoService');
     const { logoUrl } = await clinicLogoService.setClinicLogoFromUpload(file.path, file.originalname, clinicId);
     res.json({ success: true, logoUrl });
   } catch (error) {
     console.error('❌ Clinic logo upload failed:', error.message);
-    res.status(500).json({ error: true, message: error.message || 'Logo upload failed' });
+    res.status(error.status || 500).json({ error: true, message: error.message || 'Logo upload failed' });
   } finally {
     try { if (file && fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch { /* ignore */ }
   }

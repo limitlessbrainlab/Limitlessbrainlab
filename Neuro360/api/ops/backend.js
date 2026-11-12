@@ -1,3 +1,5 @@
+import portalIdentity from '../../server/utils/verifiedPortalUser.js';
+const { verifiedPortalUser } = portalIdentity;
 import { createClient } from '@supabase/supabase-js';
 
 const healthUrl = process.env.BACKEND_HEALTH_URL || 'https://limitlessbrainlab-backend.onrender.com/api/health';
@@ -11,10 +13,8 @@ async function requireSuperAdmin(req) {
   if (!token || !url || !key) return false;
 
   const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: authData } = await supabase.auth.getUser(token);
-  if (!authData?.user) return false;
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
-  return profile?.role === 'super_admin';
+  const user = await verifiedPortalUser(supabase, token);
+  return user?.role === 'super_admin';
 }
 
 async function backendHealth() {

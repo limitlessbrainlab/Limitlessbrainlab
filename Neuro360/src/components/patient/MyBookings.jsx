@@ -1,3 +1,4 @@
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import {
   Calendar,
@@ -40,7 +41,7 @@ const MyBookings = ({ limit, showTitle = true, compact = false }) => {
         params.append('status', 'completed');
       }
 
-      const response = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}?${params}`);
+      const response = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}?${params}`, { headers: await StripeService.getCheckoutHeaders() });
       const data = await response.json();
 
       if (data.success) {
@@ -48,7 +49,7 @@ const MyBookings = ({ limit, showTitle = true, compact = false }) => {
 
         // If no upcoming bookings found, also fetch all scheduled bookings as fallback
         if (filter === 'upcoming' && filteredBookings.length === 0) {
-          const allResponse = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}?status=scheduled`);
+          const allResponse = await fetch(`${API_URL}/bookings/${encodeURIComponent(user.email)}?status=scheduled`, { headers: await StripeService.getCheckoutHeaders() });
           const allData = await allResponse.json();
           if (allData.success && allData.bookings?.length > 0) {
             filteredBookings = allData.bookings;

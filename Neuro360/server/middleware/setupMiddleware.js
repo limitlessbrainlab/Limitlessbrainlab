@@ -92,7 +92,7 @@ const setupMiddleware = (app, allowedOrigins) => {
   // parsing here made EVERY webhook delivery fail with a 400.
   app.use((req, res, next) => {
     if (req.originalUrl === '/api/stripe-webhook') return next();
-    return express.json({ limit: '50mb' })(req, res, next);
+    return express.json({ limit: '50mb', verify(req, res, buffer) { if (req.path === '/api/calendly-webhook') req.rawBody = Buffer.from(buffer); } })(req, res, next);
   });
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 

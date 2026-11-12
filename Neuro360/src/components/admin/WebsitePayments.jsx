@@ -1,3 +1,4 @@
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import {
   RefreshCw,
@@ -35,7 +36,7 @@ const WebsitePayments = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/website-payments`);
+      const response = await fetch(`${API_BASE_URL}/website-payments`, { headers: await StripeService.getCheckoutHeaders() });
       const result = await response.json();
       if (result.success) {
         setData(result.data || []);

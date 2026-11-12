@@ -1,4 +1,5 @@
 const express = require('express');
+const { verifiedPortalUser } = require('../utils/verifiedPortalUser');
 const { createRoutedClient } = require('../dbRouter');
 const { normalizeCoursePayload } = require('../services/brainCoursePurchases');
 
@@ -11,15 +12,14 @@ function createBrainCoursesRouter({ stripe, stagingFrontendUrl = process.env.STA
   async function requestUser(req, res, next) {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ success: false, error: 'Authentication required' });
-    const { data: { user }, error } = await database.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    const user = await verifiedPortalUser(database, token);
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid or expired token' });
     req.courseUser = user;
     next();
   }
 
   async function superAdmin(req, res, next) {
-    const { data: profile, error } = await database.from('profiles').select('role').eq('id', req.courseUser.id).single();
-    if (error || profile?.role !== 'super_admin') return res.status(403).json({ success: false, error: 'Super admin access required' });
+    if (req.courseUser.role !== 'super_admin') return res.status(403).json({ success: false, error: 'Super admin access required' });
     next();
   }
 

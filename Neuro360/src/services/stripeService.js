@@ -1,9 +1,10 @@
+import checkoutCatalog from '../../server/config/checkoutCatalog.json';
+import { supabase } from '../lib/supabaseClient';
 /**
  * Stripe Payment Service
  * Handles international payments via Stripe Checkout
  */
 
-import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../utils/friendlyError';
 
@@ -25,17 +26,7 @@ class StripeService {
     }
 
     // Currency configuration by country
-    this.currencyConfig = {
-      US: { currency: 'USD', symbol: 'USD ', multiplier: 1 },
-      IN: { currency: 'INR', symbol: '₹', multiplier: 83 },
-      GB: { currency: 'GBP', symbol: '£', multiplier: 0.79 },
-      EU: { currency: 'EUR', symbol: '€', multiplier: 0.92 },
-      AE: { currency: 'AED', symbol: 'AED ', multiplier: 3.67 },
-      AU: { currency: 'AUD', symbol: 'A$', multiplier: 1.53 },
-      CA: { currency: 'CAD', symbol: 'C$', multiplier: 1.36 },
-      SG: { currency: 'SGD', symbol: 'S$', multiplier: 1.34 },
-      DEFAULT: { currency: 'USD', symbol: 'USD ', multiplier: 1 }
-    };
+    this.currencyConfig = checkoutCatalog.currencyConfig;
 
     // EU countries for currency mapping
     this.euCountries = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PT', 'IE', 'FI', 'GR', 'LU', 'MT', 'CY', 'SK', 'SI', 'EE', 'LV', 'LT'];
@@ -102,12 +93,7 @@ class StripeService {
 
   // Get subscription packages with localized pricing
   getSubscriptionPackages(currency = 'USD', multiplier = 1) {
-    const basePricesUSD = {
-      BASIC: 12,    // ~999 INR
-      PRO: 24,      // ~1999 INR
-      PREMIUM: 42,  // ~3499 INR
-      ENTERPRISE: 72 // ~5999 INR
-    };
+    const basePricesUSD = checkoutCatalog.subscriptionBaseUSD;
 
     return [
       {
@@ -158,6 +144,12 @@ class StripeService {
     ];
   }
 
+  async getCheckoutHeaders() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data?.session?.access_token) throw new Error('Please sign in to continue checkout');
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` };
+  }
+
   // Create Stripe Checkout Session via backend
   async createCheckoutSession(tierData, userInfo, successUrl, cancelUrl) {
     try {
@@ -175,9 +167,7 @@ class StripeService {
       // Otherwise, create a dynamic checkout session
       const response = await fetch(`${API_URL}/stripe/create-checkout-session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await this.getCheckoutHeaders(),
         body: JSON.stringify({
           tierId: tierData.id,
           tierName: tierData.name,
@@ -217,11 +207,12 @@ class StripeService {
     try {
       const response = await fetch(`${API_URL}/stripe/create-checkout-session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await this.getCheckoutHeaders(),
         body: JSON.stringify({
           priceId: tierData.stripePriceId,
+          tierId: tierData.id,
+          currency: tierData.currency || 'USD',
+          price: tierData.price,
           customerEmail: userInfo.email,
           customerName: userInfo.name,
           // Land on /dashboard/subscription (where handlePaymentCallback lives)
@@ -300,67 +291,27 @@ class StripeService {
   }
 
   // Verify payment success (called after redirect back)
-  async verifyPaymentSuccess(sessionId) {
+  async verifyPaymentSuccess(sessionId, expectedPurchase = null) {
     try {
-      const response = await fetch(`${API_URL}/stripe/verify-session/${sessionId}`);
+      if (!sessionId) throw new Error('Payment session is missing');
+      const response = await fetch(`${API_URL}/stripe/verify-session/${encodeURIComponent(sessionId)}`);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to verify payment');
       }
 
+      if (expectedPurchase && (!data.success || !data.purchase ||
+          data.purchase.email !== expectedPurchase.email?.toLowerCase() ||
+          data.purchase.type !== expectedPurchase.type ||
+          (expectedPurchase.itemId && data.purchase.itemId !== expectedPurchase.itemId) ||
+          (expectedPurchase.itemName && data.purchase.itemName !== expectedPurchase.itemName))) {
+        throw new Error('Payment could not be confirmed for this purchase. Please contact support.');
+      }
       return data;
     } catch (error) {
       console.error('ERROR: Failed to verify payment:', error);
       throw error;
-    }
-  }
-
-  // Update user subscription after successful payment
-  async updateSubscriptionAfterPayment(userEmail, tierId, paymentInfo) {
-    try {
-      const { data: patient, error: fetchError } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('email', userEmail.toLowerCase())
-        .single();
-
-      if (fetchError || !patient) {
-        throw new Error('Patient not found');
-      }
-
-      const { error: updateError } = await supabase
-        .from('patients')
-        .update({
-          subscription_tier: tierId.toLowerCase(),
-          subscription_status: 'active',
-          dashboard_access: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', patient.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      // Log the payment
-      await supabase.from('payment_history').insert({
-        patient_id: patient.id,
-        patient_email: userEmail.toLowerCase(),
-        payment_type: 'subscription',
-        amount: paymentInfo.amount,
-        currency: paymentInfo.currency || 'USD',
-        payment_provider: 'stripe',
-        payment_id: paymentInfo.paymentId || paymentInfo.sessionId,
-        tier: tierId,
-        status: 'completed',
-        created_at: new Date().toISOString()
-      });
-
-      return { success: true };
-    } catch (error) {
-      console.error('ERROR: Failed to update subscription:', error);
-      return { success: false, error: error.message };
     }
   }
 
@@ -369,9 +320,7 @@ class StripeService {
     try {
       const response = await fetch(`${API_URL}/stripe/create-portal-session`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await this.getCheckoutHeaders(),
         body: JSON.stringify({
           customerEmail,
           returnUrl: `${window.location.origin}/dashboard/subscription`

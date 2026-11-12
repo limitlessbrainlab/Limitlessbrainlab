@@ -1,3 +1,4 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Play, Download, FileText, CheckCircle, Activity, User, Building2, Calendar, History, X, ArrowLeft, Search, Filter, Send, Loader2, RefreshCw, Clock } from 'lucide-react';
 import DatabaseService from '../../services/databaseService';
@@ -10,14 +11,13 @@ import SystemHealth from './SystemHealth';
 
 // Always return a CURRENT Supabase access token. supabase.auth.getSession() refreshes
 // the token transparently if it's near expiry, so /api/qeeg/* calls no longer 401
-// after ~1 hr. Falls back to the legacy localStorage tokens for dev-bypass logins
-// that don't have a Supabase session.
+// after ~1 hr. No browser-shared credential substitutes for a user session.
 const getFreshToken = async () => {
   try {
     const { data } = await SupabaseService.supabase.auth.getSession();
     if (data?.session?.access_token) return data.session.access_token;
   } catch {}
-  return localStorage.getItem('authToken') || localStorage.getItem('access_token');
+  return null;
 };
 
 const parseResultsData = (data) => {
@@ -313,7 +313,8 @@ const AlgorithmDataProcessor = () => {
             const testUrl = `${backendBaseUrl}/uploads/${possibleFilename}`;
 
             // Test if file exists locally
-            const response = await fetch(testUrl, { method: 'HEAD' });
+            const localToken = await getFreshToken();
+            const response = await fetch(testUrl, { method: 'HEAD', headers: localToken ? { Authorization: `Bearer ${localToken}` } : {} });
             if (response.ok) {
               record.pdfUrl = `/uploads/${possibleFilename}`;
               await DatabaseService.update('algorithmResults', record.id, record);
@@ -774,7 +775,7 @@ const AlgorithmDataProcessor = () => {
 
       let response;
       try {
-        // Get auth token from localStorage
+        // Get the current Supabase session token
         const token = await getFreshToken();
 
         const fetchOptions = { method: 'POST', body: formData, signal: controller.signal };
@@ -1338,8 +1339,7 @@ const AlgorithmDataProcessor = () => {
   // Performance Report: forward the already-generated NeuroSense PDF (at pdfUrl) to the
   // server, which WARMS THE RENDER ENGINE FIRST, then reads its numbers and
   // regenerates the polished 12-page doctor-readable "Brain Type & Performance
-  // Report". Auth is a static long-lived token (VITE_PERFORMANCE_REPORT_TOKEN,
-  // with legacy VITE_CLAUDE_REPORT_TOKEN as fallback).
+  // Report". Requests use the current verified Supabase session.
   // Ordered stages shown in the progress panel. `upload` is the browser->server
   // fetch (before the first SSE event); the rest are streamed by the backend.
   const PERFORMANCE_STAGE_ORDER = [
@@ -1474,7 +1474,8 @@ const AlgorithmDataProcessor = () => {
       const apiUrl = directBackendUrl
         ? `${directBackendUrl.replace(/\/$/, '')}/api`
         : proxyApiUrl;
-      const token = import.meta.env.VITE_PERFORMANCE_REPORT_TOKEN || import.meta.env.VITE_CLAUDE_REPORT_TOKEN;
+      const token = await getFreshToken();
+      if (!token) throw new Error('Please sign in again to generate this report.');
       const backendBaseUrl = apiUrl.replace(/\/api\/?$/, '');
       const requestWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
         const controller = new AbortController();
@@ -1506,7 +1507,7 @@ const AlgorithmDataProcessor = () => {
         : `${backendBaseUrl}${pdfUrl.startsWith('/') ? pdfUrl : `/${pdfUrl}`}`;
       console.log('[Performance Report] Step 1: prefetching the generated NeuroSense PDF…', sourcePdfUrl);
       // Prefetch the just-generated NeuroSense PDF and forward it to the Claude endpoint.
-      const srcRes = await requestWithTimeout(sourcePdfUrl, {}, 60000);
+      const srcRes = await requestWithTimeout(await resolveReportUrl(sourcePdfUrl), {}, 60000);
       if (!srcRes.ok) throw new Error('Could not load the generated NeuroSense PDF.');
       const blob = await srcRes.blob();
       console.log(`[Performance Report] Step 2: NeuroSense PDF prefetched (${(blob.size / 1024).toFixed(1)} KB), building upload payload…`);
@@ -2485,6 +2486,7 @@ const AlgorithmDataProcessor = () => {
   const downloadViaBlob = async (url, filename, toastId = 'download-pdf') => {
     if (!url) { toast.error('Report not available yet.', { id: toastId }); return; }
     try {
+      url = await resolveReportUrl(url);
       toast.loading('Downloading PDF…', { id: toastId });
       const res = await fetchWithRetry(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2499,14 +2501,8 @@ const AlgorithmDataProcessor = () => {
       setTimeout(() => window.URL.revokeObjectURL(objectUrl), 100);
       toast.success('PDF download started!', { id: toastId });
     } catch (e) {
-      console.error('downloadViaBlob failed, falling back to direct open:', e);
-      // Last resort: open the URL directly so a flaky link still delivers the file.
-      try {
-        window.open(url, '_blank', 'noopener');
-        toast.success('Opening PDF…', { id: toastId });
-      } catch (_) {
-        toast.error('Could not download the PDF. Please try again.', { id: toastId });
-      }
+      console.error('Report download failed:', e);
+      toast.error('Could not download the PDF. Please try again.', { id: toastId });
     }
   };
 
@@ -2543,26 +2539,7 @@ const AlgorithmDataProcessor = () => {
         isSupabase: pdfUrl.startsWith('http')
       });
 
-      // For local files, try direct window.open first (simpler approach)
-      if (!pdfUrl.startsWith('http')) {
-
-        // Create a hidden link and click it
-        const link = document.createElement('a');
-        link.href = fullPdfUrl;
-        link.download = pdfUrl.split('/').pop() || 'neurosense-report.pdf';
-        link.target = '_blank';
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        toast.success('PDF download started!', { id: 'download-pdf' });
-        return;
-      }
-
-      // For Supabase URLs, use fetch method
-
-      const response = await fetch(fullPdfUrl);
+      const response = await fetch(await resolveReportUrl(fullPdfUrl));
 
       if (!response.ok) {
         console.error('❌ Download failed:', {

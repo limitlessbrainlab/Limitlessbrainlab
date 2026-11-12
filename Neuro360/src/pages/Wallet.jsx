@@ -621,30 +621,35 @@ const Wallet = () => {
   const handleToggleSubscription = async (id, currentStatus) => {
     const newStatus = currentStatus === 'Active' ? 'Paused' : 'Active';
     try {
-      await supabase
+      const { data, error } = await supabase
         .from('wallet_subscriptions')
         .update({ status: newStatus })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Subscription was not updated');
 
       setSubscriptions(prev => prev.map(s =>
         s.id === id ? { ...s, status: newStatus } : s
       ));
       toast.success(`Subscription ${newStatus === 'Active' ? 'resumed' : 'paused'}`);
     } catch (error) {
-      setSubscriptions(prev => prev.map(s =>
-        s.id === id ? { ...s, status: newStatus } : s
-      ));
-      toast.success(`Subscription ${newStatus === 'Active' ? 'resumed' : 'paused'}`);
+      toast.error('Could not update the subscription. Please try again.');
     }
   };
 
   // Cancel subscription
   const handleCancelSubscription = async (id) => {
     try {
-      await supabase
+      const { data, error } = await supabase
         .from('wallet_subscriptions')
         .update({ status: 'Cancelled' })
-        .eq('id', id);
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Subscription was not updated');
 
       setSubscriptions(prev => prev.filter(s => s.id !== id));
       setWalletBalance(prev => ({
@@ -653,8 +658,7 @@ const Wallet = () => {
       }));
       toast.success('Subscription cancelled');
     } catch (error) {
-      setSubscriptions(prev => prev.filter(s => s.id !== id));
-      toast.success('Subscription cancelled');
+      toast.error('Could not cancel the subscription. Please try again.');
     }
   };
 

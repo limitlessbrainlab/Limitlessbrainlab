@@ -1,8 +1,10 @@
+import portalIdentity from '../server/utils/verifiedPortalUser.js';
+const { verifiedPortalUser } = portalIdentity;
 import { createClient } from '@supabase/supabase-js';
 
 export function validateShareRequest(body = {}) {
   for (const key of ['clinicId', 'patientId', 'fileName', 'filePath']) {
-    if (!body[key]) return `${key} is required`;
+    if (typeof body[key] !== 'string' || !body[key].trim()) return `${key} is required`;
   }
   if (!body.reportData || typeof body.reportData !== 'object' || Array.isArray(body.reportData)) return 'reportData is required';
   return null;
@@ -18,10 +20,8 @@ function serverClient() {
 async function requireSuperAdmin(req, supabase) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
-  const { data } = await supabase.auth.getUser(token);
-  if (!data?.user) return null;
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-  return profile?.role === 'super_admin' ? data.user : null;
+  const user = await verifiedPortalUser(supabase, token);
+  return user?.role === 'super_admin' ? user : null;
 }
 
 export default async function handler(req, res) {
@@ -38,6 +38,21 @@ export default async function handler(req, res) {
     const { data: patient, error: patientError } = await supabase
       .from('patients').select('id, clinic_id').eq('id', patientId).single();
     if (patientError || !patient || patient.clinic_id !== clinicId) return res.status(400).json({ message: 'Patient does not belong to this clinic' });
+
+    for (const reference of [filePath, reportData.fileUrl].filter(Boolean)) {
+      let bucket = 'neurosense-reports';
+      let objectPath = reference;
+      if (/^https?:\/\//i.test(reference)) {
+        const url = new URL(reference);
+        if (url.origin !== new URL(supabase.supabaseUrl).origin) return res.status(400).json({message:'Report belongs to a different storage service'});
+        const match = url.pathname.match(/^\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)$/);
+        if (!match) return res.status(400).json({message:'Invalid report location'});
+        bucket = match[1]; objectPath = decodeURIComponent(match[2]);
+      } else if (reference.startsWith('neurosense-reports/')) objectPath = reference.slice('neurosense-reports/'.length);
+      const {data:owner,error:ownerError} = await supabase.rpc('resolve_document_owner',{p_bucket:bucket,p_path:objectPath});
+      if (ownerError) throw ownerError;
+      if (owner !== patientId) return res.status(403).json({message:'Report does not belong to this patient'});
+    }
 
     const { data: existing, error: findError } = await supabase.from('reports').select('*')
       .eq('clinic_id', clinicId).eq('patient_id', patientId).eq('file_name', fileName).eq('file_path', filePath).maybeSingle();

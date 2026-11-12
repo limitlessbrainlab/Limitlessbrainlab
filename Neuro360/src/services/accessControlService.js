@@ -281,56 +281,6 @@ class AccessControlService {
   }
 
   /**
-   * Update user's subscription tier
-   * @param {string} userEmail - User's email
-   * @param {string} newTier - New tier ID
-   * @param {Object} paymentInfo - Payment details
-   * @returns {Promise<Object>} Update result
-   */
-  async updateSubscription(userEmail, newTier, paymentInfo = {}) {
-    try {
-      const tierData = SUBSCRIPTION_TIERS[newTier.toUpperCase()];
-      if (!tierData) {
-        throw new Error('Invalid subscription tier');
-      }
-
-      const { data, error } = await supabase
-        .from('patients')
-        .update({
-          subscription_tier: newTier.toLowerCase(),
-          subscription_status: 'active',
-          dashboard_access: true,
-          reports_unlocked: tierData.reports > 0,
-          updated_at: new Date().toISOString()
-        })
-        .eq('email', userEmail.toLowerCase())
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Log the subscription change
-      await this.logAccessEvent(userEmail, 'SUBSCRIPTION_UPGRADE', {
-        newTier,
-        paymentInfo
-      });
-
-      return {
-        success: true,
-        data,
-        tier: newTier,
-        features: tierData.features
-      };
-    } catch (error) {
-      console.error('Error updating subscription:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
    * Log access event for audit trail
    * @param {string} userEmail - User's email
    * @param {string} action - Action type

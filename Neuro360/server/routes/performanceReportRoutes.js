@@ -3,7 +3,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
-const { sidecarAuth } = require('../middleware/sidecarAuth');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePatientAccess } = require('../utils/patientAccess');
 const { extractReportSource, postLesson, ensureRenderEngineReady } = require('../services/performanceReportService');
 const { buildReportDataFromSource, buildReportDataFromNeuroSenseMd } = require('../services/performanceReportData');
 const { buildNeuroSenseMarkdown } = require('../services/neurosenseMarkdown');
@@ -43,8 +44,7 @@ const upload = multer({
  * Upload an ALREADY-GENERATED brain/qEEG report PDF (field "pdf"). We warm the
  * render engine first, read the PDF's text, have Gemini transcribe the numbers
  * + write the narrative, build the report data deterministically, and return
- * the polished 12-page "Brain Type & Performance Report" PDF. Auth: static
- * long-lived PERFORMANCE_REPORT_TOKEN (falls back to legacy CLAUDE_REPORT_TOKEN).
+ * the polished 12-page "Brain Type & Performance Report" PDF for an authorized patient.
  */
 // Human-readable label for each streamed stage (frontend shows these verbatim).
 const STAGE_LABELS = {
@@ -74,12 +74,20 @@ function friendlyPipelineError(message) {
   return t;
 }
 
-router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
+router.post('/', authMiddleware, upload.single('pdf'), async (req, res) => {
   const tempPath = req.file?.path;
 
   // The "no file" guard stays plain JSON — emitted BEFORE we switch to SSE.
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'A PDF file (field "pdf") is required.' });
+  }
+
+  try {
+    const patient = await requirePatientAccess(req.user, req.body?.patientId, req.body?.clinicId);
+    req.body.clinicId = patient.clinic_id;
+  } catch (error) {
+    if (tempPath) fs.unlink(tempPath, () => {});
+    return res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Unable to authorize report access' });
   }
 
   // Switch the response to Server-Sent Events so the frontend can show live,
@@ -234,7 +242,7 @@ router.post('/', sidecarAuth, upload.single('pdf'), async (req, res) => {
     const outPath = path.join(__dirname, '../uploads', `claude-report-out-${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`);
     try {
       fs.writeFileSync(outPath, pdf);
-      const uploadResult = await SupabaseStorage.uploadFile(outPath, 'neurosense-reports', `claude-reports/${base}-${Date.now()}.pdf`);
+      const uploadResult = await SupabaseStorage.uploadFile(outPath, 'neurosense-reports', `claude-reports/${base}-${Date.now()}.pdf`, 'application/pdf', undefined, req.body.patientId);
       if (!uploadResult || !uploadResult.url) {
         throw new Error('Supabase upload returned an invalid result');
       }

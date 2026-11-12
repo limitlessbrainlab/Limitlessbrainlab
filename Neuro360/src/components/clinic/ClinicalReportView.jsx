@@ -1,3 +1,4 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Users, Activity, Pill, Heart, Home, Download, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
@@ -127,14 +128,14 @@ const ClinicalReportView = ({ patient, onClose }) => {
       // is no storage path to sign.
       let downloadUrl = null;
       if (doc.filePath) {
-        downloadUrl = await getPatientDocSignedUrl(doc.bucket || 'patients_documents', doc.filePath);
+        downloadUrl = await getPatientDocSignedUrl(doc.bucket || 'patients_documents', doc.filePath, 300, patient.id);
       }
       if (!downloadUrl) {
         downloadUrl = doc.url;
       }
 
       if (downloadUrl) {
-        window.open(downloadUrl, '_blank');
+        window.open(await resolveReportUrl(downloadUrl, patient.id), '_blank', 'noopener,noreferrer');
       } else {
         toast.error('Unable to download file. File may not exist.');
       }

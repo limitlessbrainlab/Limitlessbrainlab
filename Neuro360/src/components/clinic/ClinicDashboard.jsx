@@ -1,3 +1,4 @@
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { CreditCard, Zap, FileText, Loader2 } from 'lucide-react';
@@ -115,7 +116,7 @@ const PendingSubscriptionGate = ({ user, clinic, onPaymentSuccess }) => {
       const price = getPrice(selectedPkg);
       const response = await fetch(`${API_URL}/create-report-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           packageId: selectedPkg.id,
           packageName: selectedPkg.label,
@@ -333,7 +334,7 @@ const CreditsExhaustedPopup = ({ user, clinic, onDismiss, onPaymentSuccess }) =>
       const price = getPrice(pkg);
       const response = await fetch(`${API_URL}/create-report-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           packageId: pkg.id, packageName: pkg.label, reports: pkg.reports,
           amount: price, currency: userCurrency.currency,
@@ -910,20 +911,24 @@ const UsageTracking = ({ clinic, usage }) => {
 
 // Clinic Settings Component
 const ClinicSettings = ({ clinic }) => {
+  const { logout } = useAuth();
+  const [smtpLoaded, setSmtpLoaded] = useState(false);
   const [formData, setFormData] = useState({
     name: clinic?.name || '',
     contactPerson: clinic?.contactPerson || clinic?.contact_person || '',
     email: clinic?.email || '',
     phone: clinic?.phone || '',
     address: clinic?.address || '',
-    smtp_email: clinic?.smtpEmail || clinic?.smtp_email || '',
-    smtp_password: clinic?.smtpPassword || clinic?.smtp_password || ''
+    smtp_email: '',
+    smtp_password: ''
   });
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [originalData, setOriginalData] = useState({});
 
   useEffect(() => {
+    let cancelled = false;
+    setSmtpLoaded(false);
     if (clinic) {
       const clinicData = {
         name: clinic.name || '',
@@ -931,13 +936,35 @@ const ClinicSettings = ({ clinic }) => {
         email: clinic.email || '',
         phone: clinic.phone || '',
         address: clinic.address || '',
-        smtp_email: clinic.smtpEmail || clinic.smtp_email || '',
-        smtp_password: clinic.smtpPassword || clinic.smtp_password || ''
+        smtp_email: '',
+        smtp_password: ''
       };
       setFormData(clinicData);
-      setOriginalData(clinicData); // Store original data for change tracking
+      setOriginalData(clinicData);
+      requestSmtpConfig().then(config => {
+        if (cancelled) return;
+        setFormData(prev => ({ ...prev, ...config }));
+        setOriginalData(prev => ({ ...prev, ...config }));
+        setSmtpLoaded(true);
+      }).catch(() => {
+        if (!cancelled) toast.error('Could not load email settings. Please reload and try again.');
+      });
     }
+    return () => { cancelled = true; };
   }, [clinic]);
+
+  async function requestSmtpConfig(method = 'GET', config) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data?.session?.access_token) throw new Error('Please sign in again');
+    const response = await fetch(`${API_URL}/clinic-smtp?clinicId=${encodeURIComponent(clinic.id)}`, {
+      method,
+      headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+      ...(config ? { body: JSON.stringify(config) } : {})
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || 'Unable to access email settings');
+    return { smtp_email: result.smtp_email, smtp_password: result.smtp_password };
+  }
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -949,7 +976,7 @@ const ClinicSettings = ({ clinic }) => {
   const getChangedFields = () => {
     const changes = {};
     Object.keys(formData).forEach(key => {
-      if (formData[key] !== originalData[key]) {
+      if (!key.startsWith('smtp_') && formData[key] !== originalData[key]) {
         changes[key] = {
           old: originalData[key],
           new: formData[key]
@@ -967,9 +994,7 @@ const ClinicSettings = ({ clinic }) => {
           contactPerson: 'Contact Person',
           email: 'Email',
           phone: 'Phone',
-          address: 'Address',
-          smtp_email: 'SMTP Email',
-          smtp_password: 'SMTP Password'
+          address: 'Address'
         };
         
         return `${fieldNames[field]}: "${changes[field].old}" → "${changes[field].new}"`;
@@ -1016,13 +1041,14 @@ const ClinicSettings = ({ clinic }) => {
       }
 
       // Update clinic profile in database
-      await DatabaseService.update('clinics', clinic.id, formData);
+      const { smtp_email, smtp_password, ...profileData } = formData;
+      await DatabaseService.update('clinics', clinic.id, profileData);
 
       // Create alert for super admin
       const alertCreated = await createProfileChangeAlert(changes);
 
       // Update original data to reflect saved state
-      setOriginalData({ ...formData });
+      setOriginalData(prev => ({ ...prev, ...profileData }));
 
       // Success message
       if (alertCreated) {
@@ -1057,17 +1083,18 @@ const ClinicSettings = ({ clinic }) => {
       toast.error('Clinic ID not found');
       return;
     }
-    if (!formData.smtp_email || !formData.smtp_password) {
+    if (!smtpLoaded || !formData.smtp_email || !formData.smtp_password) {
       toast.error('Please enter both Gmail address and App Password');
       return;
     }
     setSavingSmtp(true);
     try {
-      await DatabaseService.update('clinics', clinic.id, {
+      const config = await requestSmtpConfig('PUT', {
         smtp_email: formData.smtp_email,
         smtp_password: formData.smtp_password
       });
-      setOriginalData(prev => ({ ...prev, smtp_email: formData.smtp_email, smtp_password: formData.smtp_password }));
+      setFormData(prev => ({ ...prev, ...config }));
+      setOriginalData(prev => ({ ...prev, ...config }));
       toast.success(`Email configuration saved! Emails will be sent from ${formData.smtp_email}`);
     } catch (error) {
       console.error('Error saving SMTP config:', error);
@@ -1222,6 +1249,7 @@ const ClinicSettings = ({ clinic }) => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gmail Address</label>
             <input
               type="email"
+              disabled={!smtpLoaded || savingSmtp}
               value={formData.smtp_email}
               onChange={(e) => handleInputChange('smtp_email', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
@@ -1234,6 +1262,7 @@ const ClinicSettings = ({ clinic }) => {
             <div className="relative">
               <input
                 type={showSmtpPassword ? 'text' : 'password'}
+                disabled={!smtpLoaded || savingSmtp}
                 value={formData.smtp_password}
                 onChange={(e) => handleInputChange('smtp_password', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 pr-10"
@@ -1267,7 +1296,7 @@ const ClinicSettings = ({ clinic }) => {
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3">
           <button
             onClick={handleSaveSmtpConfig}
-            disabled={savingSmtp || !formData.smtp_email || !formData.smtp_password}
+            disabled={!smtpLoaded || savingSmtp || !formData.smtp_email || !formData.smtp_password}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
               savingSmtp || !formData.smtp_email || !formData.smtp_password
                 ? 'bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed'

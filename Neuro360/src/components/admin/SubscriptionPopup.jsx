@@ -1,3 +1,5 @@
+import checkoutCatalog from '../../../server/config/checkoutCatalog.json';
+import StripeService from '../../services/stripeService';
 import React, { useState, useEffect } from 'react';
 import { X, Check, Star, Zap, Crown, AlertTriangle, CreditCard, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,27 +13,18 @@ const REPORT_PACKAGES = [
   {
     id: 'starter',
     name: 'Starter Pack',
-    reports: 10,
-    price: 999,
-    priceUSD: 12,
     features: ['10 EEG brain reports', 'Basic analytics', 'Email support'],
     savings: null
   },
   {
     id: 'basic',
     name: 'Basic Pack',
-    reports: 25,
-    price: 1999,
-    priceUSD: 24,
     features: ['25 EEG brain reports', 'Advanced analytics', 'Priority support', 'Export options'],
     savings: 'Save 20%'
   },
   {
     id: 'professional',
     name: 'Professional Pack',
-    reports: 50,
-    price: 3499,
-    priceUSD: 42,
     features: ['50 EEG brain reports', 'Full analytics suite', 'Dedicated support', 'Custom branding', 'API access'],
     popular: true,
     savings: 'Save 30%'
@@ -39,13 +32,10 @@ const REPORT_PACKAGES = [
   {
     id: 'enterprise',
     name: 'Enterprise Pack',
-    reports: 100,
-    price: 5999,
-    priceUSD: 72,
     features: ['100 EEG brain reports', 'Enterprise analytics', '24/7 support', 'White labeling', 'Custom integrations'],
     savings: 'Save 40%'
   }
-];
+].map(plan => ({ ...plan, reports: checkoutCatalog.legacyClinicReports[plan.id].reports, price: checkoutCatalog.legacyClinicReports[plan.id].INR, priceUSD: checkoutCatalog.legacyClinicReports[plan.id].USD }));
 
 const SubscriptionPopup = ({ isOpen, onClose, clinicId, currentUsage, onSubscribe, clinicInfo }) => {
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -100,7 +90,7 @@ const SubscriptionPopup = ({ isOpen, onClose, clinicId, currentUsage, onSubscrib
 
       const response = await fetch(`${API_URL}/create-report-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await StripeService.getCheckoutHeaders(),
         body: JSON.stringify({
           packageId: selectedPlan.id,
           packageName: selectedPlan.name,

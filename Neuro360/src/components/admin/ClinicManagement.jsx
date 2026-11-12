@@ -33,7 +33,7 @@ import toast from 'react-hot-toast';
 import DatabaseService from '../../services/databaseService';
 import credentialRpc from '../../services/credentialRpc';
 import { supabase } from '../../lib/supabaseClient';
-import { hashPassword, isHashed } from '../../utils/passwordUtils';
+import { isHashed } from '../../utils/passwordUtils';
 import { getOriginUrl, resolveEnv, canonicalUrlForEnv } from '../../utils/environment';
 import AdminAssignmentModal from './AdminAssignmentModal';
 import LocationService from '../../services/locationService';
@@ -352,13 +352,7 @@ const ClinicManagement = ({ onUpdate }) => {
       // database: only succeeds while the row is brand-new and passwordless.
       try {
         const claimed = await credentialRpc.claimCredentials('clinics', clinicData.email, password);
-        if (claimed === null) {
-          // RPC not deployed (pre-migration DB) — legacy embedded write.
-          await DatabaseService.update('clinics', savedClinic.id, {
-            password: await hashPassword(password),
-            plain_password: password
-          });
-        }
+        if (claimed !== true) throw new Error('Secure credential setup is unavailable. Please try again.');
       } catch (claimErr) {
         console.error('ALERT: credential claim failed during admin clinic creation:', claimErr?.message);
         try { await DatabaseService.delete('clinics', savedClinic.id); } catch (delErr) {
@@ -449,14 +443,7 @@ const ClinicManagement = ({ onUpdate }) => {
       // browser payload.
       if (editPassword) {
         const setResult = await credentialRpc.setClinicPassword(selectedClinic.id, editPassword);
-        if (setResult === null) {
-          // RPC not deployed (pre-migration DB) — legacy embedded write.
-          await DatabaseService.update('clinics', selectedClinic.id, {
-            password: await hashPassword(editPassword),
-            plain_password: editPassword,
-            credentials_updated_at: new Date().toISOString()
-          });
-        }
+        if (setResult !== true) throw new Error('Secure password updates are unavailable. Please try again.');
       }
 
       // Keep country code and phone separate
@@ -818,16 +805,7 @@ const ClinicManagement = ({ onUpdate }) => {
       // Password written by the database via RPC (admin session authorizes it);
       // plaintext kept in sync server-side so credential emails keep working.
       const setResult = await credentialRpc.setClinicPassword(selectedClinic.id, password);
-      if (setResult === null) {
-        // RPC not deployed (pre-migration DB) — legacy embedded write.
-        await DatabaseService.update('clinics', selectedClinic.id, {
-          password: await hashPassword(password),
-          // Keep plaintext in sync so the credential emails always show the real current password
-          plain_password: password,
-          // Bump so the clinic's open session is force-logged-out after a password reset
-          credentials_updated_at: new Date().toISOString()
-        });
-      }
+      if (setResult !== true) throw new Error('Secure password updates are unavailable. Please try again.');
 
       // Try to send email with credentials (no activation OTP — not used)
       try {

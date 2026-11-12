@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
 import { authService } from '../services/authService';
+import { restoreSessionUser } from './restoreSessionUser.js';
 import DatabaseService from '../services/databaseService';
 import supabase from '../lib/supabaseClient';
 import { getFriendlyErrorMessage } from '../utils/friendlyError';
@@ -272,114 +273,22 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      // PRODUCTION MODE: Check for stored authentication
-      // First check localStorage for token and user
-      const storedToken = localStorage.getItem('authToken') || Cookies.get('authToken');
+      // Cached display data never establishes identity; verify the native session and current account.
       const storedUser = localStorage.getItem('user');
-
-      if (storedToken && storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-
-          // Super admins authenticate via a real Supabase JWT — never trust the
-          // localStorage copy blindly. Validate the live session against the
-          // Supabase server, confirm it belongs to the same email, and re-derive
-          // the role from profiles. If anything is missing/expired/tampered,
-          // clear everything and force a fresh login.
-          // (Clinics & patients use local_token_* with no Supabase session, so
-          //  they keep the existing localStorage-restore behavior below.)
-          if (parsedUser.role === 'super_admin') {
-            if (!supabase) {
-              throw new Error('Supabase unavailable — cannot validate admin session');
-            }
-
-            const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
-            const sameEmail = authUser?.email?.toLowerCase() === parsedUser.email?.toLowerCase();
-
-            if (authErr || !authUser || !sameEmail) {
-              throw new Error('Invalid or expired admin session');
-            }
-
-            // Re-derive role from the trusted profiles table (defends against a
-            // tampered localStorage role).
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role, full_name, avatar_url')
-              .eq('id', authUser.id)
-              .single();
-
-            if (!profile || profile.role !== 'super_admin') {
-              throw new Error('Account is not a super admin');
-            }
-
-            const validatedUser = {
-              ...parsedUser,
-              id: authUser.id,
-              email: authUser.email,
-              role: 'super_admin',
-              name: profile.full_name || parsedUser.name,
-              avatar: profile.avatar_url || parsedUser.avatar,
-            };
-
-            setUser(validatedUser);
-            setIsAuthenticated(true);
-            localStorage.setItem('user', JSON.stringify(validatedUser));
-            setLoading(false);
-            return;
-          }
-
-          // Non-admin (clinic/patient): restore from localStorage
-          setUser(parsedUser);
-          setIsAuthenticated(true);
-          setLoading(false);
-          return;
-        } catch (e) {
-          // Validation failed (or bad JSON) — clear any stale auth so the user
-          // is sent to /login by ProtectedRoute instead of seeing the admin UI.
-          localStorage.removeItem('user');
-          localStorage.removeItem('authToken');
-          Cookies.remove('authToken');
-          Cookies.remove('authToken', { path: '/' });
-          setUser(null);
-          setIsAuthenticated(false);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // If no localStorage auth, check Supabase session
-      if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          // Get user profile from database
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const userData = {
-            id: session.user.id,
-            email: session.user.email,
-            name: profile?.full_name || session.user.user_metadata?.full_name || 'User',
-            role: profile?.role || session.user.user_metadata?.role || 'patient',
-            avatar: profile?.avatar_url,
-            isActivated: true
-          };
-
-          setUser(userData);
-          setIsAuthenticated(true);
-          localStorage.setItem('user', JSON.stringify(userData));
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
+      const cached = storedUser ? JSON.parse(storedUser) : null;
+      if (!supabase) throw new Error('Supabase unavailable');
+      const validatedUser = await restoreSessionUser(supabase, cached);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Session unavailable');
+      setUser(validatedUser);
+      setIsAuthenticated(true);
+      localStorage.setItem('user', JSON.stringify(validatedUser));
+      localStorage.setItem('authToken', session.access_token);
     } catch (error) {
+      localStorage.removeItem('user');
+      localStorage.removeItem('authToken');
+      Cookies.remove('authToken');
+      Cookies.remove('authToken', { path: '/' });
       setUser(null);
       setIsAuthenticated(false);
     } finally {

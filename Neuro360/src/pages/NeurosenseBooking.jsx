@@ -1,3 +1,4 @@
+import checkoutCatalog from '../../server/config/checkoutCatalog.json';
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Brain, Clock, MapPin, Phone, Mail, User, Globe, MessageSquare, Send, X, Sparkles } from 'lucide-react';
@@ -488,7 +489,7 @@ const NeurosenseBooking = () => {
                     title: 'Neurosense Bundle',
                     description: 'All 4 assessments: Neuro Age Estimator, Neuro Performance Score, Brain Burnout Score & Brain Fitness Score',
                     originalPrice: { usd: 89.95 },
-                    salePrice: { usd: 19.99 },
+                    salePrice: { usd: checkoutCatalog.legacyAssessments['neurosense-bundle'].USD },
                     link: services.map(s => s.link).filter(Boolean).join(','),
                     includes: ['Neuro Age Estimator', 'Neuro Performance Score', 'Brain Burnout Score', 'Brain Fitness Score']
                   };

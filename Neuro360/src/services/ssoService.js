@@ -1,5 +1,5 @@
 import axios from 'axios';
-import Cookies from 'js-cookie';
+import { supabase } from '../lib/supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
@@ -12,7 +12,9 @@ const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' :
  * @returns {Promise<string>} The redirect URL
  */
 export async function generateSSORedirect(userId, email, role, doctorSlug = null) {
-  const token = localStorage.getItem('authToken') || Cookies.get('authToken');
+  const { data, error } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (error || !token) throw new Error('Please sign in again to continue');
 
   const payload = { userId, email, role };
   if (doctorSlug) {

@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft, Loader2, CheckCircle, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import DatabaseService from '../../services/databaseService';
-import SupabaseService from '../../services/supabaseService';
 import { getFriendlyErrorMessage } from '../../utils/friendlyError';
 import toast from 'react-hot-toast';
 
@@ -14,8 +12,6 @@ const ForgotPasswordForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [accountType, setAccountType] = useState(null);
-  const [account, setAccount] = useState(null);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordChanged, setPasswordChanged] = useState(false);
@@ -28,57 +24,6 @@ const ForgotPasswordForm = () => {
     try {
       setIsLoading(true);
       const normalizedEmail = data.email.trim().toLowerCase();
-      let foundAccount = null;
-      let foundType = null;
-
-      // Check clinics table
-      const clinics = await DatabaseService.get('clinics') || [];
-      const clinic = clinics.find(c => c.email === normalizedEmail);
-      if (clinic) {
-        foundType = 'clinic';
-        foundAccount = clinic;
-      }
-
-      // Check patients table
-      if (!foundAccount) {
-        const supabase = SupabaseService.supabase;
-        if (supabase && SupabaseService.isAvailable()) {
-          const { data: patients, error } = await supabase
-            .from('patients')
-            .select('*')
-            .eq('email', normalizedEmail);
-          if (!error && patients && patients.length > 0) {
-            foundType = 'patient';
-            foundAccount = patients[0];
-          }
-        }
-      }
-
-      // Check super admins (profiles with role super_admin)
-      if (!foundAccount) {
-        const supabase = SupabaseService.supabase;
-        if (supabase && SupabaseService.isAvailable()) {
-          const { data: admins, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('email', normalizedEmail)
-            .eq('role', 'super_admin');
-          if (!error && admins && admins.length > 0) {
-            foundType = 'super_admin';
-            foundAccount = admins[0];
-          }
-        }
-      }
-
-      if (!foundAccount) {
-        setError('root', { message: 'No account found with this email address' });
-        setIsLoading(false);
-        return;
-      }
-
-      setAccountType(foundType);
-      setAccount(foundAccount);
-
       // Send OTP
       const response = await fetch(`${API_URL}/send-otp`, {
         method: 'POST',
@@ -169,7 +114,7 @@ const ForgotPasswordForm = () => {
           body: JSON.stringify({
             email,
             password: data.newPassword,
-            name: account?.name || account?.contactPerson || account?.contact_person || 'User'
+            name: 'User'
           })
         });
       } catch (emailErr) {

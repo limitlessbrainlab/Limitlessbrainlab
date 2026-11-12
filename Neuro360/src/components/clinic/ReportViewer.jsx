@@ -1,3 +1,4 @@
+import { resolveReportUrl } from '../../services/patientDocuments';
 import React, { useState, useEffect } from 'react';
 import {
   FileText,
@@ -314,7 +315,7 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
       if (directFileUrl) {
         try {
 
-          const response = await fetch(directFileUrl);
+          const response = await fetch(await resolveReportUrl(directFileUrl));
           if (response.ok) {
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
@@ -472,26 +473,6 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
     }
   };
 
-  const handleSubscription = (subscriptionData) => {
-    try {
-      // Save subscription to database (synchronous)
-      DatabaseService.add('subscriptions', subscriptionData);
-      
-      // Update clinic's subscription status (synchronous)
-      DatabaseService.update('clinics', subscriptionData.clinicId, {
-        subscriptionStatus: 'active',
-        reportsAllowed: subscriptionData.reportsAllowed
-      });
-      
-      // Reload data to reflect changes
-      loadReports();
-      
-      toast.success('Subscription updated successfully!');
-    } catch (error) {
-      console.error('Error updating subscription:', error);
-      toast.error('Failed to update subscription');
-    }
-  };
 
   const getPatientName = (patientId) => {
     const patient = patients.find(p => p.id === patientId);
@@ -1058,7 +1039,6 @@ const ReportViewer = ({ clinicId, patients = [], reports: initialReports, onUpda
         onClose={() => setShowSubscriptionPopup(false)}
         clinicId={clinicId}
         currentUsage={reports.length}
-        onSubscribe={handleSubscription}
         clinicInfo={{
           name: user?.clinicName || user?.name || 'Clinic',
           email: user?.email || '',
@@ -1105,7 +1085,7 @@ const ReportDetails = ({ report, patient, onBack, onDownload }) => {
         }
 
         if (!active) return;
-        if (url) setPreviewUrl(url);
+        if (url) setPreviewUrl(await resolveReportUrl(url));
         else setPreviewError(true);
       } catch (err) {
         console.error('ERROR: Report preview URL resolution failed:', err);

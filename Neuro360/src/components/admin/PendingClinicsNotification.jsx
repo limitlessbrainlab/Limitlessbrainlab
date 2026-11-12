@@ -1,3 +1,4 @@
+import { PUBLIC_COLUMNS } from '../../services/publicColumns.js';
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Bell, ArrowLeft, Clock, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -55,7 +56,7 @@ const PendingClinicsNotification = ({ onUpdate, autoShow = true, variant = 'hidd
       // credentials email is sent here on approval, so both go through this queue.
       const { data: rows, error } = await supabase
         .from('clinics')
-        .select('*')
+        .select(PUBLIC_COLUMNS.clinics)
         .eq('subscription_status', 'pending_approval')
         .order('created_at', { ascending: false });
       if (error) throw error;

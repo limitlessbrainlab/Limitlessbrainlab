@@ -10,11 +10,12 @@ test('removed clinic denies its login without blocking a separate admin using th
   const clinic = { id: 'clinic', email, is_active: false, deletedAt: '2026-11-06', password: 'clinic-password' };
   const client = { auth: {
     signOut: async () => {},
-    signInWithPassword: async ({ password }) => ({ error: password === 'admin-password' ? null : new Error('bad password') })
-  }, from: () => ({select: () => ({eq: () => ({order: async () => ({data:[],error:null})})})}) };
+    signInWithPassword: async ({ password }) => ({ data: password === 'admin-password' && adminExists ? { user: { id: 'admin' }, session: { access_token: 'admin-jwt' } } : null, error: password === 'admin-password' && adminExists ? null : new Error('bad password') })
+  }, from: table => ({select: () => ({eq: () => ({order: async () => ({data:[],error:null}), maybeSingle: async () => ({data: table === 'profiles' && adminExists ? {id:'admin',email,role:'super_admin'} : null})})})}) };
   const api = { interceptors: { request: { use() {} }, response: { use() {} } } };
   const context = { module: {exports:{}}, console: { log() {}, warn() {}, error() {} },
-    axios: {create: () => api}, Cookies: {}, SupabaseService: {supabase:client},
+    PUBLIC_COLUMNS: { profiles: 'id,email,role' }, axios: {create: () => api}, Cookies: {}, SupabaseService: {supabase:client},
+    credentialRpc: { verifyClinicLogin: async () => null, verifyPatientLogin: async () => null },
     DatabaseService: {get: async table => table === 'clinics' ? [clinic] : table === 'superAdmins' && adminExists ? [{id:'admin',email,role:'super_admin'}] : []},
     comparePassword: async (a,b) => a === b, getOriginUrl: () => '', sameEnv: () => true
   };
@@ -28,7 +29,7 @@ test('removed clinic denies its login without blocking a separate admin using th
   const result = await login('admin-password');
   assert.equal(result.user.role,'super_admin');
   assert.equal(result.user.id,'admin');
-  await assert.rejects(() => login('clinic-password'), /Invalid email or password/);
+  await assert.rejects(() => login('clinic-password'), /account has been removed/i);
   adminExists = false;
   await assert.rejects(() => login('clinic-password'), /account has been removed/i);
 });

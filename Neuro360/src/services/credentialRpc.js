@@ -15,7 +15,7 @@ const supabase = SupabaseService.supabase;
 const FUNC_MISSING_RE =
   /Could not find the function|function .* does not exist|PGRST202|40401/i;
 
-async function callRpc(fn, args) {
+async function callRpc(fn, args, emptySuccess = null) {
   if (!supabase) return null;
   try {
     const { data, error } = await supabase.rpc(fn, args);
@@ -26,7 +26,8 @@ async function callRpc(fn, args) {
       }
       throw Object.assign(new Error(error.message || `RPC ${fn} failed`), { code: error.code, rpc: fn });
     }
-    return data;
+    // SQL void returns null on success; writes must not trigger legacy fallback.
+    return data ?? emptySuccess;
   } catch (err) {
     if (FUNC_MISSING_RE.test(err.message || '')) {
       console.warn(`credentialRpc: ${fn} not available on this database — using legacy path`);
@@ -53,27 +54,27 @@ export const credentialRpc = {
 
   /** Authenticated (admin or self). Throws on refusal. */
   setClinicPassword: (clinicId, newPassword) =>
-    callRpc('set_clinic_password', { p_clinic_id: clinicId, p_new_password: newPassword }),
+    callRpc('set_clinic_password', { p_clinic_id: clinicId, p_new_password: newPassword }, true),
 
   /** Authenticated (admin or self). Throws on refusal. */
   setPatientPassword: (patientId, newPassword) =>
-    callRpc('set_patient_password', { p_patient_id: patientId, p_new_password: newPassword }),
+    callRpc('set_patient_password', { p_patient_id: patientId, p_new_password: newPassword }, true),
 
   /** Clinic editing its own patient (ownership gate via clinic_id). */
   setPatientPasswordByClinic: (clinicId, patientId, newPassword) =>
     callRpc('set_patient_password_by_clinic', {
       p_clinic_id: clinicId, p_patient_id: patientId, p_new_password: newPassword,
-    }),
+    }, true),
 
   /** Patient self-heal after a successful Supabase Auth sign-in. */
   healPatientPassword: (patientId, newPassword) =>
-    callRpc('heal_patient_password', { p_patient_id: patientId, p_new_password: newPassword }),
+    callRpc('heal_patient_password', { p_patient_id: patientId, p_new_password: newPassword }, true),
 
   /** Set credentials on an account created < 15 min ago with no password yet. */
   claimCredentials: (tableName, email, newPassword) =>
     callRpc('claim_credentials_for_new_account', {
       p_table: tableName, p_email: email, p_new_password: newPassword,
-    }),
+    }, true),
 };
 
 export default credentialRpc;
